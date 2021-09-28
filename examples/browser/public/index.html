@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
+    <title>LoginForm</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+
+<body>
+    <div class="container">
+        <div class="row justify-content-center" style="padding-top: 40px;">
+            <div class="col-auto">
+                <h3>Behavior Graph Example - Login Form</h3>
+            </div>
+        </div>
+        <div class="row justify-content-center">
+            <div class="col-2">
+                <p class="text-end">Email</p>
+            </div>
+            <div class="col-3"><input type="email" id="email"><i class="fa fa-star" id="emailFeedback" style="padding-left: 20px;"></i></div>
+        </div>
+        <div class="row justify-content-center">
+            <div class="col-2">
+                <p class="text-end">Password</p>
+            </div>
+            <div class="col-3"><input type="password" id="password"><i class="fa fa-star" id="passwordFeedback" style="padding-left: 20px;"></i></div>
+        </div>
+        <div class="row justify-content-center">
+            <div class="col-2"></div>
+            <div class="col-3 text-start"><button class="btn btn-primary" id="login" type="button">Login</button></div>
+        </div>
+        <div class="row justify-content-center">
+            <div class="col-5">
+                <p id="loginStatus">Paragraph</p>
+            </div>
+        </div>
+        <div class="row justify-content-center">
+            <div class="col-3 text-center"><button class="btn btn-primary" id="loginSuccess" type="button">Login Success Response</button></div>
+            <div class="col-3 text-center"><button class="btn btn-primary" id="loginFail" type="button">Login Fail Response</button></div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="bundle.js"></script>
+</body>
+
+</html>
