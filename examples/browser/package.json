@@ -1,0 +1,20 @@
+{
+  "name": "browser-bg",
+  "version": "1.0.0",
+  "description": "browser app using behavior-graph",
+  "main": "index.js",
+  "scripts": {
+    "build": "rollup -c rollup.config.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@vzmi/behavior-graph": "^0.9.7",
+    "express": "^4.17.1"
+  },
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^9.0.0",
+    "rollup": "^2.47.0"
+  }
+}
