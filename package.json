@@ -1,5 +1,5 @@
 {
-  "name": "@vzmi/behavior-graph",
+  "name": "behavior-graph",
   "version": "0.5.0",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
