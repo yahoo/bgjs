@@ -2,7 +2,7 @@
 //  Copyright Yahoo 2021
 //
 
-import * as bg from "@vzmi/behavior-graph"
+import * as bg from "behavior-graph"
 
 function validateEmail(email) {
     const re = /^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;

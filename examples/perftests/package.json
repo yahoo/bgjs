@@ -1,0 +1,28 @@
+{
+  "name": "perftests",
+  "version": "1.0.0",
+  "description": "performance testing",
+  "main": "/lib/index.js",
+  "types": "lib/index.d.ts",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "^16.4.2",
+    "typescript": "^4.4.0"
+  },
+  "files": [
+    "lib/**/*"
+  ],
+  "scripts": {
+    "build": "rm -rf lib/ && tsc && echo 'Build is successful!'",
+    "try": "rm -rf lib/ && tsc && node ./lib/index.js",
+    "try-trace": "rm -rf lib/ && tsc && node --prof ./lib/index.js"
+  },
+  "author": "",
+  "dependencies": {
+    "behavior-graph": "file:../.."
+  },
+  "directories": {
+    "lib": "lib"
+  },
+  "keywords": []
+}
