@@ -9,15 +9,11 @@ import { Extent } from "./extent";
 import { Resource } from "./resource";
 
 export enum OrderingState {
-    Unordered,
-    Ordering,
-    Ordered
-}
-
-export enum ValuePersistence {
-    Persistent,
-    Transient,
-    TransientTrace
+    Untracked, // new behaviors
+    NeedsOrdering, // added to list for ordering
+    Clearing, // visited while clearing dfs
+    Ordering, // visited while ordering dfs
+    Ordered // has a valid order
 }
 
 interface SideEffect {
@@ -82,8 +78,8 @@ export class Graph {
                     this.needsOrdering.length > 0) {
 
                     let sequence = this.currentEvent!.sequence;
-                    this.addUntrackedBehaviors(sequence);
-                    this.addUntrackedSupplies(sequence);
+                    this.addUntrackedBehaviors();
+                    this.addUntrackedSupplies();
                     this.addUntrackedDemands(sequence);
                     this.orderBehaviors();
                     this.runNextBehavior(sequence);
@@ -175,7 +171,7 @@ export class Graph {
         }
     }
 
-    private addUntrackedBehaviors(sequence: number) {
+    private addUntrackedBehaviors() {
         if (this.untrackedBehaviors.length > 0) {
             for (let behavior of this.untrackedBehaviors) {
                 this.modifiedDemandBehaviors.push(behavior);
@@ -185,7 +181,7 @@ export class Graph {
         }
     }
 
-    private addUntrackedSupplies(sequence: number) {
+    private addUntrackedSupplies() {
         if (this.modifiedSupplyBehaviors.length > 0) {
             for (let behavior of this.modifiedSupplyBehaviors) {
                 if (behavior.untrackedSupplies != null) {
@@ -208,7 +204,10 @@ export class Graph {
                     // technically this doesn't need reordering but its subsequents will
                     // setting this to reorder will also adjust its subsequents if necessary
                     // in the sortDFS code
-                    this.needsOrdering.push(behavior);
+                    if (behavior.orderingState != OrderingState.NeedsOrdering) {
+                        behavior.orderingState = OrderingState.NeedsOrdering;
+                        this.needsOrdering.push(behavior);
+                    }
                 }
             }
             this.modifiedSupplyBehaviors.length = 0;
@@ -256,7 +255,7 @@ export class Graph {
                         }
                     }
 
-                    let orderBehavior = behavior.orderingState == OrderingState.Unordered;
+                    let orderBehavior = behavior.orderingState != OrderingState.Ordered;
 
                     if (addedDemands != undefined) {
                         for (let demand of addedDemands) {
@@ -277,7 +276,10 @@ export class Graph {
                     behavior.untrackedDemands = null;
 
                     if (orderBehavior) {
-                        this.needsOrdering.push(behavior);
+                        if (behavior.orderingState != OrderingState.NeedsOrdering) {
+                            behavior.orderingState = OrderingState.NeedsOrdering;
+                            this.needsOrdering.push(behavior);
+                        }
                     }
                     if (needsRunning) {
                         this.activateBehavior(behavior, sequence);
@@ -297,33 +299,28 @@ export class Graph {
         if (this.needsOrdering.length == 0) { return; }
 
         let localNeedsOrdering : Behavior[] = [];
-        let traversalQueue: Behavior[] = [];
-
-        // first get behaviors that need ordering and mark them as
-        // ordered so they will be traversed when first encountered
-        for (let behavior of this.needsOrdering) {
-            behavior.orderingState = OrderingState.Ordered;
-            traversalQueue.push(behavior);
-        }
-        this.needsOrdering.length = 0;
 
         // dfs forward on each to find all that need ordering
-        while (traversalQueue.length > 0) {
-            let behavior = traversalQueue.shift();
-            if (behavior != undefined) {
-                if (behavior.orderingState == OrderingState.Ordered) {
-                    behavior.orderingState = OrderingState.Unordered;
-                    localNeedsOrdering.push(behavior);
-                    if (behavior.supplies) {
-                        for (let supply of behavior.supplies) {
-                            for (let subsequent of supply.subsequents) {
-                                traversalQueue.push(subsequent);
+        let x = 0;
+        while (x < this.needsOrdering.length) {
+            let behavior = this.needsOrdering[x];
+            if (behavior.orderingState == OrderingState.NeedsOrdering) {
+                behavior.orderingState = OrderingState.Clearing;
+                localNeedsOrdering.push(behavior);
+                if (behavior.supplies) {
+                    for (let supply of behavior.supplies) {
+                        for (let subsequent of supply.subsequents) {
+                            if (subsequent.orderingState == OrderingState.Ordered) {
+                                subsequent.orderingState = OrderingState.NeedsOrdering;
+                                this.needsOrdering.push(subsequent);
                             }
                         }
                     }
                 }
             }
+            x++;
         }
+        this.needsOrdering.length = 0;
 
         let needsReheap = { value: false }; // this allows out parameter
         for (let behavior of localNeedsOrdering) {
@@ -343,7 +340,7 @@ export class Graph {
             throw err;
         }
 
-        if (behavior.orderingState == OrderingState.Unordered) {
+        if (behavior.orderingState == OrderingState.Clearing) {
             behavior.orderingState = OrderingState.Ordering;
 
             let order = 0;

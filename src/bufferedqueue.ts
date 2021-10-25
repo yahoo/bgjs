@@ -31,20 +31,23 @@ export class BufferedPriorityQueue<T extends Orderable> {
             return undefined;
         } else {
             // heapify elements in the buffer
-            while (true) {
-                let b = this.buffer.shift();
-                if (b != undefined) {
-                    this.queue.push(b);
-                    if (this.queue.length > 1) {
-                        this.up(this.queue.length - 1);
-                    }
-                } else {
-                    break;
+            for (let i = 0; i < this.buffer.length; i++) {
+                let b = this.buffer[i];
+                this.queue.push(b);
+                if (this.queue.length > 1) {
+                    this.up(this.queue.length - 1);
                 }
             }
+            this.buffer.length = 0;
 
-            let b = this.queue.shift();
+            // The min is the first one
+            // We want to pop from the front (shift) but that is
+            // expensive in js so we take the last element and put
+            // it at the top and sort it back down (pop is cheap)
+            let b = this.queue[0];
+            let last = this.queue.pop()!;
             if (this.queue.length > 0) {
+                this.queue[0] = last;
                 this.down(0);
             }
             return b;

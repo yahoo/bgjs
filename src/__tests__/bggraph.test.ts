@@ -837,15 +837,13 @@ describe('dynamic graph changes', () => {
         // b_a behavior should be reordered to come after b_b
         let ext2: Extent = new Extent(g);
         let b_b = ext2.makeBehavior([r_a], null, extent => {
-            if (r_a.justUpdated) {
-                r_x.update(r_a.value, true);
-            }
+            r_x.update(r_a.value, true);
         });
         ext2.addToGraphWithAction();
 
         // update the supply to accommodate
         g.action('supply r_x', () => {
-            b_b.setSupplies( [r_x]);
+            b_b.setSupplies([r_x]);
         });
 
         // when action initiates updates we should get them run in order

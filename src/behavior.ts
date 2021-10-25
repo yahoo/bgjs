@@ -16,7 +16,7 @@ export class Behavior implements Orderable {
     removedWhen: number | null = null;
     added: boolean = false;
     extent: Extent;
-    orderingState: OrderingState = OrderingState.Unordered;
+    orderingState: OrderingState = OrderingState.Untracked;
     order: number = 0;
 
     untrackedDemands: Resource[] | null;

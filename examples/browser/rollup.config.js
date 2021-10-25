@@ -3,11 +3,11 @@
 //  Licensed under the terms of the Apache 2.0 license. See LICENSE file in project root for terms.
 //
 
-import { nodeResolve } from '@rollup/plugin-node-resolve'
+import { nodeResolve } from '@rollup/plugin-node-resolve';
+import commonjs from '@rollup/plugin-commonjs';
 
 export default {
     input: 'main.js',
-    external: ['behavior-graph'],
     output: {
         file: 'public/bundle.js',
         format: 'iife',
@@ -15,5 +15,5 @@ export default {
             'behavior-graph': 'bg'
         }
     },
-    plugins:[nodeResolve()]
+    plugins:[nodeResolve(), commonjs()]
 }

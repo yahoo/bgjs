@@ -4,16 +4,17 @@
   "description": "browser app using behavior-graph",
   "main": "index.js",
   "scripts": {
-    "build": "rollup -c rollup.config.js",
+    "build": "./node_modules/rollup/dist/bin/rollup -c rollup.config.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "Apache-2.0",
   "dependencies": {
-    "behavior-graph": "^0.9.7",
+    "behavior-graph": "file:../..",
     "express": "^4.17.1"
   },
   "devDependencies": {
+    "@rollup/plugin-commonjs": "^21.0.1",
     "@rollup/plugin-node-resolve": "^9.0.0",
     "rollup": "^2.47.0"
   }
