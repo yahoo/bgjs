@@ -1,6 +1,6 @@
 {
   "name": "behavior-graph",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "main": "lib/cjs/index.js",
   "module": "lib/mjs/index.js",
   "types": "lib/mjs/index.d.ts",
