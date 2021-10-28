@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/behavior-graph/lib/behavior-graph.min.js"></script>
+    <meta charset="UTF-8">
+    <title>Hello World</title>
+</head>
+<body>
+
+<script>
+    let g = new bg.Graph();
+    let e = new bg.Extent(g);
+    let m = new bg.Moment(e);
+    e.makeBehavior([m], null, (extent) => {
+        console.log("Hello, World!");
+    });
+
+    e.addToGraphWithAction();
+
+    g.action(null, () => {
+        m.update();
+    });
+</script>
+</body>
+</html>
