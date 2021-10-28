@@ -8,9 +8,9 @@ Yes
 
 ## Documentation
 
-[Introduction to Behavior Graph](bgdocs/typescript/intro.html)
+[Introduction to Behavior Graph](https://yahoo.github.io/bgdocs/docs/typescript/intro.html)
 
-[Behavior Graph Programming Guide](bgdocs/typescript/guide.html)
+[Behavior Graph Programming Guide](https://yahoo.github.io/bgdocs/docs/typescript/guide.html)
 
 ## Example
 
@@ -22,12 +22,41 @@ Node/NPM & Typescript
 
 ## Installation
 
-Simply add the following dependency to your package.json:
+If you are using Node/NPM, simply add the following dependency to your package.json:
 
 ```json
   "dependencies": {
-    "@yahoo/behavior-graph": "~0.5"
+    "behavior-graph": "~0.5"
   }
+```
+
+Then access the object through an import or require
+
+```js
+import * as bg from 'behavior-graph';
+```
+
+Or, if you want to import directly into the browser
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/behavior-graph/lib/behavior-graph.min.js" />
+````
+
+Then the following should run in node or the browser
+
+```js
+let g = new bg.Graph();
+let e = new bg.Extent(g);
+let m = new bg.Moment(e);
+e.makeBehavior([m], null, (extent) => {
+   console.log("Hello, World!"); 
+});
+
+e.addToGraphWithAction();
+
+g.action(null, () => {
+    m.update();
+});
 ```
 
 ## License

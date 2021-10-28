@@ -1,13 +1,21 @@
 {
   "name": "behavior-graph",
-  "version": "0.5.0",
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "version": "0.5.2",
+  "main": "lib/cjs/index.js",
+  "module": "lib/mjs/index.js",
+  "types": "lib/mjs/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./lib/mjs/index.js",
+      "require": "./lib/cjs/index.js"
+    }
+  },
   "license": "Apache-2.0",
   "devDependencies": {
     "@types/jest": "^24.0.17",
     "@types/node": "^12.7.2",
     "jest": "^24.9.0",
+    "rollup": "^2.58.3",
     "ts-jest": "^24.0.2",
     "typescript": "^3.5.3"
   },
@@ -18,10 +26,9 @@
     "type": "git",
     "url": "https://github.com/yahoo/bgjs"
   },
-  "dependencies": {},
   "scripts": {
     "test": "jest",
-    "build": "rm -rf lib/ && tsc && echo 'Build is successful!'",
+    "build": "rm -rf lib/* && tsc -p tsconfig.json && tsc -p tsconfig-cjs.json && ./fixup && rollup -c rollup.config.js && echo 'Build is successful!'",
     "test-coverage": "jest --coverage",
     "ci-build": "npm run build",
     "ci-test": "jest --coverage --runInBand --coverageDirectory $SD_ARTIFACTS_DIR/coverage"

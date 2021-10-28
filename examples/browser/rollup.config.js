@@ -4,7 +4,6 @@
 //
 
 import { nodeResolve } from '@rollup/plugin-node-resolve';
-import commonjs from '@rollup/plugin-commonjs';
 
 export default {
     input: 'main.js',
@@ -15,5 +14,5 @@ export default {
             'behavior-graph': 'bg'
         }
     },
-    plugins:[nodeResolve(), commonjs()]
+    plugins:[nodeResolve()]
 }
