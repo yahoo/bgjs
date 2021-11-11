@@ -5,7 +5,7 @@
 
 import {Graph} from "./bggraph";
 import {Behavior} from "./behavior";
-import {Resource, State} from "./resource";
+import {Moment, Resource, State} from "./resource";
 
 export interface Named {
     debugName: string | null;
@@ -30,7 +30,7 @@ export class Extent implements Named {
         // this hidden behavior supplies addedToGraph and gets activated independently when an
         // extent is added to the graph
         this.addedToGraph = new State<boolean>(this, false);
-        this.addedToGraphBehavior = this.makeBehavior(null, [this.addedToGraph], (extent) => {
+        this.addedToGraphBehavior = this.behavior(null, [this.addedToGraph], (extent) => {
             this.addedToGraph.update(true, true);
         });
     }
@@ -89,9 +89,21 @@ export class Extent implements Named {
         }
     }
 
-    makeBehavior(demands: Resource[] | null, supplies: Resource[] | null, block: (extent: this) => void): Behavior {
+    behavior(demands: Resource[] | null, supplies: Resource[] | null, block: (extent: this) => void): Behavior {
         let behavior = new Behavior(this, demands, supplies, block as (extent: Extent) => void);
         return behavior;
+    }
+
+    resource(name?: string): Resource {
+        return new Resource(this, name);
+    }
+
+    moment<T>(name?: string): Moment<T> {
+        return new Moment<T>(this, name);
+    }
+
+    state<T>(initialState: T, name?: string): State<T> {
+        return new State<T>(this, initialState, name);
     }
 
     sideEffect(name: string | null, block: (extent: this) => void) {

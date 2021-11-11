@@ -105,22 +105,27 @@ export class State<T> extends Resource implements Transient {
         this.currentState = { value: initialState, event: InitialEvent };
     }
 
-    updateWithAction(newValue: T, changesOnly: boolean) {
+    updateWithAction(newValue: T) {
         this.graph.action(this.debugName ?? ("Impulse From updateValue(): " + this), () => {
-            this.update(newValue, changesOnly);
+            this.update(newValue);
         });
         return;
     }
 
-    update(newValue: T, changesOnly: boolean) {
-        this.assertValidUpdater();
-
-        if (changesOnly) {
-            if (this.currentState.value == newValue) {
-                return;
-            }
+    update(newValue: T) {
+        if (this.currentState.value == newValue) {
+            return;
         }
-        this.previousState = this.currentState;
+        this.updateForce(newValue);
+    }
+
+    updateForce(newValue: T) {
+        this.assertValidUpdater();
+        if (this.graph.currentEvent != null && this.currentState.event.sequence < this.graph.currentEvent?.sequence) {
+            // captures trace as the value before any updates
+            this.previousState = this.currentState;
+        }
+
         this.currentState = { value: newValue, event: this.graph.currentEvent! };
         this.graph.resourceTouched(this);
         this.graph.trackTransient(this);
