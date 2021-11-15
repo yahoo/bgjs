@@ -8,7 +8,7 @@ import {Behavior} from "./behavior";
 import {Moment, Resource, State} from "./resource";
 
 export interface Named {
-    debugName: string | null;
+    debugName: string | undefined;
 }
 
 function isNamed(arg: any): arg is Named {
@@ -16,22 +16,23 @@ function isNamed(arg: any): arg is Named {
 }
 
 export class Extent implements Named {
-    debugName: string | null;
+    debugConstructorName: string | undefined;
+    debugName: string | undefined;
     behaviors: Behavior[] = [];
     resources: Resource[] = [];
     graph: Graph;
     addedToGraphWhen: number | null = null;
-    addedToGraph: State<boolean>;
+    added: State<boolean>;
     addedToGraphBehavior: Behavior;
 
     constructor(graph: Graph) {
-        this.debugName = this.constructor.name;
+        this.debugConstructorName = this.constructor.name;
         this.graph = graph;
         // this hidden behavior supplies addedToGraph and gets activated independently when an
         // extent is added to the graph
-        this.addedToGraph = new State<boolean>(this, false);
-        this.addedToGraphBehavior = this.behavior(null, [this.addedToGraph], (extent) => {
-            this.addedToGraph.update(true, true);
+        this.added = new State<boolean>(this, false);
+        this.addedToGraphBehavior = this.behavior(null, [this.added], (extent) => {
+            extent.added.update(true);
         });
     }
 
@@ -43,8 +44,8 @@ export class Extent implements Named {
         this.resources.push(resource);
     }
 
-    addToGraphWithAction() {
-        this.graph.action('add extent: ' + this.debugName, () => { this.addToGraph(); });
+    addToGraphWithAction(debugName?: string) {
+        this.graph.action(() => { this.addToGraph(); }, debugName);
     }
 
     addToGraph() {
@@ -58,8 +59,8 @@ export class Extent implements Named {
         }
     }
 
-    removeFromGraphWithAction() {
-        this.graph.action('remove extent: ' + this.debugName, () => { this.removeFromGraph(); });
+    removeFromGraphWithAction(debugName?: string) {
+        this.graph.action(() => { this.removeFromGraph(); }, debugName);
     }
 
     removeFromGraph() {
@@ -89,8 +90,8 @@ export class Extent implements Named {
         }
     }
 
-    behavior(demands: Resource[] | null, supplies: Resource[] | null, block: (extent: this) => void): Behavior {
-        let behavior = new Behavior(this, demands, supplies, block as (extent: Extent) => void);
+    behavior(demands: Resource[] | null, supplies: Resource[] | null, block: (ext: this) => void): Behavior {
+        let behavior = new Behavior(this, demands, supplies, block as (arg0: Extent) => void);
         return behavior;
     }
 
@@ -106,15 +107,15 @@ export class Extent implements Named {
         return new State<T>(this, initialState, name);
     }
 
-    sideEffect(name: string | null, block: (extent: this) => void) {
-        if (this.addedToGraphWhen != null) {
-            this.graph.sideEffect(this, name, block as (extent: Extent) => void);
-        }
+    sideEffect(block: (ext: this) => void, debugName?: string) {
+        // This requires a cast because we know the extent won't be null at runtime because this side effect
+        // was created with one
+        this.graph.sideEffectHelper({ debugName: debugName, block: (block as (arg0: Extent | null) => void), extent: this, behavior: this.graph.currentBehavior });
     }
 
-    actionAsync(impulse: string | null, action: () => void) {
+    actionAsync(action: (ext: this) => void, debugName?: string) {
         if (this.addedToGraphWhen != null) {
-            this.graph.actionAsync(impulse, action);
+            this.graph.actionHelper({block: action as (arg0: Extent | null) => void, debugName: debugName, extent: this }, false)
         } else {
             let err: any = new Error("Action on extent requires it be added to the graph.");
             err.extent = this;
@@ -122,9 +123,9 @@ export class Extent implements Named {
         }
     }
 
-    action(impulse: string | null, action: () => void) {
+    action(action: (ext: this) => void, debugName?: string) {
         if (this.addedToGraphWhen != null) {
-            this.graph.action(impulse, action);
+            this.graph.actionHelper({block: action as (arg0: Extent | null) => void, debugName: debugName, extent: this }, true)
         } else {
             let err: any = new Error("Action on extent requires it be added to the graph.");
             err.extent = this;

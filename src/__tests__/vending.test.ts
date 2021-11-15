@@ -3,17 +3,7 @@
 //
 
 
-import { 
-    Graph, 
-    GraphEvent, 
-    BehaviorGraphDateProvider,
-    Behavior,
-    State,
-    Moment,
-    Resource,
-    Extent,
-    InitialEvent
- } from '../index';
+import {Behavior, Extent, Graph, InitialEvent, Moment, State} from '../index';
 
 describe('Version 1: Simple Vending Machine', () => {
 
@@ -21,9 +11,9 @@ describe('Version 1: Simple Vending Machine', () => {
         sodasVended: number = 0;
         buttonAction: Moment = this.moment();
         vendEffect: Behavior = this.behavior([this.buttonAction], [], (extent: VendingMachine) => {
-            extent.sideEffect('vend', (extent) => {
+            extent.sideEffect((extent) => {
                 extent.sodasVended += 1;
-            });
+            }, 'vend');
         });
     }
 
@@ -60,9 +50,9 @@ describe('Version 2: No Free Soda', () => {
             if (extent.buttonAction.justUpdated) {
                 if (coins >= extent.SODA_PRICE) {
                     coins -= extent.SODA_PRICE;
-                    extent.sideEffect('vend', (extent) => {
+                    extent.sideEffect((extent) => {
                         extent.sodasVended += 1;
-                    });
+                    }, 'vend');
                 }
             }
 
@@ -143,9 +133,9 @@ describe('Version 3: Cans', () => {
                 if (coins >= extent.SODA_PRICE && cans > 0) {
                     coins -= extent.SODA_PRICE;
                     cans -= 1;
-                    extent.sideEffect('vend',(extent) => {
+                    extent.sideEffect((extent) => {
                         extent.sodasVended += 1;
-                    })
+                    }, 'vend')
                 }
             }
             extent.coinsTotal.update(coins);
@@ -156,15 +146,15 @@ describe('Version 3: Cans', () => {
             super(graph);
 
             this.behavior([this.coinsTotal], null, extent => {
-                extent.sideEffect('coin display',(extent) => {
+                extent.sideEffect((extent) => {
                     extent.coinsDisplay = extent.coinsTotal.value;
-                });
+                }, 'coin display');
             });
 
             this.behavior([this.cansTotal], null, extent => {
-                extent.sideEffect('can display', (extent) => {
+                extent.sideEffect((extent) => {
                     extent.cansDisplay = extent.cansTotal.value;
-                });
+                }, 'can display');
             });
 
         }
@@ -220,15 +210,15 @@ describe('Version 4: Vending State', () => {
             super(graph);
 
             this.behavior([this.coinsTotal], null, extent => {
-                extent.sideEffect('coin display', (extent) => {
+                extent.sideEffect((extent) => {
                     extent.coinsDisplay = extent.coinsTotal.value;
-                });
+                }, 'coin display');
             });
 
             this.behavior([this.cansTotal], null, extent => {
-                extent.sideEffect('can display', (extent) => {
+                extent.sideEffect((extent) => {
                     extent.cansDisplay = extent.cansTotal.value;
-                });
+                }, 'can display');
             });
 
             this.behavior(
@@ -268,9 +258,9 @@ describe('Version 4: Vending State', () => {
                     } else {
                         if (extent.buttonAction.justUpdated) {
                             if (coins >= extent.SODA_PRICE && cans > 0) {
-                                extent.sideEffect('vend', (extent) => {
+                                extent.sideEffect((extent) => {
                                     extent.sodasVended += 1;
-                                });
+                                }, 'vend');
                                 extent.vending.update(true);
                             }
                         }
@@ -359,15 +349,15 @@ describe('Version 5: Jammed', () => {
             super(graph);
 
             this.behavior([this.coinsTotal], null, extent => {
-                extent.sideEffect('coin display', (extent) => {
+                extent.sideEffect((extent) => {
                     extent.coinsDisplay = extent.coinsTotal.value;
-                });
+                }, 'coin display');
             });
 
             this.behavior([this.cansTotal], null, extent => {
-                extent.sideEffect('can display', () => {
+                extent.sideEffect(() => {
                     extent.cansDisplay = extent.cansTotal.value
-                });
+                }, 'can display');
             });
 
             this.behavior(
@@ -381,9 +371,9 @@ describe('Version 5: Jammed', () => {
                     if (extent.insertCoinsAction.justUpdated) {
                         let inserted = extent.insertCoinsAction.value!;
                         if (extent.jammed.traceValue) {
-                            extent.sideEffect('return coins', (extent) => {
+                            extent.sideEffect((extent) => {
                                 extent.coinsReturned = inserted;
-                            });
+                            }, 'return coins');
                         } else {
                             coins += inserted;
                         }
@@ -430,14 +420,14 @@ describe('Version 5: Jammed', () => {
 
             this.behavior([this.vending], null, (extent) => {
                 if (extent.vending.justUpdatedTo(true)) {
-                    extent.sideEffect('vend, start timeout timer',(extent) => {
+                    extent.sideEffect((extent) => {
                         extent.vendTimeoutTimerRunning = true;
                         extent.sodasVended += 1;
-                    });
+                    }, 'vend, start timeout timer');
                 } else if (extent.vending.justUpdatedTo(false)) {
-                    extent.sideEffect('stop, timeout timer',(extent) => {
+                    extent.sideEffect((extent) => {
                         extent.vendTimeoutTimerRunning = false;
-                    });
+                    }, 'stop, timeout timer');
                 }
             });
 

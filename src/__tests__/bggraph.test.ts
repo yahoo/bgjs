@@ -82,7 +82,7 @@ describe('State Resource', () => {
 
         // |> When updated with same value and filtering off
         let entered = sr1.event;
-        g.action(null, () => {
+        g.action(() => {
             sr1.updateForce(1);
         })
 
@@ -116,7 +116,7 @@ describe('State Resource', () => {
         ext.addToGraphWithAction();
 
         // |> When updated in push event
-        ext.action('update', () => {
+        ext.action(() => {
             sr1.update(1);
         });
 
@@ -206,10 +206,10 @@ describe('State Resource', () => {
         // |> When it is updated multiple times in action (or behavior)
         var traceValue;
         var traceEvent;
-        g.action(null, () => {
+        g.action(() => {
             sr1.update(1);
             sr1.update(2);
-            g.sideEffect(ext, null, (extent) => {
+            g.sideEffect(() => {
                 traceValue = sr1.traceValue;
                 traceEvent = sr1.traceEvent;
             });
@@ -244,7 +244,7 @@ describe('State Resource', () => {
             didRun = true;
         });
 
-        g.action('adding', () => {
+        g.action(() => {
             sr1.update(1);
             ext.addToGraph();
         });
@@ -354,7 +354,7 @@ describe('Moment Resource', () => {
         // |> When it is read in the graph (and was not updated)
         let beforeUpdate = false;
         let happenedEvent = null;
-        ext.action('initial', () => {
+        ext.action(() => {
             beforeUpdate = mr1.justUpdated;
             mr1.update();
             happenedEvent = ext.graph.currentEvent;
@@ -401,7 +401,7 @@ describe('Moment Resource', () => {
             didRun = true;
         });
 
-        g.action('adding', () => {
+        g.action(() => {
             mr1.update();
             ext.addToGraph();
         });
@@ -490,7 +490,7 @@ describe('dependencies', () => {
 
         ext.addToGraphWithAction();
 
-        g.action('test', () => {
+        g.action(() => {
             r_a.update(1);
             r_b.update(2);
         });
@@ -530,7 +530,7 @@ describe('dependencies', () => {
         ext2.addToGraphWithAction();
         parentExt.addToGraphWithAction()
 
-        g.action('update ext2_r1', () => {
+        g.action(() => {
             ext2_r1.update(33)
         });
 
@@ -548,7 +548,7 @@ describe('dynamic graph changes', () => {
             r_x.update(r_a.value * 2);
         });
 
-        g.action('add', () => {
+        g.action(() => {
             r_a.update(2);
             ext.addToGraph();
         });
@@ -647,7 +647,7 @@ describe('dynamic graph changes', () => {
         });
         let ext2behavior = ext2.behavior([demanded1], null, extent => {
         });
-        g.action("adding", () => {
+        g.action(() => {
             ext.addToGraph();
             ext2.addToGraph();
         });
@@ -672,7 +672,7 @@ describe('dynamic graph changes', () => {
         });
         let ext2behavior = ext2.behavior(null, [supplied2], extent => {
         });
-        g.action("adding", () => {
+        g.action(() => {
             ext.addToGraph();
             ext2.addToGraph();
         });
@@ -694,7 +694,7 @@ describe('dynamic graph changes', () => {
         let demanded2 = ext2.moment('demanded2');
         let ext2behavior = ext2.behavior([demanded1, demanded2], null, extent => {
         });
-        g.action('adding', () => {
+        g.action(() => {
             ext.addToGraph();
             ext2.addToGraph();
         });
@@ -717,7 +717,7 @@ describe('dynamic graph changes', () => {
         let supplied2 = ext2.moment('supplied2');
         let ext2behavior = ext2.behavior(null, [supplied1, supplied2], extent => {
         });
-        g.action('adding', () => {
+        g.action(() => {
             ext.addToGraph();
             ext2.addToGraph();
         });
@@ -748,9 +748,9 @@ describe('dynamic graph changes', () => {
             ext2.removeFromGraph();
         });
 
-        g.action('add', () => {
-            ext.addToGraphWithAction();
-            ext2.addToGraphWithAction();
+        g.action(() => {
+            ext.addToGraph();
+            ext2.addToGraph();
         });
 
         // when it is both activated and removed in the same event
@@ -787,7 +787,7 @@ describe('dynamic graph changes', () => {
         });
         ext.addToGraphWithAction();
 
-        g.action('update', () => {
+        g.action(() => {
             b1.setDemands([r_a]);
         });
 
@@ -817,7 +817,7 @@ describe('dynamic graph changes', () => {
         });
         ext.addToGraphWithAction();
 
-        g.action('update', () => {
+        g.action(() => {
             b1.setSupplies([r_a]);
         });
 
@@ -845,7 +845,7 @@ describe('dynamic graph changes', () => {
         ext2.addToGraphWithAction();
 
         // update the supply to accommodate
-        g.action('supply r_x', () => {
+        g.action(() => {
             b_b.setSupplies([r_x]);
         });
 
@@ -867,7 +867,7 @@ describe('dynamic graph changes', () => {
         ext.addToGraphWithAction();
 
         // |> When that behavior no longer supplies that original resource
-        ext.action("change supply", () => {
+        ext.action(() => {
             m1.suppliedBy!.setSupplies([]);
         });
 
@@ -902,7 +902,7 @@ describe('Extents', () => {
 
     test('gets class name', () => {
         let e = new TestExtent(g);
-        expect(e.debugName).toBe('TestExtent');
+        expect(e.debugConstructorName).toBe('TestExtent');
     });
 
     test('contained components picked up', () => {
@@ -933,7 +933,7 @@ describe('Extents', () => {
     test('added resource is updated on adding', () => {
         let e = new Extent(g);
         let runOnAdd = false;
-        e.behavior([e.addedToGraph], [], extent => {
+        e.behavior([e.added], [], extent => {
             runOnAdd = true;
         });
         e.addToGraphWithAction();
@@ -952,11 +952,11 @@ describe('Extents', () => {
         test('check actions on unadded extents are errors', () => {
             let e = new TestExtent(g);
             expect(() => {
-                e.action('impulse1', () => {
+                e.action(() => {
                 });
             }).toThrow();
             expect(() => {
-                e.actionAsync('impulse2', () => {
+                e.actionAsync(() => {
                 });
             }).toThrow();
         });
@@ -1050,13 +1050,13 @@ describe('Graph checks', () => {
         });
 
         expect(() => {
-            g.action('update', () => {
+            g.action(() => {
                 b_x.setDemands([r_a]);
             });
         }).toThrow();
 
         expect(() => {
-            g.action('update', () => {
+            g.action(() => {
                 b_x.setSupplies([r_a]);
             });
         }).toThrow();
@@ -1070,23 +1070,23 @@ describe('Graph checks', () => {
         let secondAction = false;
         ext.addToGraphWithAction();
         expect(() => {
-            g.action('throws', () => {
-                ext.sideEffect('action', (extent) => {
-                    g.action('innerAction', () => {
+            g.action(() => {
+                ext.sideEffect((extent) => {
+                    g.action(() => {
                         innerAction = true;
                     });
-                })
-                ext.sideEffect('innerEffect', (extent) => {
+                }, 'action')
+                ext.sideEffect((extent) => {
                     throw(new Error());
-                });
-                ext.sideEffect('effect', (extent) => {
+                }, 'innerEffect');
+                ext.sideEffect((extent) => {
                     innerEffect = true;
-                });
+                }, 'effect');
             });
         }).toThrow();
 
         // |> When trying to run another event
-        g.action('works', () => {
+        g.action(() => {
             secondAction = true;
         });
 
@@ -1117,7 +1117,7 @@ describe('Graph checks', () => {
         });
         ext.addToGraphWithAction();
         expect(() => {
-            g.action('r1', () => {
+            g.action(() => {
                 r1.update();
             });
         }).toThrow();
@@ -1138,7 +1138,7 @@ describe('Graph checks', () => {
 
         // |> When it throws when adding
         expect(() => {
-            g.action('add', () => {
+            g.action(() => {
                 ext.addToGraph();
                 throw(new Error());
             });
@@ -1167,9 +1167,9 @@ describe('Effects, Actions, Events', () => {
         let happened: boolean = false;
         // behavior a has a side effect and
         ext.behavior([r_a], [r_b], extent => {
-            extent.sideEffect('happen', extent => {
+            extent.sideEffect(extent => {
                 happened = true;
-            });
+            }, 'happen');
             r_b.update(1);
         });
 
@@ -1177,9 +1177,9 @@ describe('Effects, Actions, Events', () => {
         // check that side effect didn't happen during b's run
         ext.behavior([r_b], null, extent => {
             expect(happened).toBeFalsy();
-            extent.sideEffect('after effect', (extent) => {
+            extent.sideEffect((extent) => {
                 expect(happened).toBeTruthy();
-            });
+            }, 'after effect');
         });
 
         ext.addToGraphWithAction();
@@ -1194,17 +1194,17 @@ describe('Effects, Actions, Events', () => {
         let whenX: number = 0;
         let whenY: number = 0;
         ext.behavior([r_a], [r_b], extent => {
-            ext.sideEffect('first', (extent) => {
+            ext.sideEffect((extent) => {
                 whenX = counter;
                 counter += 1;
-            });
+            }, 'first');
             r_b.update(1);
         });
         ext.behavior([r_b], null, extent => {
-            ext.sideEffect('second', (extent) => {
+            ext.sideEffect((extent) => {
                 whenY = counter;
                 counter += 1;
-            });
+            }, 'second');
         });
 
         ext.addToGraphWithAction();
@@ -1217,10 +1217,10 @@ describe('Effects, Actions, Events', () => {
         let r1 = ext.moment('r1');
         ext.behavior([r_a], [r1], extent => {
             r1.update();
-            extent.sideEffect('after', (extent) => {
+            extent.sideEffect((extent) => {
                 expect(r_a.justUpdatedTo(1)).toBeTruthy();
                 expect(r1.justUpdated).toBeTruthy();
-            });
+            }, 'after');
         });
         ext.addToGraphWithAction();
         r_a.updateWithAction(1);
@@ -1239,7 +1239,7 @@ describe('Effects, Actions, Events', () => {
         ext.makeBehavior([r_a], null, (extent) => {
             if (r_a.justUpdated) {
                 extent.sideEffect('update b', (extent) => {
-                    ext.action('update b', () => {
+                    ext.action(() => {
                         // initiate another event
                         r_b.update(2)
                     });
@@ -1279,14 +1279,14 @@ describe('Effects, Actions, Events', () => {
         let m1 = ext.moment('m1');
         let eventLoopOrder, effect2Order: number | undefined;
         ext.behavior([m1], null, (extent) => {
-            extent.sideEffect('effect 1', (extent) => {
-                extent.graph.action('event2', () => {
+            extent.sideEffect((extent) => {
+                extent.graph.action(() => {
                     eventLoopOrder = effectCounter++;
                 });
-            });
-            extent.sideEffect('effect 2', (extent) => {
+            }, 'effect 1');
+            extent.sideEffect((extent) => {
                 effect2Order = effectCounter++;
-            });
+            }, 'effect 2');
         });
         ext.addToGraphWithAction();
 
@@ -1298,6 +1298,9 @@ describe('Effects, Actions, Events', () => {
         expect(eventLoopOrder).toEqual(1);
     });
 
+    /*
+    11/15/2021-- Actions created directly from within a behavior seem closer to a mistake
+    even if they could be rewritten as sideEffects. They are now disallowed.
     test('behaviors from first event complete before next event', () => {
         // Note: Initiating side effects directly from within a behavior can lead to accessing
         // and thus depending on state without being explicit about that dependency. However
@@ -1311,7 +1314,7 @@ describe('Effects, Actions, Events', () => {
         let m2 = ext.moment('m2');
         ext.behavior([m1], [m2], (extent) => {
             m2.update();
-            extent.action('inside side effect', () => {
+            extent.action(() => {
                 eventLoopOrder = effectCounter++;
             });
         });
@@ -1336,7 +1339,7 @@ describe('Effects, Actions, Events', () => {
         let m1 = ext.moment('m1');
         let m2 = ext.moment('m2');
         ext.behavior([m1], [m2], (extent) => {
-            extent.action('inside side effect', () => {
+            extent.action(() => {
                 // this will force event to finish when it runs synchronously
             });
             // event should have finished by the time we return up the stack
@@ -1350,6 +1353,7 @@ describe('Effects, Actions, Events', () => {
         m1.updateWithAction();
 
     });
+     */
 
     test('actions are run synchronously by default when there is only one', () => {
         // |> Given there are no running events
@@ -1357,7 +1361,7 @@ describe('Effects, Actions, Events', () => {
         ext.addToGraphWithAction();
 
         // |> When an action is added
-        ext.action('action', () => {
+        ext.action(() => {
             counter = counter + 1;
         });
 
@@ -1373,15 +1377,15 @@ describe('Effects, Actions, Events', () => {
         ext.addToGraphWithAction();
 
         // |> When a new action is added
-        ext.action('existing', () => {
-            ext.sideEffect('side effect', (extent) => {
-                ext.action('new', () => {
+        ext.action(() => {
+            ext.sideEffect((extent) => {
+                ext.action(() => {
                     actionIsRun = counter;
                     counter = counter + 1;
                 });
                 effectIsRun = counter;
                 counter = counter + 1;
-            });
+            }, 'side effect');
         });
 
         // |> Then it will be run after first event completes entirely
@@ -1397,15 +1401,15 @@ describe('Effects, Actions, Events', () => {
         ext.addToGraphWithAction();
 
         // |> When a new action is added asynchronously
-        ext.action('existing', () => {
-            ext.sideEffect('side effect', (extent) => {
-                ext.actionAsync('new', () => {
+        ext.action(() => {
+            ext.sideEffect((extent) => {
+                ext.actionAsync(() => {
                     actionIsRun = counter;
                     counter = counter + 1;
                 });
                 effectIsRun = counter;
                 counter = counter + 1;
-            });
+            }, 'side effect');
         });
 
         // |> Then it will be run after first event completes entirely
@@ -1416,10 +1420,10 @@ describe('Effects, Actions, Events', () => {
     test('actionAsync runs immediately if no current events', () => {
         let effectIsRun = false;
         ext.addToGraphWithAction();
-        ext.actionAsync('existing', () => {
-            ext.sideEffect('side effect', (extent) => {
+        ext.actionAsync(() => {
+            ext.sideEffect((extent) => {
                 effectIsRun = true;
-            });
+            }, 'side effect');
         });
 
         expect(effectIsRun).toBeTruthy();
@@ -1443,10 +1447,178 @@ describe('Effects, Actions, Events', () => {
     test('effects can only be run during an event', () => {
         ext.addToGraphWithAction();
         expect(() => {
-            ext.sideEffect('should throw', (extent) => {
+            ext.sideEffect((extent) => {
                 // do nothing
+            }, 'should throw');
+        }).toThrow();
+    });
+
+    test('actions have knowledge of changes for debugging', () => {
+        // |> Given a subsequent behavior
+        let m1 = ext.moment('m1')
+        let m2 = ext.moment('m2')
+        let m3 = ext.moment('m3')
+
+        let actionUpdatesDuring;
+        ext.behavior([m1], [m3], extent => {
+            m3.update()
+            actionUpdatesDuring = extent.graph.eventLoopState?.actionUpdates;
+        });
+        ext.addToGraphWithAction();
+
+        // |> When action updates multiple resources
+        g.action(() => {
+            m1.update();
+            m2.update();
+        });
+
+        // |> Then that information is available during the current event
+        expect(actionUpdatesDuring).toStrictEqual([m1, m2]);
+        expect(g.eventLoopState?.actionUpdates).toBeUndefined();
+    });
+
+    test('actions have debugName', () => {
+        let m1 = ext.moment();
+        let s1 = ext.state<number>(1);
+        let lastActionName;
+        ext.behavior([ext.added, m1, s1], null, extent => {
+            lastActionName = extent.graph.eventLoopState?.action.debugName;
+        });
+        ext.addToGraphWithAction('added');
+        expect(lastActionName).toBe('added');
+
+        g.action(() => {
+            m1.update();
+        }, '1');
+
+        expect(lastActionName).toBe('1');
+
+        g.actionAsync(() => {
+            m1.update();
+        }, '2');
+
+        expect(lastActionName).toBe('2');
+
+        m1.updateWithAction(undefined,'3');
+
+        expect(lastActionName).toBe('3');
+
+        s1.updateWithAction(2, '4');
+
+        expect(lastActionName).toBe('4');
+
+        ext.action(() => {
+            m1.update();
+        }, '5');
+
+        expect(lastActionName).toBe('5');
+
+        ext.actionAsync(() => {
+            m1.update();
+        }, '6');
+
+        expect(lastActionName).toBe('6');
+    });
+
+    test('sideEffects have debugName', () => {
+        let m1 = ext.moment();
+        let m2 = ext.moment();
+        let firstSideEffectName;
+        let secondSideEffectName;
+        ext.behavior([m1], [m2], extent => {
+            m2.update();
+            extent.sideEffect(extent1 => {
+                firstSideEffectName = extent.graph.eventLoopState?.currentSideEffect?.debugName;
+            }, '1');
+        });
+        ext.behavior([m2], null, extent => {
+            extent.sideEffect(extent1 => {
+                secondSideEffectName = extent.graph.eventLoopState?.currentSideEffect?.debugName;
+            });
+        });
+        ext.addToGraphWithAction();
+        m1.updateWithAction();
+
+        expect(firstSideEffectName).toBe('1');
+        expect(secondSideEffectName).toBeUndefined();
+    });
+
+    test('can create side effects with graph object', () => {
+        let valueAfter = 0;
+        let sideEffectName;
+        g.action(() => {
+            g.sideEffect(() => {
+                valueAfter = 1;
+                sideEffectName = g.eventLoopState?.currentSideEffect?.debugName;
+            }, 'sideEffect1');
+        });
+        expect(valueAfter).toBe(1);
+        expect(sideEffectName).toBe('sideEffect1');
+    });
+
+    test('defining behavior visible inside side effect', () => {
+        let m1 = ext.moment();
+        let definingBehavior;
+        let createdBehavior = ext.behavior([m1], null, ext => {
+            ext.sideEffect(extent => {
+                definingBehavior = extent.graph.eventLoopState!.currentSideEffect!.behavior;
+            });
+        });
+
+        ext.addToGraphWithAction();
+        m1.updateWithAction();
+
+        expect(definingBehavior).toBe(createdBehavior);
+    });
+
+    test('action inside sideEffect has extent', () => {
+        let m1 = ext.moment();
+        let insideExtent;
+        ext.behavior([m1], null, ext => {
+            ext.sideEffect(extent => {
+                extent.action(extent1 => {
+                    insideExtent = extent1;
+                });
+            });
+        });
+        ext.addToGraphWithAction();
+        m1.updateWithAction();
+
+        expect(insideExtent).toBe(ext);
+    });
+
+    test('nested actions are disallowed', () => {
+        expect(() => {
+            g.action(() => {
+                g.action(() => {
+
+                });
             });
         }).toThrow();
     });
+
+    test('actions directly inside behaviors are disallowed', () => {
+        ext.behavior([ext.added], null, extent => {
+            extent.action(extent => {
+               // throws
+            });
+        });
+
+        expect(() => {
+            ext.addToGraphWithAction();
+        }).toThrow();
+    });
+
+    test('sideEffect in sideEffect doesnt make sense', () => {
+        expect(() => {
+            g.action(() => {
+                g.sideEffect(() => {
+                    g.sideEffect(() => {
+                        // throws
+                    });
+                });
+            });
+        }).toThrow();
+    })
 });
 

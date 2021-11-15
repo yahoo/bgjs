@@ -17,14 +17,16 @@ export enum OrderingState {
 }
 
 interface SideEffect {
-    debugName: string | null;
-    block: (extent: Extent) => void;
-    extent: Extent;
+    block: (extent: Extent | null) => void;
+    extent: Extent | null;
+    behavior: Behavior | null;
+    debugName?: string;
 }
 
 interface Action {
-    impulse: string | null;
-    block: () => void;
+    block: (extent: Extent | null) => void;
+    extent: Extent | null;
+    debugName?: string;
 }
 
 export interface BehaviorGraphDateProvider {
@@ -48,22 +50,30 @@ export class Graph {
     modifiedSupplyBehaviors: Behavior[] = [];
     updatedTransients: Transient[] = [];
     needsOrdering: Behavior[] = [];
+    eventLoopState: EventLoopState | null = null;
 
     constructor(timeProvider = DefaultDateProvider) {
         this.lastEvent = InitialEvent;
         this.dateProvider = timeProvider;
     }
 
-    actionAsync(impulse: string | null, block: () => void) {
-        this.actions.push({impulse: impulse, block: block});
-        if (this.currentEvent == null) {
-            this.eventLoop();
-        }
+    actionAsync(block: () => void, debugName?: string) {
+        this.actionHelper({debugName: debugName, block: block, extent: null}, false);
     }
 
-    action(impulse: string | null, block: () => void) {
-        this.actions.push({impulse: impulse, block: block});
-        this.eventLoop();
+    action(block: () => void, debugName?: string) {
+        this.actionHelper({debugName: debugName, block: block, extent: null}, true);
+    }
+
+    actionHelper(action: Action, forceSync: boolean) {
+        if (this.eventLoopState != null && (this.eventLoopState.phase == EventLoopPhase.action || this.eventLoopState.phase == EventLoopPhase.updates)) {
+            let err: any = new Error("Action cannot be created directly inside another action or behavior. Consider wrapping it in a side effect block.");
+            throw err;
+        }
+        this.actions.push(action);
+        if (this.currentEvent == null || forceSync) {
+            this.eventLoop();
+        }
     }
 
     private eventLoop() {
@@ -77,6 +87,7 @@ export class Graph {
                     this.modifiedSupplyBehaviors.length > 0 ||
                     this.needsOrdering.length > 0) {
 
+                    this.eventLoopState!.phase = EventLoopPhase.updates;
                     let sequence = this.currentEvent!.sequence;
                     this.addUntrackedBehaviors();
                     this.addUntrackedSupplies();
@@ -89,7 +100,14 @@ export class Graph {
 
                 let effect = this.effects.shift();
                 if (effect) {
+                    this.eventLoopState!.phase = EventLoopPhase.sideEffects;
+                    this.eventLoopState!.currentSideEffect = effect;
                     effect.block(effect.extent);
+                    if (this.eventLoopState != null) {
+                        // side effect could create a synchronous action which would create a nested event loop
+                        // which would clear out any existing event loop states
+                        this.eventLoopState.currentSideEffect = null;
+                    }
                     continue;
                 }
 
@@ -97,19 +115,23 @@ export class Graph {
                     this.clearTransients();
                     this.lastEvent = this.currentEvent!;
                     this.currentEvent = null;
+                    this.eventLoopState = null;
                     this.currentBehavior = null;
                 }
 
                 let action = this.actions.shift();
                 if (action) {
-                    let newEvent = new GraphEvent(this.lastEvent.sequence + 1, this.dateProvider.now(), action.impulse);
+                    let newEvent = new GraphEvent(this.lastEvent.sequence + 1, this.dateProvider.now());
                     this.currentEvent = newEvent;
-                    action.block();
+                    this.eventLoopState = new EventLoopState(action);
+                    this.eventLoopState.phase = EventLoopPhase.action;
+                    action.block(action.extent);
                     continue;
                 }
 
             } catch (error) {
                 this.currentEvent = null;
+                this.eventLoopState = null;
                 this.actions.length = 0;
                 this.effects.length = 0;
                 this.currentBehavior = null;
@@ -140,6 +162,9 @@ export class Graph {
 
     resourceTouched(resource: Resource) {
         if (this.currentEvent != null) {
+            if (this.eventLoopState != null && this.eventLoopState.phase == EventLoopPhase.action) {
+                this.eventLoopState.actionUpdates.push(resource);
+            }
             for (let subsequent of resource.subsequents) {
                 this.activateBehavior(subsequent, this.currentEvent.sequence);
             }
@@ -162,12 +187,19 @@ export class Graph {
         }
     }
 
-    sideEffect(extent: Extent, name: string | null, block: (extent: Extent) => void) {
+    sideEffect(block: () => void, debugName?: string) {
+        this.sideEffectHelper({ debugName: debugName, block: block, behavior: null, extent: null });
+    }
+
+    sideEffectHelper(sideEffect: SideEffect) {
         if (this.currentEvent == null) {
             let err: any = new Error("Effects can only be added during an event.");
             throw err;
+        } else if (this.eventLoopState!.phase == EventLoopPhase.sideEffects) {
+            let err: any = new Error("Nested side effects don't make sense");
+            throw err;
         } else {
-            this.effects.push({ debugName: name, block: block, extent: extent });
+            this.effects.push(sideEffect);
         }
     }
 
@@ -544,16 +576,34 @@ export class Graph {
 export class GraphEvent {
     sequence: number;
     timestamp: Date;
-    impulse: string | null;
 
-    constructor(sequence: number, timestamp: Date, impulse: string | null) {
+    constructor(sequence: number, timestamp: Date) {
         this.sequence = sequence;
         this.timestamp = timestamp;
-        this.impulse = impulse;
     }
 }
 
-export const InitialEvent: GraphEvent = new GraphEvent(0, new Date(0), "InitialEvent");
+enum EventLoopPhase {
+    queued,
+    action,
+    updates,
+    sideEffects
+}
+
+export class EventLoopState {
+    action: Action;
+    actionUpdates: Resource[];
+    currentSideEffect: SideEffect | null = null;
+    phase: EventLoopPhase;
+
+    constructor(action: Action) {
+        this.action = action;
+        this.phase =  EventLoopPhase.queued;
+        this.actionUpdates = [];
+    }
+}
+
+export const InitialEvent: GraphEvent = new GraphEvent(0, new Date(0));
 
 export interface Transient {
     clear(): void;

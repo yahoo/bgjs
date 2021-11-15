@@ -8,7 +8,7 @@ import {Extent, Named} from "./extent";
 import {GraphEvent, Graph, Transient, InitialEvent} from "./bggraph";
 
 export class Resource implements Named {
-    debugName: string | null = null;
+    debugName: string | undefined;
 
     extent: Extent;
     graph: Graph;
@@ -72,10 +72,10 @@ export class Moment<T = undefined> extends Resource implements Transient {
         return this._happenedWhen;
     }
 
-    updateWithAction(value: T | undefined = undefined) {
-        this.graph.action(this.debugName ?? ("Impulse From update(): " + this), () => {
+    updateWithAction(value: T | undefined = undefined, debugName?: string) {
+        this.graph.action(() => {
             this.update(value);
-        });
+        }, debugName);
         return;
     }
 
@@ -105,10 +105,10 @@ export class State<T> extends Resource implements Transient {
         this.currentState = { value: initialState, event: InitialEvent };
     }
 
-    updateWithAction(newValue: T) {
-        this.graph.action(this.debugName ?? ("Impulse From updateValue(): " + this), () => {
+    updateWithAction(newValue: T, debugName?: string) {
+        this.graph.action(() => {
             this.update(newValue);
-        });
+        }, debugName);
         return;
     }
 
