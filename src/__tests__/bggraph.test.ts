@@ -336,9 +336,78 @@ describe('State Resource', () => {
             }).toThrow();
 
         });
+
+        test('cannot access value inside behavior if not supply or demand', () => {
+            let sr1 = ext.state(1);
+            let sr2 = ext.state(1);
+            let sr3 = ext.state(1);
+            let sr4 = ext.state(1);
+            let sr5 = ext.state(1);
+
+            // |> Given resource that are supplied and demanded
+            ext.behavior([sr1], [sr2], ext => {
+                sr1.value;
+                sr1.event;
+                sr1.justUpdated;
+                sr2.value;
+                sr2.event;
+                sr2.justUpdated;
+            });
+            ext.addToGraphWithAction();
+
+            // |> When they are accessed inside a behavior during an event
+            // |> Then it will succeed
+            sr1.updateWithAction(2);
+
+            // |> And when they are accessed outside an event or behavior
+            // |> Then it will succeed
+            sr1.value;
+            sr1.event;
+            sr1.justUpdated;
+
+            // |> And when we access a non-supplied resource inside an action
+            // |> Then it will succeed
+            g.action(() => {
+                sr1.value;
+            });
+
+            // |> But Given behaviors that access value, event, or justUpdated for a resource
+            // that is not supplied or demanded
+            let ext2 = new Extent(g);
+            ext2.behavior([sr3], null, ext => {
+                sr2.value;
+            });
+
+            ext2.behavior([sr4], null, ext => {
+                sr2.event;
+            });
+
+            ext2.behavior([sr5], null, ext => {
+                sr2.justUpdated;
+            });
+            ext2.addToGraphWithAction();
+
+            // |> Then it will fail
+            expect(() => {
+                sr3.updateWithAction(2);
+            }).toThrow();
+
+            expect(() => {
+                sr4.updateWithAction(2);
+            }).toThrow();
+
+            expect(() => {
+                sr5.updateWithAction(2);
+            }).toThrow();
+
+            // |> And when we access a supplied resource from an action
+            // |> Then it will fail
+            expect(() => {
+                sr2.updateWithAction(2);
+            }).toThrow();
+        });
     });
-})
-;
+});
 
 describe('Moment Resource', () => {
 
@@ -463,6 +532,76 @@ describe('Moment Resource', () => {
             ext.addToGraphWithAction();
             expect(() => {
                 mr1.update();
+            }).toThrow();
+        });
+
+        test('cannot access value inside behavior if not supply or demand', () => {
+            let mr1 = ext.moment();
+            let mr2 = ext.moment();
+            let mr3 = ext.moment();
+            let mr4 = ext.moment();
+            let mr5 = ext.moment();
+
+            // |> Given resource that are supplied and demanded
+            ext.behavior([mr1], [mr2], ext => {
+                mr1.value;
+                mr1.event;
+                mr1.justUpdated;
+                mr2.value;
+                mr2.event;
+                mr2.justUpdated;
+            });
+            ext.addToGraphWithAction();
+
+            // |> When they are accessed inside a behavior during an event
+            // |> Then it will succeed
+            mr1.updateWithAction();
+
+            // |> And when they are accessed outside an event or behavior
+            // |> Then it will succeed
+            mr1.value;
+            mr1.event;
+            mr1.justUpdated;
+
+            // |> And when we access a non-supplied resource inside an action
+            // |> Then it will succeed
+            g.action(() => {
+                mr1.value;
+            });
+
+            // |> But Given behaviors that access value, event, or justUpdated for a resource
+            // that is not supplied or demanded
+            let ext2 = new Extent(g);
+            ext2.behavior([mr3], null, ext => {
+                mr2.value;
+            });
+
+            ext2.behavior([mr4], null, ext => {
+                mr2.event;
+            });
+
+            ext2.behavior([mr5], null, ext => {
+                mr2.justUpdated;
+            });
+            ext2.addToGraphWithAction();
+
+            // |> Then it will fail
+            expect(() => {
+                mr3.updateWithAction();
+            }).toThrow();
+
+            expect(() => {
+                mr4.updateWithAction();
+            }).toThrow();
+
+            expect(() => {
+                mr5.updateWithAction();
+            }).toThrow();
+
+            // |> And when we access a supplied resource from an action
+            // |> Then it will fail
+            expect(() => {
+                mr2.updateWithAction();
             }).toThrow();
         });
 

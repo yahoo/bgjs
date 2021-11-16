@@ -50,7 +50,20 @@ export class Resource implements Named {
         }
     }
 
+    assertValidAccessor() {
+        let graph = this.graph;
+        let currentBehavior = graph.currentBehavior;
+
+        if (currentBehavior != null && currentBehavior != this.suppliedBy && !currentBehavior.demands?.has(this)) {
+            let err: any = new Error("Cannot access the value or event of a resource inside a behavior unless it is supplied or demanded.");
+            err.resource = this;
+            err.currentBehavior = currentBehavior;
+            throw err;
+        }
+    }
+
     get justUpdated(): boolean {
+        this.assertValidAccessor();
         return false;
     }
 }
@@ -61,14 +74,17 @@ export class Moment<T = undefined> extends Resource implements Transient {
     private _happenedWhen: GraphEvent | null = null;
 
     get justUpdated(): boolean {
+        this.assertValidAccessor();
         return this._happened;
     }
 
     get value(): T | undefined {
+        this.assertValidAccessor();
         return this._happenedValue;
     }
 
     get event(): GraphEvent | null {
+        this.assertValidAccessor();
         return this._happenedWhen;
     }
 
@@ -136,15 +152,17 @@ export class State<T> extends Resource implements Transient {
     }
 
     get value(): T {
+        this.assertValidAccessor();
         return this.currentState.value;
     }
 
     get event(): GraphEvent {
+        this.assertValidAccessor();
         return this.currentState.event;
     }
 
     private get trace(): StateHistory<T> {
-        if (this.justUpdated) {
+        if (this.currentState.event === this.graph.currentEvent) {
             return this.previousState!;
         } else {
             return this.currentState;
@@ -160,7 +178,8 @@ export class State<T> extends Resource implements Transient {
     }
 
     get justUpdated(): boolean {
-        return this.event === this.graph.currentEvent
+        this.assertValidAccessor();
+        return this.currentState.event === this.graph.currentEvent
     }
 
     justUpdatedTo(toState: T): boolean {
