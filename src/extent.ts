@@ -5,7 +5,7 @@
 
 import {Graph} from "./bggraph";
 import {Behavior} from "./behavior";
-import {Moment, Resource, State} from "./resource";
+import {Moment, Resource, State, Linkable} from "./resource";
 
 export interface Named {
     debugName: string | undefined;
@@ -90,7 +90,7 @@ export class Extent implements Named {
         }
     }
 
-    behavior(demands: Resource[] | null, supplies: Resource[] | null, block: (ext: this) => void): Behavior {
+    behavior(demands: Linkable[] | null, supplies: Resource[] | null, block: (ext: this) => void): Behavior {
         let behavior = new Behavior(this, demands, supplies, block as (arg0: Extent) => void);
         return behavior;
     }

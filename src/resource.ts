@@ -7,7 +7,19 @@ import {Behavior} from "./behavior";
 import {Extent, Named} from "./extent";
 import {GraphEvent, Graph, Transient, InitialEvent} from "./bggraph";
 
-export class Resource implements Named {
+export enum LinkType {
+    demand,
+    supply,
+    order,
+    trace
+}
+
+export interface Linkable {
+    resource: Resource,
+    type: LinkType
+}
+
+export class Resource implements Named, Linkable {
     debugName: string | undefined;
 
     extent: Extent;
@@ -24,6 +36,18 @@ export class Resource implements Named {
         if (name !== undefined) {
             this.debugName = name;
         }
+    }
+
+    get order(): Linkable {
+        return {resource: this, type: LinkType.order }
+    }
+
+    get resource(): Resource {
+        return this;
+    }
+
+    get type(): LinkType {
+        return LinkType.demand;
     }
 
     assertValidUpdater() {

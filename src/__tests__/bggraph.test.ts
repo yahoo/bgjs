@@ -647,6 +647,21 @@ describe('dependencies', () => {
         expect(r_a.subsequents!.size).toBe(1);
     });
 
+    test('ordering resources arent called', () => {
+        // |> Given a behavior with an ordering demand
+        let run = false;
+        ext.behavior([r_a, r_b.order], null, ext1 => {
+            run = true;
+        });
+        ext.addToGraphWithAction();
+
+        // |> When that demand is updated
+        r_b.updateWithAction(1);
+
+        // |> Then that behavior doesn't run
+        expect(run).toBeFalsy();
+    });
+
     test('check can update resource in a different extent', () => {
 
         let parentExt = new Extent(g)
@@ -1571,7 +1586,7 @@ describe('Effects, Actions, Events', () => {
             });
         }).then(() => {
             order.push(4);
-            expect(order).toStrictEqual([1,2,3,4]);
+            expect(order).toStrictEqual([1, 2, 3, 4]);
         });
         order.push(3);
         return p;
@@ -1592,7 +1607,7 @@ describe('Effects, Actions, Events', () => {
             });
         }).then(() => {
             order.push(4);
-            expect(order).toStrictEqual([1,2,3,4]);
+            expect(order).toStrictEqual([1, 2, 3, 4]);
         });
         order.push(3);
         return p;

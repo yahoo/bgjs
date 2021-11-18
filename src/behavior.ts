@@ -4,12 +4,13 @@
 
 
 import {Orderable} from "./bufferedqueue";
-import {Extent, Named} from "./extent";
-import {Resource} from "./resource";
+import {Extent} from "./extent";
+import {Resource, Linkable} from "./resource";
 import {OrderingState} from "./bggraph"
 
 export class Behavior implements Orderable {
     demands: Set<Resource> | null;
+    orderingDemands: Set<Resource> | null;
     supplies: Set<Resource> | null;
     block: (extent: Extent) => void;
     enqueuedWhen: number | null = null;
@@ -19,13 +20,14 @@ export class Behavior implements Orderable {
     orderingState: OrderingState = OrderingState.Untracked;
     order: number = 0;
 
-    untrackedDemands: Resource[] | null;
+    untrackedDemands: Linkable[] | null;
     untrackedSupplies: Resource[] | null;
 
-    constructor(extent: Extent, demands: Resource[] | null, supplies: Resource[] | null, block: (extent: Extent) => void) {
+    constructor(extent: Extent, demands: Linkable[] | null, supplies: Resource[] | null, block: (extent: Extent) => void) {
         this.extent = extent;
         extent.addBehavior(this);
         this.demands = null;
+        this.orderingDemands = null;
         this.supplies = null;
         this.block = block;
         this.untrackedDemands = demands;

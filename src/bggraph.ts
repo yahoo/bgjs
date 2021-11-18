@@ -6,7 +6,7 @@
 import {BufferedPriorityQueue} from "./bufferedqueue";
 import {Behavior} from "./behavior";
 import {Extent} from "./extent";
-import {Resource} from "./resource";
+import {LinkType, Resource} from "./resource";
 
 export enum OrderingState {
     Untracked, // new behaviors
@@ -188,7 +188,10 @@ export class Graph {
                 this.eventLoopState.actionUpdates.push(resource);
             }
             for (let subsequent of resource.subsequents) {
-                this.activateBehavior(subsequent, this.currentEvent.sequence);
+                let isOrderingDemand = subsequent.orderingDemands != null && subsequent.orderingDemands.has(resource);
+                if (!isOrderingDemand) {
+                    this.activateBehavior(subsequent, this.currentEvent.sequence);
+                }
             }
         }
     }
@@ -276,7 +279,7 @@ export class Graph {
                     let removedDemands: Resource[] | undefined;
                     if (behavior.demands != null) {
                         for (let demand of behavior.demands) {
-                            if (!behavior.untrackedDemands.includes(demand)) {
+                            if (!behavior.untrackedDemands.some(linkable => linkable.resource == demand)) {
                                 if (removedDemands == undefined) {
                                     removedDemands = [];
                                 }
@@ -286,7 +289,8 @@ export class Graph {
                     }
 
                     let addedDemands: Resource[] | undefined;
-                    for (let untrackedDemand of behavior.untrackedDemands) {
+                    for (let linkableDemand of behavior.untrackedDemands) {
+                        let untrackedDemand = linkableDemand.resource;
                         if (!untrackedDemand.added) {
                             let err: any = new Error("All demands must be added to the graph.");
                             err.currentBehavior = behavior;
@@ -326,7 +330,22 @@ export class Graph {
                         }
                     }
 
-                    behavior.demands = new Set(behavior.untrackedDemands);
+                    let newDemands: Set<Resource> | null = null;
+                    let orderingDemands: Set<Resource> | null = null;
+                    for (let linkable of behavior.untrackedDemands) {
+                        if (newDemands == null) {
+                            newDemands = new Set();
+                        }
+                        newDemands.add(linkable.resource);
+                        if (linkable.type == LinkType.order) {
+                            if (orderingDemands == null) {
+                                orderingDemands = new Set();
+                            }
+                            orderingDemands.add(linkable.resource);
+                        }
+                    }
+                    behavior.demands = newDemands;
+                    behavior.orderingDemands = orderingDemands;
                     behavior.untrackedDemands = null;
 
                     if (orderBehavior) {
