@@ -1088,18 +1088,6 @@ describe('Extents', () => {
             }).toThrow();
         });
 
-        test('check actions on unadded extents are errors', () => {
-            let e = new TestExtent(g);
-            expect(() => {
-                e.action(() => {
-                });
-            }).toThrow();
-            expect(() => {
-                e.actionAsync(() => {
-                });
-            }).toThrow();
-        });
-
         test('check extent cannot be added to graph outside event', () => {
             let e = new TestExtent(g);
             expect(() => {
@@ -1568,6 +1556,90 @@ describe('Effects, Actions, Events', () => {
         expect(effectIsRun).toBeTruthy();
     });
 
+    test('actionAsync returns promise which is resolved asynchronously when event loop completes', () => {
+        // |> Given a promise from the actionAsync call
+        // |> When it is run
+        // |> Then the action will be started immediately with a new event loop
+        //    and it will complete side effects
+        //    and will resolve promise
+        //    which will run asynchronously after actionAsync call completes
+        let order: number[] = [];
+        let p = g.actionAsync(() => {
+            order.push(1);
+            g.sideEffect(() => {
+                order.push(2);
+            });
+        }).then(() => {
+            order.push(4);
+            expect(order).toStrictEqual([1,2,3,4]);
+        });
+        order.push(3);
+        return p;
+    });
+
+    test('actionAsync exits on extent', () => {
+        // |> Given a promise from the actionAsync call
+        // |> When it is run
+        // |> Then the action will be started immediately with a new event loop
+        //    and it will complete side effects
+        //    and will resolve promise
+        //    which will run asynchronously after actionAsync call completes
+        let order: number[] = [];
+        let p = ext.actionAsync((ext1) => {
+            order.push(1);
+            ext1.sideEffect((ex) => {
+                order.push(2);
+            });
+        }).then(() => {
+            order.push(4);
+            expect(order).toStrictEqual([1,2,3,4]);
+        });
+        order.push(3);
+        return p;
+    });
+
+    test('promise is resolved at the end of existing event loop', (done) => {
+        // |> Given an existing event loop
+        // |> When actionAsync are called
+        // |> They will be run at the end of the existing event loop
+        let firstCalled = false;
+        let secondCalled = false;
+        g.action(() => {
+            g.sideEffect(() => {
+                Promise.all([
+                    g.actionAsync(() => {
+                        firstCalled = true;
+                    }),
+                    g.actionAsync(() => {
+                        secondCalled = true;
+                    })
+                ]).then(() => {
+                    expect(firstCalled && secondCalled).toBeTruthy();
+                    done();
+                });
+            });
+        });
+
+    });
+
+    test('errors from async action are available', () => {
+        // |> Given a behavior that supplies a resource
+        let mr1 = ext.moment();
+        ext.behavior(null, [mr1], ext => {
+
+        });
+        ext.addToGraphWithAction();
+
+
+        // |> When an actionAsync causes error by updating a supplied resource
+        // |> Then there will be an error which is rejected asynchronously
+        return g.actionAsync(() => {
+            mr1.update(); // will fail, because its already supplied
+        }).catch(error => {
+            expect(error).not.toBeNull();
+        });
+    });
+
     test('timeProvider gives an alternate time', () => {
         let t = new Date(1);
         let tp = {
@@ -1638,7 +1710,7 @@ describe('Effects, Actions, Events', () => {
 
         expect(lastActionName).toBe('2');
 
-        m1.updateWithAction(undefined,'3');
+        m1.updateWithAction(undefined, '3');
 
         expect(lastActionName).toBe('3');
 
@@ -1739,7 +1811,7 @@ describe('Effects, Actions, Events', () => {
     test('actions directly inside behaviors are disallowed', () => {
         ext.behavior([ext.added], null, extent => {
             extent.action(extent => {
-               // throws
+                // throws
             });
         });
 
@@ -1759,5 +1831,6 @@ describe('Effects, Actions, Events', () => {
             });
         }).toThrow();
     })
-});
+})
+;
 

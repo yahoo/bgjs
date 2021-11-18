@@ -60,7 +60,7 @@ export class Extent implements Named {
     }
 
     removeFromGraphWithAction(debugName?: string) {
-        this.graph.action(() => { this.removeFromGraph(); }, debugName);
+        this.action(() => { this.removeFromGraph(); }, debugName);
     }
 
     removeFromGraph() {
@@ -113,23 +113,11 @@ export class Extent implements Named {
         this.graph.sideEffectHelper({ debugName: debugName, block: (block as (arg0: Extent | null) => void), extent: this, behavior: this.graph.currentBehavior });
     }
 
-    actionAsync(action: (ext: this) => void, debugName?: string) {
-        if (this.addedToGraphWhen != null) {
-            this.graph.actionHelper({block: action as (arg0: Extent | null) => void, debugName: debugName, extent: this }, false)
-        } else {
-            let err: any = new Error("Action on extent requires it be added to the graph.");
-            err.extent = this;
-            throw err;
-        }
+    async actionAsync(action: (ext: this) => void, debugName?: string) {
+        return this.graph.actionAsyncHelper({block: action as (arg0: Extent | null) => void, debugName: debugName, extent: this, resolve:null })
     }
 
     action(action: (ext: this) => void, debugName?: string) {
-        if (this.addedToGraphWhen != null) {
-            this.graph.actionHelper({block: action as (arg0: Extent | null) => void, debugName: debugName, extent: this }, true)
-        } else {
-            let err: any = new Error("Action on extent requires it be added to the graph.");
-            err.extent = this;
-            throw err;
-        }
+        this.graph.actionHelper({block: action as (arg0: Extent | null) => void, debugName: debugName, extent: this, resolve: null })
     }
 }

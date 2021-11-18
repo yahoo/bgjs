@@ -3,10 +3,10 @@
 //
 
 
-import { BufferedPriorityQueue } from "./bufferedqueue";
-import { Behavior } from "./behavior";
-import { Extent } from "./extent";
-import { Resource } from "./resource";
+import {BufferedPriorityQueue} from "./bufferedqueue";
+import {Behavior} from "./behavior";
+import {Extent} from "./extent";
+import {Resource} from "./resource";
 
 export enum OrderingState {
     Untracked, // new behaviors
@@ -26,15 +26,18 @@ interface SideEffect {
 interface Action {
     block: (extent: Extent | null) => void;
     extent: Extent | null;
+    resolve: (() => void) | null;
     debugName?: string;
 }
 
 export interface BehaviorGraphDateProvider {
-    now() : Date
+    now(): Date
 }
 
 const DefaultDateProvider = {
-    now: () => { return new Date(); }
+    now: () => {
+        return new Date();
+    }
 }
 
 export class Graph {
@@ -57,28 +60,44 @@ export class Graph {
         this.dateProvider = timeProvider;
     }
 
-    actionAsync(block: () => void, debugName?: string) {
-        this.actionHelper({debugName: debugName, block: block, extent: null}, false);
-    }
-
     action(block: () => void, debugName?: string) {
-        this.actionHelper({debugName: debugName, block: block, extent: null}, true);
+        this.actionHelper({debugName: debugName, block: block, extent: null, resolve: null});
     }
 
-    actionHelper(action: Action, forceSync: boolean) {
+    actionHelper(action: Action) {
         if (this.eventLoopState != null && (this.eventLoopState.phase == EventLoopPhase.action || this.eventLoopState.phase == EventLoopPhase.updates)) {
             let err: any = new Error("Action cannot be created directly inside another action or behavior. Consider wrapping it in a side effect block.");
             throw err;
         }
         this.actions.push(action);
-        if (this.currentEvent == null || forceSync) {
-            this.eventLoop();
-        }
+        this.eventLoop();
+    }
+
+    async actionAsync(block: () => void, debugName?: string) {
+        return this.actionAsyncHelper({debugName: debugName, block: block, extent: null, resolve: null})
+    }
+
+    async actionAsyncHelper(action: Action) {
+        return new Promise((resolve, reject) => {
+            try {
+                if (this.eventLoopState != null && (this.eventLoopState.phase == EventLoopPhase.action || this.eventLoopState.phase == EventLoopPhase.updates)) {
+                    let err: any = new Error("Action cannot be created directly inside another action or behavior. Consider wrapping it in a side effect block.");
+                    throw err;
+                }
+                action.resolve = resolve;
+                this.actions.push(action);
+                if (this.currentEvent == null) {
+                    this.eventLoop();
+                }
+            } catch (e) {
+                reject(e);
+            }
+        });
     }
 
     private eventLoop() {
 
-        while(true) {
+        while (true) {
 
             try {
                 if (this.activatedBehaviors.length > 0 ||
@@ -112,6 +131,9 @@ export class Graph {
                 }
 
                 if (this.currentEvent) {
+                    if (this.eventLoopState!.action.resolve != undefined) {
+                        this.eventLoopState!.action.resolve();
+                    }
                     this.clearTransients();
                     this.lastEvent = this.currentEvent!;
                     this.currentEvent = null;
@@ -188,7 +210,7 @@ export class Graph {
     }
 
     sideEffect(block: () => void, debugName?: string) {
-        this.sideEffectHelper({ debugName: debugName, block: block, behavior: null, extent: null });
+        this.sideEffectHelper({debugName: debugName, block: block, behavior: null, extent: null});
     }
 
     sideEffectHelper(sideEffect: SideEffect) {
@@ -328,9 +350,11 @@ export class Graph {
         // find all behaviors that need ordering and their
         // subsequents and mark them all as needing ordering
 
-        if (this.needsOrdering.length == 0) { return; }
+        if (this.needsOrdering.length == 0) {
+            return;
+        }
 
-        let localNeedsOrdering : Behavior[] = [];
+        let localNeedsOrdering: Behavior[] = [];
 
         // dfs forward on each to find all that need ordering
         let x = 0;
@@ -354,7 +378,7 @@ export class Graph {
         }
         this.needsOrdering.length = 0;
 
-        let needsReheap = { value: false }; // this allows out parameter
+        let needsReheap = {value: false}; // this allows out parameter
         for (let behavior of localNeedsOrdering) {
             this.sortDFS(behavior, needsReheap);
         }
@@ -598,7 +622,7 @@ export class EventLoopState {
 
     constructor(action: Action) {
         this.action = action;
-        this.phase =  EventLoopPhase.queued;
+        this.phase = EventLoopPhase.queued;
         this.actionUpdates = [];
     }
 }
