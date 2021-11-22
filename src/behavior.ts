@@ -48,24 +48,6 @@ export class Behavior implements Orderable {
 
 }
 
-export class DynamicDemands<T extends Extent> {
-    switches: Demandable[];
-    links: (ext: T) => Demandable[] | null
-    constructor(switches: Demandable[], links: (ext: T) => Demandable[] | null) {
-        this.switches = switches;
-        this.links = links;
-    }
-}
-
-export class DynamicSupplies<T extends Extent> {
-    switches: Demandable[];
-    links: (ext: T) => Resource[] | null
-    constructor(switches: Demandable[], links: (ext: T) => Resource[] | null) {
-        this.switches = switches;
-        this.links = links;
-    }
-}
-
 export class BehaviorBuilder<T extends Extent> {
     extent: T;
     untrackedDemands: Demandable[] | null = null;

@@ -4,7 +4,7 @@
 
 
 import {Behavior} from "./behavior";
-import {Extent, Named} from "./extent";
+import {Extent} from "./extent";
 import {GraphEvent, Graph, Transient, InitialEvent} from "./bggraph";
 
 export enum LinkType {
@@ -17,9 +17,9 @@ export interface Demandable {
     type: LinkType
 }
 
-export class Resource implements Named, Demandable {
-    debugName: string | undefined;
-
+export class Resource implements Demandable {
+    debugName: string | null;
+    isResource: boolean = true;
     extent: Extent;
     graph: Graph;
     added: boolean = false;
@@ -33,6 +33,8 @@ export class Resource implements Named, Demandable {
         extent.addResource(this);
         if (name !== undefined) {
             this.debugName = name;
+        } else {
+            this.debugName = null;
         }
     }
 

@@ -1177,6 +1177,30 @@ describe('dynamic graph changes', () => {
             });
         });
     });
+
+    test('updating demands on behavior that has already run will affect future events', () => {
+        // |> Given a behavior that demands one resource
+        let m1 = ext.moment();
+        let m2 = ext.moment();
+        let run = false;
+        ext.behavior([m1], null, ext1 => {
+            ext1.graph.currentBehavior!.setDynamicDemands([m2]);
+            run = true;
+        });
+        ext.addToGraphWithAction();
+
+        // It doesn't activate on other resource
+        m2.updateWithAction();
+        expect(run).toBeFalsy();
+
+        // |> When behavior updates demands on itself to include m2
+        m1.updateWithAction();
+        run = false;
+
+        // |> Then m2 updating will activate the behavior
+        m2.updateWithAction();
+        expect(run).toBeTruthy();
+    });
 });
 
 
@@ -1190,7 +1214,7 @@ describe('Extents', () => {
 
         constructor(graph: Graph) {
             super(graph);
-            this.r1 = this.state(0, 'r1');
+            this.r1 = this.state(0);
             this.r2 = this.state(0, 'custom_r2');
             this.b1 = this.behavior([this.r1], [this.r2], (extent: TestExtent) => {
                 if (this.r1.justUpdated) {
@@ -1206,25 +1230,8 @@ describe('Extents', () => {
 
     test('gets class name', () => {
         let e = new TestExtent(g);
-        let m1 = e.moment()
-        let m2 = e.moment()
-        let m3 = e.moment()
 
         expect(e.debugConstructorName).toBe('TestExtent');
-
-        e.behavior().demands(m1, m2).supplies(m3).runs(ext1 => {
-
-        });
-
-
-        e.behavior()
-            .dynamicDemands([m2], ext1 => {
-                return []
-            })
-            .runs(ext1 => {
-                m3.update();
-            });
-
     })
 
     test('contained components picked up', () => {

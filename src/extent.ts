@@ -7,15 +7,7 @@ import {Graph} from "./bggraph";
 import {Behavior, BehaviorBuilder} from "./behavior";
 import {Moment, Resource, State, Demandable} from "./resource";
 
-export interface Named {
-    debugName: string | undefined;
-}
-
-function isNamed(arg: any): arg is Named {
-    return (arg as Named).debugName !== undefined;
-}
-
-export class Extent implements Named {
+export class Extent {
     debugConstructorName: string | undefined;
     debugName: string | undefined;
     behaviors: Behavior[] = [];
@@ -85,12 +77,9 @@ export class Extent implements Named {
         // by this Extent object and name them with corresponding keys
         for (let key in this) {
             let object = this[key];
-            if (object == null || object == undefined) {
-                continue;
-            }
-            if (isNamed(object)) {
-                if (object.debugName == null) {
-                    object.debugName = key;
+            if (object && (object as any)['isResource'] !== undefined) {
+                if ((object as any as Resource).debugName == null) {
+                    (object as any as Resource).debugName = key;
                 }
             }
         }
