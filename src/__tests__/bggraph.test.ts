@@ -752,17 +752,23 @@ describe('dynamic graph changes', () => {
             counter = counter + 1;
         });
         let y_out = ext.state(0, 'y_out');
-        let y_bhv = ext.behavior([r_a, reordering, x_out], [y_out], (extent: Extent) => {
+        let y_bhv = ext.behavior([r_a, reordering], [y_out], (extent: Extent) => {
             whenY = counter;
             counter = counter + 1;
         });
 
         ext.behavior([r_a], [reordering], (extent: Extent) => {
-            x_bhv.setDemands([r_a, reordering, y_out]);
-            y_bhv.setDemands([r_a, reordering]);
+            x_bhv.setDynamicDemands([y_out]);
+            y_bhv.setDynamicDemands([]);
         });
 
         ext.addToGraphWithAction();
+
+        // this sets them one way
+        g.action(() => {
+            x_bhv.setDynamicDemands([]);
+            y_bhv.setDynamicDemands([x_out]);
+        });
 
         // when event that activates re-demand behavior happens
         r_a.updateWithAction(2);
@@ -942,7 +948,7 @@ describe('dynamic graph changes', () => {
         ext.addToGraphWithAction();
 
         g.action(() => {
-            b1.setDemands([r_a]);
+            b1.setDynamicDemands([r_a]);
         });
 
         expect(b1.demands).toContain(r_a);
@@ -955,7 +961,7 @@ describe('dynamic graph changes', () => {
             run = true;
         });
         ext.behavior([r_a], [], extent => {
-            b1.setDemands([r_a]);
+            b1.setDynamicDemands([r_a]);
         });
         ext.addToGraphWithAction();
 
@@ -972,7 +978,7 @@ describe('dynamic graph changes', () => {
         ext.addToGraphWithAction();
 
         g.action(() => {
-            b1.setSupplies([r_a]);
+            b1.setDynamicSupplies([r_a]);
         });
 
         expect(b1.supplies).toContain(r_a);
@@ -1000,7 +1006,7 @@ describe('dynamic graph changes', () => {
 
         // update the supply to accommodate
         g.action(() => {
-            b_b.setSupplies([r_x]);
+            b_b.setDynamicSupplies([r_x]);
         });
 
         // when action initiates updates we should get them run in order
@@ -1015,14 +1021,18 @@ describe('dynamic graph changes', () => {
     test('changing supplies will unsupply old resources', () => {
         // |> Given we have a resource supplied by a behavior
         let m1 = new Moment(ext);
-        ext.behavior(null, [m1], (extent) => {
+        let b1 = ext.behavior(null, null, (extent) => {
             // do nothing
         });
         ext.addToGraphWithAction();
+        ext.action(() => {
+            b1.setDynamicSupplies([m1])
+        });
+        expect(m1.suppliedBy).not.toBeNull();
 
         // |> When that behavior no longer supplies that original resource
         ext.action(() => {
-            m1.suppliedBy!.setSupplies([]);
+            b1.setDynamicSupplies(null);
         });
 
         // |> Then that resource should free to be supplied by another behavior
@@ -1111,9 +1121,61 @@ describe('dynamic graph changes', () => {
         });
 
         // |> And behavior is ordered greater than the relinking behavior to ensure
-        // it is updated before running 
+        // it is updated before running
         expect(behaviorOrder).toBeGreaterThan(relinkingBehaviorOrder);
+    });
 
+    test('setDynamicDemands retains statics', () => {
+        // |> Given a behavior with static demands
+        let m1 = ext.moment();
+        let m2 = ext.moment();
+        let run = false;
+        let b1 = ext.behavior([m1], null, ext1 => {
+            run = true;
+        });
+        ext.addToGraphWithAction();
+
+        // |> When dynamicDemands are set
+        g.action(() => {
+            b1.setDynamicDemands([m2]);
+        });
+
+        // |> Then behavior runs on newly added dynamicDemand
+        m2.updateWithAction()
+        expect(run).toBeTruthy();
+
+        // |> And when static demand is updated
+        run = false
+        m1.updateWithAction()
+
+        // |> Then it will also update
+        expect(run).toBeTruthy();
+    });
+
+    test('setDynamicSupplies retains statics', () => {
+        // |> Given behavior that supplies one resource
+        let m1 = ext.moment();
+        let m2 = ext.moment();
+        let m3 = ext.moment();
+        let b1 = ext.behavior([m1], [m2], ext1 => {
+            m2.update();
+            m3.update();
+        });
+        ext.addToGraphWithAction();
+
+        // |> When I setDynamicSupplies to supply both and activate it
+        g.action(() => {
+            b1.setDynamicSupplies([m3]);
+        });
+
+        // |> Then behavior updates both successfully
+        g.action(() => {
+            m1.update();
+            g.sideEffect(() => {
+                expect(m2.justUpdated).toBeTruthy();
+                expect(m3.justUpdated).toBeTruthy();
+            });
+        });
     });
 });
 
@@ -1284,11 +1346,11 @@ describe('Graph checks', () => {
         ext.addToGraphWithAction();
 
         expect(() => {
-            b_x.setDemands([r_a]);
+            b_x.setDynamicDemands([r_a]);
         }).toThrow();
 
         expect(() => {
-            b_x.setSupplies([r_b]);
+            b_x.setDynamicSupplies([r_b]);
         }).toThrow();
     });
 
@@ -1298,13 +1360,13 @@ describe('Graph checks', () => {
 
         expect(() => {
             g.action(() => {
-                b_x.setDemands([r_a]);
+                b_x.setDynamicDemands([r_a]);
             });
         }).toThrow();
 
         expect(() => {
             g.action(() => {
-                b_x.setSupplies([r_a]);
+                b_x.setDynamicSupplies([r_a]);
             });
         }).toThrow();
 
@@ -1355,8 +1417,8 @@ describe('Graph checks', () => {
         });
         ext.behavior([r2], [r3], extent => {
             r3.update();
-            b3.setDemands([]);
-            b3.setSupplies([]);
+            b3.setDynamicDemands([]);
+            b3.setDynamicSupplies([]);
             throw(new Error());
         });
         b3 = ext.behavior([r3], null, extent => {

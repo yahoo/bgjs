@@ -21,7 +21,9 @@ export class Behavior implements Orderable {
     order: number = 0;
 
     untrackedDemands: Demandable[] | null;
+    untrackedDynamicDemands: Demandable[] | null;
     untrackedSupplies: Resource[] | null;
+    untrackedDynamicSupplies: Resource[] | null;
 
     constructor(extent: Extent, demands: Demandable[] | null, supplies: Resource[] | null, block: (extent: Extent) => void) {
         this.extent = extent;
@@ -31,14 +33,16 @@ export class Behavior implements Orderable {
         this.supplies = null;
         this.block = block;
         this.untrackedDemands = demands;
+        this.untrackedDynamicDemands = null;
         this.untrackedSupplies = supplies;
+        this.untrackedDynamicSupplies = null;
     }
 
-    setDemands(newDemands: Demandable[]) {
+    setDynamicDemands(newDemands: Demandable[] | null) {
         this.extent.graph.updateDemands(this, newDemands);
     }
 
-    setSupplies(newSupplies: Resource[]) {
+    setDynamicSupplies(newSupplies: Resource[] | null) {
         this.extent.graph.updateSupplies(this, newSupplies);
     }
 
@@ -117,14 +121,14 @@ export class BehaviorBuilder<T extends Extent> {
         if (hasDynamicDemands) {
             new Behavior(this.extent, this.dynamicDemandSwitches, [dynamicDemandResource!], ((extent: T) => {
                let demandLinks = this.dynamicDemandLinks!(extent);
-               mainBehavior.setDemands([...(this.untrackedDemands ?? []), ...(demandLinks ?? [])]);
+               mainBehavior.setDynamicDemands(demandLinks);
             }) as (arg0: Extent) => void);
         }
 
         if (hasDynamicSupplies) {
             new Behavior(this.extent, this.dynamicSupplySwitches, [dynamicSupplyResource!], ((extent: T) => {
                 let supplyLinks = this.dynamicSupplyLinks!(extent);
-                mainBehavior.setSupplies([...(this.untrackedSupplies ?? []), ...(supplyLinks ?? [])]);
+                mainBehavior.setDynamicSupplies(supplyLinks);
             }) as (arg0: Extent) => void);
         }
 
