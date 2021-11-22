@@ -4,8 +4,8 @@
 
 
 import {Graph} from "./bggraph";
-import {Behavior} from "./behavior";
-import {Moment, Resource, State, Linkable} from "./resource";
+import {Behavior, BehaviorBuilder} from "./behavior";
+import {Moment, Resource, State, Demandable} from "./resource";
 
 export interface Named {
     debugName: string | undefined;
@@ -31,7 +31,7 @@ export class Extent implements Named {
         // this hidden behavior supplies addedToGraph and gets activated independently when an
         // extent is added to the graph
         this.added = new State<boolean>(this, false);
-        this.addedToGraphBehavior = this.behavior(null, [this.added], (extent) => {
+        this.addedToGraphBehavior = this.behavior().supplies(this.added).runs((extent) => {
             extent.added.update(true);
         });
     }
@@ -45,7 +45,9 @@ export class Extent implements Named {
     }
 
     addToGraphWithAction(debugName?: string) {
-        this.graph.action(() => { this.addToGraph(); }, debugName);
+        this.graph.action(() => {
+            this.addToGraph();
+        }, debugName);
     }
 
     addToGraph() {
@@ -60,7 +62,9 @@ export class Extent implements Named {
     }
 
     removeFromGraphWithAction(debugName?: string) {
-        this.action(() => { this.removeFromGraph(); }, debugName);
+        this.action(() => {
+            this.removeFromGraph();
+        }, debugName);
     }
 
     removeFromGraph() {
@@ -81,7 +85,9 @@ export class Extent implements Named {
         // by this Extent object and name them with corresponding keys
         for (let key in this) {
             let object = this[key];
-            if (object == null || object == undefined) { continue; }
+            if (object == null || object == undefined) {
+                continue;
+            }
             if (isNamed(object)) {
                 if (object.debugName == null) {
                     object.debugName = key;
@@ -90,9 +96,21 @@ export class Extent implements Named {
         }
     }
 
-    behavior(demands: Linkable[] | null, supplies: Resource[] | null, block: (ext: this) => void): Behavior {
-        let behavior = new Behavior(this, demands, supplies, block as (arg0: Extent) => void);
-        return behavior;
+    behavior(): BehaviorBuilder<this>
+    behavior(demands: Demandable[] | null, supplies: Resource[] | null, runBlock: (ext: this) => void): Behavior
+    behavior(demands?: Demandable[] | null, supplies?: Resource[] | null, runBlock?: (ext: this) => void): BehaviorBuilder<this> | Behavior {
+        let b: BehaviorBuilder<this> = new BehaviorBuilder(this);
+        if (demands) {
+            b.demands(...demands)
+        }
+        if (supplies) {
+            b.supplies(...supplies)
+        }
+        if (runBlock) {
+            return b.runs(runBlock);
+        } else {
+            return b;
+        }
     }
 
     resource(name?: string): Resource {
@@ -110,14 +128,29 @@ export class Extent implements Named {
     sideEffect(block: (ext: this) => void, debugName?: string) {
         // This requires a cast because we know the extent won't be null at runtime because this side effect
         // was created with one
-        this.graph.sideEffectHelper({ debugName: debugName, block: (block as (arg0: Extent | null) => void), extent: this, behavior: this.graph.currentBehavior });
+        this.graph.sideEffectHelper({
+            debugName: debugName,
+            block: (block as (arg0: Extent | null) => void),
+            extent: this,
+            behavior: this.graph.currentBehavior
+        });
     }
 
     async actionAsync(action: (ext: this) => void, debugName?: string) {
-        return this.graph.actionAsyncHelper({block: action as (arg0: Extent | null) => void, debugName: debugName, extent: this, resolve:null })
+        return this.graph.actionAsyncHelper({
+            block: action as (arg0: Extent | null) => void,
+            debugName: debugName,
+            extent: this,
+            resolve: null
+        })
     }
 
     action(action: (ext: this) => void, debugName?: string) {
-        this.graph.actionHelper({block: action as (arg0: Extent | null) => void, debugName: debugName, extent: this, resolve: null })
+        this.graph.actionHelper({
+            block: action as (arg0: Extent | null) => void,
+            debugName: debugName,
+            extent: this,
+            resolve: null
+        })
     }
 }

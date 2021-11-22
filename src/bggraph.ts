@@ -6,7 +6,7 @@
 import {BufferedPriorityQueue} from "./bufferedqueue";
 import {Behavior} from "./behavior";
 import {Extent} from "./extent";
-import {LinkType, Resource} from "./resource";
+import {Demandable, LinkType, Resource} from "./resource";
 
 export enum OrderingState {
     Untracked, // new behaviors
@@ -476,7 +476,7 @@ export class Graph {
         this.untrackedBehaviors.push(behavior)
     }
 
-    updateDemands(behavior: Behavior, newDemands: Resource[]) {
+    updateDemands(behavior: Behavior, newDemands: Demandable[]) {
         if (!behavior.added) {
             let err: any = new Error("Behavior must belong to graph before updating demands.");
             err.behavior = behavior;

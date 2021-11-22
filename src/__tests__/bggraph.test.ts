@@ -1029,7 +1029,95 @@ describe('dynamic graph changes', () => {
         expect(m1.suppliedBy).toBeNull();
     });
 
+    test('dynamicDemands clause updates demands', () => {
+        // |> Given a behavior with dynamicDemands
+        let m1 = ext.moment();
+        let m2 = ext.moment();
+        let m3 = ext.moment();
+        let runCount = 0;
+        let relinkBehaviorOrder = 0;
+        let behaviorOrder = 0;
+        ext.behavior()
+            .demands(m1)
+            .dynamicDemands([m2], ext1 => {
+                return [m3];
+                relinkBehaviorOrder = ext1.graph.currentBehavior!.order;
+            })
+            .runs(ext1 => {
+                runCount++;
+                behaviorOrder = ext1.graph.currentBehavior!.order;
+            });
+        ext.addToGraphWithAction();
+
+        // |> When net yet demanded resource is updated
+        m3.updateWithAction();
+
+        // |> Then behavior is not run
+        expect(runCount).toBe(0);
+
+        // |> And when an update activates a relink and we update
+        m2.updateWithAction();
+        m3.updateWithAction();
+
+        // |> Then behavior will be run
+        expect(runCount).toBe(1);
+
+        // |> And when we update original static resource
+        m1.updateWithAction();
+
+        // |> Then we expect behavior to also run
+        expect(runCount).toBe(2);
+
+        // |> Relink behavior should be a prior to its behavior
+        // This ensures that relinking happens before behavior is run
+        expect(behaviorOrder).toBeGreaterThan(relinkBehaviorOrder);
+    });
+
+    test('dynamicSupplies clause updates supplies', () => {
+        // |> Given a behavior with dynamicSupplies
+        let m1 = ext.moment();
+        let m2 = ext.moment();
+        let m3 = ext.moment();
+
+        let relinkingBehaviorOrder = 0;
+        let behaviorOrder = 0;
+        ext.behavior()
+            .demands(m1)
+            .dynamicSupplies([m2], ext1 => {
+                relinkingBehaviorOrder = ext1.graph.currentBehavior!.order;
+                return [m3];
+            })
+            .runs(ext1 => {
+                behaviorOrder = ext1.graph.currentBehavior!.order;
+                m3.update();
+            });
+        ext.addToGraphWithAction();
+
+        // |> When behavior activated before relink is activated
+        // |> Then action should throw because behavior does not supply that resource
+        expect(() => {
+            m1.update();
+        }).toThrow(); // cannot update unsupplied resource
+
+        // |> And when behavior has its supplies relinked
+        m2.updateWithAction();
+
+        // |> Then the behavior can activate and update the newly supplied resource
+        g.action(() => {
+            m1.update();
+            g.sideEffect(() => {
+                expect(m3.justUpdated).toBeTruthy();
+            });
+        });
+
+        // |> And behavior is ordered greater than the relinking behavior to ensure
+        // it is updated before running 
+        expect(behaviorOrder).toBeGreaterThan(relinkingBehaviorOrder);
+
+    });
 });
+
+
 
 describe('Extents', () => {
 
@@ -1042,7 +1130,7 @@ describe('Extents', () => {
             super(graph);
             this.r1 = this.state(0, 'r1');
             this.r2 = this.state(0, 'custom_r2');
-            this.b1 = new Behavior(this, [this.r1], [this.r2], (extent: Extent) => {
+            this.b1 = this.behavior([this.r1], [this.r2], (extent: TestExtent) => {
                 if (this.r1.justUpdated) {
                     this.r2.update(this.r1.value * 2);
                 }
@@ -1056,8 +1144,26 @@ describe('Extents', () => {
 
     test('gets class name', () => {
         let e = new TestExtent(g);
+        let m1 = e.moment()
+        let m2 = e.moment()
+        let m3 = e.moment()
+
         expect(e.debugConstructorName).toBe('TestExtent');
-    });
+
+        e.behavior().demands(m1, m2).supplies(m3).runs(ext1 => {
+
+        });
+
+
+        e.behavior()
+            .dynamicDemands([m2], ext1 => {
+                return []
+            })
+            .runs(ext1 => {
+                m3.update();
+            });
+
+    })
 
     test('contained components picked up', () => {
         let e = new TestExtent(g);
@@ -1118,8 +1224,7 @@ describe('Extents', () => {
             }).toThrow();
         });
     });
-})
-;
+});
 
 describe('Graph checks', () => {
 
@@ -1845,7 +1950,6 @@ describe('Effects, Actions, Events', () => {
                 });
             });
         }).toThrow();
-    })
-})
-;
+    });
+});
 

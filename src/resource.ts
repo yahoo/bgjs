@@ -8,18 +8,16 @@ import {Extent, Named} from "./extent";
 import {GraphEvent, Graph, Transient, InitialEvent} from "./bggraph";
 
 export enum LinkType {
-    demand,
-    supply,
+    reactive,
     order,
-    trace
 }
 
-export interface Linkable {
+export interface Demandable {
     resource: Resource,
     type: LinkType
 }
 
-export class Resource implements Named, Linkable {
+export class Resource implements Named, Demandable {
     debugName: string | undefined;
 
     extent: Extent;
@@ -38,7 +36,7 @@ export class Resource implements Named, Linkable {
         }
     }
 
-    get order(): Linkable {
+    get order(): Demandable {
         return {resource: this, type: LinkType.order }
     }
 
@@ -47,7 +45,7 @@ export class Resource implements Named, Linkable {
     }
 
     get type(): LinkType {
-        return LinkType.demand;
+        return LinkType.reactive;
     }
 
     assertValidUpdater() {
