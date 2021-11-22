@@ -52,9 +52,9 @@ class LoginExtent extends bg.Extent {
             let email = extent.email.value;
             let emailValid = validateEmail(email);
             extent.emailValid.update(emailValid);
-            extent.sideEffect(null, (extent) => {
+            extent.sideEffect((extent) => {
                 inputFeedback("emailFeedback", extent.emailValid.value);
-            });
+            }, undefined, null);
 
         });
 
@@ -64,9 +64,9 @@ class LoginExtent extends bg.Extent {
             let password = extent.password.value ?? "";
             let passwordValid = password.length > 0;
             extent.passwordValid.update(passwordValid);
-            extent.sideEffect("passwordFeedback", (extent) => {
+            extent.sideEffect((extent) => {
                 inputFeedback("passwordFeedback", extent.passwordValid.value);
-            });
+            }, undefined, "passwordFeedback");
 
         });
 
@@ -75,9 +75,9 @@ class LoginExtent extends bg.Extent {
 
             let enabled = extent.emailValid.value && extent.passwordValid.value && !extent.loggingIn.value;
             extent.loginEnabled.update(enabled)
-            extent.sideEffect("enable login button", (extent) => {
+            extent.sideEffect((extent) => {
                 loginButtonEnable(extent.loginEnabled.value);
-            });
+            }, undefined, "enable login button");
 
         });
 
@@ -91,16 +91,16 @@ class LoginExtent extends bg.Extent {
             }
 
             if (extent.loggingIn.justUpdatedTo(true)) {
-                extent.sideEffect("login api call", (extent) => {
+                extent.sideEffect((extent) => {
                     loginToServer(extent.email.value, extent.password.value);
-                });
+                }, undefined, "login api call");
             }
 
         });
 
 
         this.makeBehavior([this.loggingIn, this.loginComplete, this.addedToGraph], null, (extent) => {
-            extent.sideEffect("login status", (extent) => {
+            extent.sideEffect((extent) => {
                 let status = "&nbsp;"
                 if (extent.loggingIn.value) {
                     status = "Logging in...";
@@ -112,7 +112,7 @@ class LoginExtent extends bg.Extent {
                     }
                 }
                 updateLoginStatus(status);
-            });
+            }, undefined, "login status");
         });
 
     }

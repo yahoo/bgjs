@@ -3,10 +3,10 @@
 //
 
 
-import { BufferedPriorityQueue } from "./bufferedqueue";
-import { Behavior } from "./behavior";
-import { Extent } from "./extent";
-import { Resource } from "./resource";
+import {BufferedPriorityQueue} from "./bufferedqueue";
+import {Behavior} from "./behavior";
+import {Extent} from "./extent";
+import {Demandable, LinkType, Resource} from "./resource";
 
 export enum OrderingState {
     Untracked, // new behaviors
@@ -17,22 +17,27 @@ export enum OrderingState {
 }
 
 interface SideEffect {
-    debugName: string | null;
-    block: (extent: Extent) => void;
-    extent: Extent;
+    block: (extent: Extent | null) => void;
+    extent: Extent | null;
+    behavior: Behavior | null;
+    debugName?: string;
 }
 
 interface Action {
-    impulse: string | null;
-    block: () => void;
+    block: (extent: Extent | null) => void;
+    extent: Extent | null;
+    resolve: (() => void) | null;
+    debugName?: string;
 }
 
 export interface BehaviorGraphDateProvider {
-    now() : Date
+    now(): Date
 }
 
 const DefaultDateProvider = {
-    now: () => { return new Date(); }
+    now: () => {
+        return new Date();
+    }
 }
 
 export class Graph {
@@ -48,27 +53,51 @@ export class Graph {
     modifiedSupplyBehaviors: Behavior[] = [];
     updatedTransients: Transient[] = [];
     needsOrdering: Behavior[] = [];
+    eventLoopState: EventLoopState | null = null;
 
     constructor(timeProvider = DefaultDateProvider) {
         this.lastEvent = InitialEvent;
         this.dateProvider = timeProvider;
     }
 
-    actionAsync(impulse: string | null, block: () => void) {
-        this.actions.push({impulse: impulse, block: block});
-        if (this.currentEvent == null) {
-            this.eventLoop();
-        }
+    action(block: () => void, debugName?: string) {
+        this.actionHelper({debugName: debugName, block: block, extent: null, resolve: null});
     }
 
-    action(impulse: string | null, block: () => void) {
-        this.actions.push({impulse: impulse, block: block});
+    actionHelper(action: Action) {
+        if (this.eventLoopState != null && (this.eventLoopState.phase == EventLoopPhase.action || this.eventLoopState.phase == EventLoopPhase.updates)) {
+            let err: any = new Error("Action cannot be created directly inside another action or behavior. Consider wrapping it in a side effect block.");
+            throw err;
+        }
+        this.actions.push(action);
         this.eventLoop();
+    }
+
+    async actionAsync(block: () => void, debugName?: string) {
+        return this.actionAsyncHelper({debugName: debugName, block: block, extent: null, resolve: null})
+    }
+
+    async actionAsyncHelper(action: Action) {
+        return new Promise((resolve, reject) => {
+            try {
+                if (this.eventLoopState != null && (this.eventLoopState.phase == EventLoopPhase.action || this.eventLoopState.phase == EventLoopPhase.updates)) {
+                    let err: any = new Error("Action cannot be created directly inside another action or behavior. Consider wrapping it in a side effect block.");
+                    throw err;
+                }
+                action.resolve = resolve;
+                this.actions.push(action);
+                if (this.currentEvent == null) {
+                    this.eventLoop();
+                }
+            } catch (e) {
+                reject(e);
+            }
+        });
     }
 
     private eventLoop() {
 
-        while(true) {
+        while (true) {
 
             try {
                 if (this.activatedBehaviors.length > 0 ||
@@ -77,6 +106,7 @@ export class Graph {
                     this.modifiedSupplyBehaviors.length > 0 ||
                     this.needsOrdering.length > 0) {
 
+                    this.eventLoopState!.phase = EventLoopPhase.updates;
                     let sequence = this.currentEvent!.sequence;
                     this.addUntrackedBehaviors();
                     this.addUntrackedSupplies();
@@ -89,27 +119,41 @@ export class Graph {
 
                 let effect = this.effects.shift();
                 if (effect) {
+                    this.eventLoopState!.phase = EventLoopPhase.sideEffects;
+                    this.eventLoopState!.currentSideEffect = effect;
                     effect.block(effect.extent);
+                    if (this.eventLoopState != null) {
+                        // side effect could create a synchronous action which would create a nested event loop
+                        // which would clear out any existing event loop states
+                        this.eventLoopState.currentSideEffect = null;
+                    }
                     continue;
                 }
 
                 if (this.currentEvent) {
+                    if (this.eventLoopState!.action.resolve != undefined) {
+                        this.eventLoopState!.action.resolve();
+                    }
                     this.clearTransients();
                     this.lastEvent = this.currentEvent!;
                     this.currentEvent = null;
+                    this.eventLoopState = null;
                     this.currentBehavior = null;
                 }
 
                 let action = this.actions.shift();
                 if (action) {
-                    let newEvent = new GraphEvent(this.lastEvent.sequence + 1, this.dateProvider.now(), action.impulse);
+                    let newEvent = new GraphEvent(this.lastEvent.sequence + 1, this.dateProvider.now());
                     this.currentEvent = newEvent;
-                    action.block();
+                    this.eventLoopState = new EventLoopState(action);
+                    this.eventLoopState.phase = EventLoopPhase.action;
+                    action.block(action.extent);
                     continue;
                 }
 
             } catch (error) {
                 this.currentEvent = null;
+                this.eventLoopState = null;
                 this.actions.length = 0;
                 this.effects.length = 0;
                 this.currentBehavior = null;
@@ -140,8 +184,14 @@ export class Graph {
 
     resourceTouched(resource: Resource) {
         if (this.currentEvent != null) {
+            if (this.eventLoopState != null && this.eventLoopState.phase == EventLoopPhase.action) {
+                this.eventLoopState.actionUpdates.push(resource);
+            }
             for (let subsequent of resource.subsequents) {
-                this.activateBehavior(subsequent, this.currentEvent.sequence);
+                let isOrderingDemand = subsequent.orderingDemands != null && subsequent.orderingDemands.has(resource);
+                if (!isOrderingDemand) {
+                    this.activateBehavior(subsequent, this.currentEvent.sequence);
+                }
             }
         }
     }
@@ -162,12 +212,19 @@ export class Graph {
         }
     }
 
-    sideEffect(extent: Extent, name: string | null, block: (extent: Extent) => void) {
+    sideEffect(block: () => void, debugName?: string) {
+        this.sideEffectHelper({debugName: debugName, block: block, behavior: null, extent: null});
+    }
+
+    sideEffectHelper(sideEffect: SideEffect) {
         if (this.currentEvent == null) {
             let err: any = new Error("Effects can only be added during an event.");
             throw err;
+        } else if (this.eventLoopState!.phase == EventLoopPhase.sideEffects) {
+            let err: any = new Error("Nested side effects don't make sense");
+            throw err;
         } else {
-            this.effects.push({ debugName: name, block: block, extent: extent });
+            this.effects.push(sideEffect);
         }
     }
 
@@ -184,31 +241,33 @@ export class Graph {
     private addUntrackedSupplies() {
         if (this.modifiedSupplyBehaviors.length > 0) {
             for (let behavior of this.modifiedSupplyBehaviors) {
-                if (behavior.untrackedSupplies != null) {
-                    if (behavior.supplies != null) {
-                        for (let existingSupply of behavior.supplies) {
-                            existingSupply.suppliedBy = null;
-                        }
-                    }
-                    behavior.supplies = new Set(behavior.untrackedSupplies);
-                    for (let newSupply of behavior.supplies) {
-                        if (newSupply.suppliedBy != null && newSupply.suppliedBy != behavior) {
-                            let err: any = new Error("Resource cannot be supplied by more than one behavior.");
-                            err.alreadySupplied = newSupply;
-                            err.desiredSupplier = behavior;
-                            throw err;
-                        }
-                        newSupply.suppliedBy = behavior;
-                    }
-                    behavior.untrackedSupplies = null;
-                    // technically this doesn't need reordering but its subsequents will
-                    // setting this to reorder will also adjust its subsequents if necessary
-                    // in the sortDFS code
-                    if (behavior.orderingState != OrderingState.NeedsOrdering) {
-                        behavior.orderingState = OrderingState.NeedsOrdering;
-                        this.needsOrdering.push(behavior);
+                let allUntrackedSupplies = [...(behavior.untrackedSupplies ?? []), ...(behavior.untrackedDynamicSupplies ?? [])];
+
+                if (behavior.supplies != null) {
+                    for (let existingSupply of behavior.supplies) {
+                        existingSupply.suppliedBy = null;
                     }
                 }
+                behavior.supplies = new Set(allUntrackedSupplies);
+                for (let newSupply of behavior.supplies) {
+                    if (newSupply.suppliedBy != null && newSupply.suppliedBy != behavior) {
+                        let err: any = new Error("Resource cannot be supplied by more than one behavior.");
+                        err.alreadySupplied = newSupply;
+                        err.desiredSupplier = behavior;
+                        throw err;
+                    }
+                    newSupply.suppliedBy = behavior;
+                }
+
+                // technically this behavior doesn't need reordering but its subsequents will
+                // if they already demand a newly supplied resource
+                // setting this to reorder will ensure its subsequents will reorder if needed
+                // in the sortDFS code
+                if (behavior.orderingState != OrderingState.NeedsOrdering) {
+                    behavior.orderingState = OrderingState.NeedsOrdering;
+                    this.needsOrdering.push(behavior);
+                }
+
             }
             this.modifiedSupplyBehaviors.length = 0;
         }
@@ -217,73 +276,87 @@ export class Graph {
     private addUntrackedDemands(sequence: number) {
         if (this.modifiedDemandBehaviors.length > 0) {
             for (let behavior of this.modifiedDemandBehaviors) {
-                if (behavior.untrackedDemands != null) {
+                let allUntrackedDemands = [...(behavior.untrackedDemands ?? []), ...(behavior.untrackedDynamicDemands ?? [])];
 
-                    let removedDemands: Resource[] | undefined;
-                    if (behavior.demands != null) {
-                        for (let demand of behavior.demands) {
-                            if (!behavior.untrackedDemands.includes(demand)) {
-                                if (removedDemands == undefined) {
-                                    removedDemands = [];
-                                }
-                                removedDemands.push(demand);
+                let removedDemands: Resource[] | undefined;
+                if (behavior.demands != null) {
+                    for (let demand of behavior.demands) {
+                        if (!allUntrackedDemands.some(linkable => linkable.resource == demand)) {
+                            if (removedDemands == undefined) {
+                                removedDemands = [];
+                            }
+                            removedDemands.push(demand);
+                        }
+                    }
+                }
+
+                let addedDemands: Resource[] | undefined;
+                for (let linkableDemand of allUntrackedDemands) {
+                    let untrackedDemand = linkableDemand.resource;
+                    if (!untrackedDemand.added) {
+                        let err: any = new Error("All demands must be added to the graph.");
+                        err.currentBehavior = behavior;
+                        err.untrackedDemand = untrackedDemand;
+                        throw err;
+                    }
+                    if (behavior.demands == null || !behavior.demands.has(untrackedDemand)) {
+                        if (addedDemands == undefined) {
+                            addedDemands = [];
+                        }
+                        addedDemands.push(untrackedDemand);
+                    }
+                }
+
+                let needsRunning = false;
+
+                if (removedDemands != undefined) {
+                    for (let demand of removedDemands) {
+                        demand.subsequents.delete(behavior);
+                    }
+                }
+
+                let orderBehavior = behavior.orderingState != OrderingState.Ordered;
+
+                if (addedDemands != undefined) {
+                    for (let demand of addedDemands) {
+                        demand.subsequents.add(behavior);
+                        if (demand.justUpdated) {
+                            needsRunning = true;
+                        }
+                        if (!orderBehavior) {
+                            let prior = demand.suppliedBy;
+                            if (prior != null && prior.orderingState == OrderingState.Ordered && prior.order >= behavior.order) {
+                                orderBehavior = true;
                             }
                         }
                     }
+                }
 
-                    let addedDemands: Resource[] | undefined;
-                    for (let untrackedDemand of behavior.untrackedDemands) {
-                        if (!untrackedDemand.added) {
-                            let err: any = new Error("All demands must be added to the graph.");
-                            err.currentBehavior = behavior;
-                            err.untrackedDemand = untrackedDemand;
-                            throw err;
-                        }
-                        if (behavior.demands == null || !behavior.demands.has(untrackedDemand)) {
-                            if (addedDemands == undefined) {
-                                addedDemands = [];
-                            }
-                            addedDemands.push(untrackedDemand);
-                        }
+                let newDemands: Set<Resource> | null = null;
+                let orderingDemands: Set<Resource> | null = null;
+                for (let linkable of allUntrackedDemands) {
+                    if (newDemands == null) {
+                        newDemands = new Set();
                     }
-
-                    let needsRunning = false;
-
-                    if (removedDemands != undefined) {
-                        for (let demand of removedDemands) {
-                            demand.subsequents.delete(behavior);
+                    newDemands.add(linkable.resource);
+                    if (linkable.type == LinkType.order) {
+                        if (orderingDemands == null) {
+                            orderingDemands = new Set();
                         }
+                        orderingDemands.add(linkable.resource);
                     }
+                }
+                behavior.demands = newDemands;
+                behavior.orderingDemands = orderingDemands;
 
-                    let orderBehavior = behavior.orderingState != OrderingState.Ordered;
-
-                    if (addedDemands != undefined) {
-                        for (let demand of addedDemands) {
-                            demand.subsequents.add(behavior);
-                            if (demand.justUpdated) {
-                                needsRunning = true;
-                            }
-                            if (!orderBehavior) {
-                                let prior = demand.suppliedBy;
-                                if (prior != null && prior.orderingState == OrderingState.Ordered && prior.order >= behavior.order) {
-                                    orderBehavior = true;
-                                }
-                            }
-                        }
+                if (orderBehavior) {
+                    if (behavior.orderingState != OrderingState.NeedsOrdering) {
+                        behavior.orderingState = OrderingState.NeedsOrdering;
+                        this.needsOrdering.push(behavior);
                     }
-
-                    behavior.demands = new Set(behavior.untrackedDemands);
-                    behavior.untrackedDemands = null;
-
-                    if (orderBehavior) {
-                        if (behavior.orderingState != OrderingState.NeedsOrdering) {
-                            behavior.orderingState = OrderingState.NeedsOrdering;
-                            this.needsOrdering.push(behavior);
-                        }
-                    }
-                    if (needsRunning) {
-                        this.activateBehavior(behavior, sequence);
-                    }
+                }
+                if (needsRunning) {
+                    this.activateBehavior(behavior, sequence);
                 }
 
 
@@ -296,9 +369,11 @@ export class Graph {
         // find all behaviors that need ordering and their
         // subsequents and mark them all as needing ordering
 
-        if (this.needsOrdering.length == 0) { return; }
+        if (this.needsOrdering.length == 0) {
+            return;
+        }
 
-        let localNeedsOrdering : Behavior[] = [];
+        let localNeedsOrdering: Behavior[] = [];
 
         // dfs forward on each to find all that need ordering
         let x = 0;
@@ -322,7 +397,7 @@ export class Graph {
         }
         this.needsOrdering.length = 0;
 
-        let needsReheap = { value: false }; // this allows out parameter
+        let needsReheap = {value: false}; // this allows out parameter
         for (let behavior of localNeedsOrdering) {
             this.sortDFS(behavior, needsReheap);
         }
@@ -401,7 +476,7 @@ export class Graph {
         this.untrackedBehaviors.push(behavior)
     }
 
-    updateDemands(behavior: Behavior, newDemands: Resource[]) {
+    updateDemands(behavior: Behavior, newDemands: Demandable[] | null) {
         if (!behavior.added) {
             let err: any = new Error("Behavior must belong to graph before updating demands.");
             err.behavior = behavior;
@@ -411,11 +486,11 @@ export class Graph {
             err.behavior = behavior;
             throw err;
         }
-        behavior.untrackedDemands = newDemands;
+        behavior.untrackedDynamicDemands = newDemands;
         this.modifiedDemandBehaviors.push(behavior);
     }
 
-    updateSupplies(behavior: Behavior, newSupplies: Resource[]) {
+    updateSupplies(behavior: Behavior, newSupplies: Resource[] | null) {
         if (!behavior.added) {
             let err: any = new Error("Behavior must belong to graph before updating supplies.");
             err.behavior = behavior;
@@ -425,7 +500,7 @@ export class Graph {
             err.behavior = behavior;
             throw err;
         }
-        behavior.untrackedSupplies = newSupplies;
+        behavior.untrackedDynamicSupplies = newSupplies;
         this.modifiedSupplyBehaviors.push(behavior);
     }
 
@@ -544,16 +619,34 @@ export class Graph {
 export class GraphEvent {
     sequence: number;
     timestamp: Date;
-    impulse: string | null;
 
-    constructor(sequence: number, timestamp: Date, impulse: string | null) {
+    constructor(sequence: number, timestamp: Date) {
         this.sequence = sequence;
         this.timestamp = timestamp;
-        this.impulse = impulse;
     }
 }
 
-export const InitialEvent: GraphEvent = new GraphEvent(0, new Date(0), "InitialEvent");
+enum EventLoopPhase {
+    queued,
+    action,
+    updates,
+    sideEffects
+}
+
+export class EventLoopState {
+    action: Action;
+    actionUpdates: Resource[];
+    currentSideEffect: SideEffect | null = null;
+    phase: EventLoopPhase;
+
+    constructor(action: Action) {
+        this.action = action;
+        this.phase = EventLoopPhase.queued;
+        this.actionUpdates = [];
+    }
+}
+
+export const InitialEvent: GraphEvent = new GraphEvent(0, new Date(0));
 
 export interface Transient {
     clear(): void;

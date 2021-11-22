@@ -3,29 +3,17 @@
 //
 
 
-import { 
-    Graph, 
-    GraphEvent, 
-    BehaviorGraphDateProvider,
-    Behavior,
-    State,
-    Moment,
-    Resource,
-    Extent,
-    InitialEvent
- } from '../index';
+import {Behavior, Extent, Graph, InitialEvent, Moment, State} from '../index';
 
 describe('Version 1: Simple Vending Machine', () => {
 
     class VendingMachine extends Extent {
         sodasVended: number = 0;
-        buttonAction: Moment = new Moment(this);
-        vendEffect: Behavior = this.makeBehavior([this.buttonAction], [], (extent: VendingMachine) => {
-            if (extent.buttonAction.justUpdated) {
-                extent.sideEffect('vend', (extent) => {
-                    extent.sodasVended += 1;
-                });
-            }
+        buttonAction: Moment = this.moment();
+        vendEffect: Behavior = this.behavior([this.buttonAction], [], (extent: VendingMachine) => {
+            extent.sideEffect((extent) => {
+                extent.sodasVended += 1;
+            }, 'vend');
         });
     }
 
@@ -47,11 +35,11 @@ describe('Version 2: No Free Soda', () => {
         SODA_PRICE: number = 100;
         sodasVended: number = 0;
 
-        buttonAction: Moment = new Moment(this);
-        insertCoinsAction: Moment<number> = new Moment(this);
-        coinsTotal: State<number> = new State(this, 0);
+        buttonAction: Moment = this.moment();
+        insertCoinsAction: Moment<number> = this.moment();
+        coinsTotal: State<number> = this.state(0);
 
-        vendEffect: Behavior = this.makeBehavior([this.buttonAction, this.insertCoinsAction], [this.coinsTotal], extent => {
+        vendEffect: Behavior = this.behavior([this.buttonAction, this.insertCoinsAction], [this.coinsTotal], extent => {
 
             let coins = extent.coinsTotal.value;
 
@@ -62,13 +50,13 @@ describe('Version 2: No Free Soda', () => {
             if (extent.buttonAction.justUpdated) {
                 if (coins >= extent.SODA_PRICE) {
                     coins -= extent.SODA_PRICE;
-                    extent.sideEffect('vend', (extent) => {
+                    extent.sideEffect((extent) => {
                         extent.sodasVended += 1;
-                    });
+                    }, 'vend');
                 }
             }
 
-            extent.coinsTotal.update(coins, true);
+            extent.coinsTotal.update(coins);
 
         });
     }
@@ -122,14 +110,14 @@ describe('Version 3: Cans', () => {
         cansDisplay: number = 0;
         coinsDisplay: number = 0;
 
-        buttonAction: Moment = new Moment(this);
-        insertCoinsAction: Moment<number> = new Moment(this);
-        restockAction: Moment<number> = new Moment(this);
+        buttonAction: Moment = this.moment();
+        insertCoinsAction: Moment<number> = this.moment();
+        restockAction: Moment<number> = this.moment();
 
-        coinsTotal: State<number> = new State(this, 0);
-        cansTotal: State<number> = new State(this, 0);
+        coinsTotal: State<number> = this.state(0);
+        cansTotal: State<number> = this.state(0);
 
-        vendEffect: Behavior = this.makeBehavior([this.buttonAction, this.insertCoinsAction, this.restockAction],
+        vendEffect: Behavior = this.behavior([this.buttonAction, this.insertCoinsAction, this.restockAction],
             [this.coinsTotal, this.cansTotal], extent => {
 
             let coins = extent.coinsTotal.value;
@@ -145,28 +133,28 @@ describe('Version 3: Cans', () => {
                 if (coins >= extent.SODA_PRICE && cans > 0) {
                     coins -= extent.SODA_PRICE;
                     cans -= 1;
-                    extent.sideEffect('vend',(extent) => {
+                    extent.sideEffect((extent) => {
                         extent.sodasVended += 1;
-                    })
+                    }, 'vend')
                 }
             }
-            extent.coinsTotal.update(coins, true);
-            extent.cansTotal.update(cans, true);
+            extent.coinsTotal.update(coins);
+            extent.cansTotal.update(cans);
         });
 
         constructor(graph: Graph) {
             super(graph);
 
-            this.makeBehavior([this.coinsTotal], null, extent => {
-                extent.sideEffect('coin display',(extent) => {
-                    extent.coinsDisplay = this.coinsTotal.value;
-                });
+            this.behavior([this.coinsTotal], null, extent => {
+                extent.sideEffect((extent) => {
+                    extent.coinsDisplay = extent.coinsTotal.value;
+                }, 'coin display');
             });
 
-            this.makeBehavior([this.cansTotal], null, extent => {
-                extent.sideEffect('can display', (extent) => {
-                    extent.cansDisplay = this.cansTotal.value;
-                });
+            this.behavior([this.cansTotal], null, extent => {
+                extent.sideEffect((extent) => {
+                    extent.cansDisplay = extent.cansTotal.value;
+                }, 'can display');
             });
 
         }
@@ -209,31 +197,31 @@ describe('Version 4: Vending State', () => {
         cansDisplay: number = 0;
         coinsDisplay: number = 0;
 
-        buttonAction: Moment = new Moment(this);
-        insertCoinsAction: Moment<number> = new Moment(this);
-        restockAction: Moment<number> = new Moment(this);
-        vending: State<boolean> = new State(this, false);
-        completeVendAction: Moment = new Moment(this);
+        buttonAction: Moment = this.moment();
+        insertCoinsAction: Moment<number> = this.moment();
+        restockAction: Moment<number> = this.moment();
+        vending: State<boolean> = this.state(false);
+        completeVendAction: Moment = this.moment();
 
-        coinsTotal: State<number> = new State(this, 0);
-        cansTotal: State<number> = new State(this, 0);
+        coinsTotal: State<number> = this.state(0);
+        cansTotal: State<number> = this.state(0);
 
         constructor(graph: Graph) {
             super(graph);
 
-            this.makeBehavior([this.coinsTotal], null, extent => {
-                extent.sideEffect('coin display', (extent) => {
+            this.behavior([this.coinsTotal], null, extent => {
+                extent.sideEffect((extent) => {
                     extent.coinsDisplay = extent.coinsTotal.value;
-                });
+                }, 'coin display');
             });
 
-            this.makeBehavior([this.cansTotal], null, extent => {
-                extent.sideEffect('can display', (extent) => {
+            this.behavior([this.cansTotal], null, extent => {
+                extent.sideEffect((extent) => {
                     extent.cansDisplay = extent.cansTotal.value;
-                });
+                }, 'can display');
             });
 
-            this.makeBehavior(
+            this.behavior(
                 [this.completeVendAction, this.insertCoinsAction, this.restockAction],
                 [this.coinsTotal, this.cansTotal],
                 extent => {
@@ -249,12 +237,12 @@ describe('Version 4: Vending State', () => {
                         cans -= 1;
                     }
 
-                    extent.coinsTotal.update(coins, true);
-                    extent.cansTotal.update(cans, true);
+                    extent.coinsTotal.update(coins);
+                    extent.cansTotal.update(cans);
 
                 });
 
-            this.makeBehavior(
+            this.behavior(
                 [this.coinsTotal, this.cansTotal, this.buttonAction, this.completeVendAction],
                 [this.vending],
                 (extent) => {
@@ -265,15 +253,15 @@ describe('Version 4: Vending State', () => {
                     // given extent.vending.value
                     if (extent.vending.value) {
                         if (extent.completeVendAction.justUpdated) {
-                            extent.vending.update(false, true);
+                            extent.vending.update(false);
                         }
                     } else {
                         if (extent.buttonAction.justUpdated) {
                             if (coins >= extent.SODA_PRICE && cans > 0) {
-                                extent.sideEffect('vend', (extent) => {
+                                extent.sideEffect((extent) => {
                                     extent.sodasVended += 1;
-                                });
-                                extent.vending.update(true, true);
+                                }, 'vend');
+                                extent.vending.update(true);
                             }
                         }
                     }
@@ -344,35 +332,35 @@ describe('Version 5: Jammed', () => {
         coinsReturned: number = 0;
 
         // measures
-        buttonAction: Moment = new Moment(this);
-        insertCoinsAction: Moment<number> = new Moment(this);
-        restockAction: Moment<number> = new Moment(this);
-        completeVendAction: Moment = new Moment(this);
-        timeoutAction: Moment = new Moment(this);
-        fixJamAction: Moment = new Moment(this);
+        buttonAction: Moment = this.moment();
+        insertCoinsAction: Moment<number> = this.moment();
+        restockAction: Moment<number> = this.moment();
+        completeVendAction: Moment = this.moment();
+        timeoutAction: Moment = this.moment();
+        fixJamAction: Moment = this.moment();
 
         // resources
-        vending: State<boolean> = new State(this, false);
-        coinsTotal: State<number> = new State(this, 0);
-        cansTotal: State<number> = new State(this, 0);
-        jammed: State<boolean> = new State(this, false);
+        vending: State<boolean> = this.state(false);
+        coinsTotal: State<number> = this.state(0);
+        cansTotal: State<number> = this.state(0);
+        jammed: State<boolean> = this.state(false);
 
         constructor(graph: Graph) {
             super(graph);
 
-            this.makeBehavior([this.coinsTotal], null, extent => {
-                extent.sideEffect('coin display', (extent) => {
+            this.behavior([this.coinsTotal], null, extent => {
+                extent.sideEffect((extent) => {
                     extent.coinsDisplay = extent.coinsTotal.value;
-                });
+                }, 'coin display');
             });
 
-            this.makeBehavior([this.cansTotal], null, extent => {
-                extent.sideEffect('can display', () => {
+            this.behavior([this.cansTotal], null, extent => {
+                extent.sideEffect(() => {
                     extent.cansDisplay = extent.cansTotal.value
-                });
+                }, 'can display');
             });
 
-            this.makeBehavior(
+            this.behavior(
                 [this.completeVendAction, this.insertCoinsAction, this.restockAction],
                 [this.coinsTotal, this.cansTotal],
                 extent => {
@@ -383,9 +371,9 @@ describe('Version 5: Jammed', () => {
                     if (extent.insertCoinsAction.justUpdated) {
                         let inserted = extent.insertCoinsAction.value!;
                         if (extent.jammed.traceValue) {
-                            extent.sideEffect('return coins', (extent) => {
+                            extent.sideEffect((extent) => {
                                 extent.coinsReturned = inserted;
-                            });
+                            }, 'return coins');
                         } else {
                             coins += inserted;
                         }
@@ -400,12 +388,12 @@ describe('Version 5: Jammed', () => {
                         cans -= 1;
                     }
 
-                    extent.coinsTotal.update(coins, true);
-                    extent.cansTotal.update(cans, true);
+                    extent.coinsTotal.update(coins);
+                    extent.cansTotal.update(cans);
 
                 });
 
-            this.makeBehavior(
+            this.behavior(
                 [this.coinsTotal, this.cansTotal, this.buttonAction, this.completeVendAction, this.jammed],
                 [this.vending],
                 (extent) => {
@@ -416,42 +404,42 @@ describe('Version 5: Jammed', () => {
 
                     if (vending) {
                         if (extent.completeVendAction.justUpdated) {
-                            extent.vending.update(false, true);
+                            extent.vending.update(false);
                         } else if (extent.jammed.justUpdatedTo(true)) {
-                            extent.vending.update(false, true);
+                            extent.vending.update(false);
                         }
                     } else {
                         if (extent.buttonAction.justUpdated) {
                             if (coins >= extent.SODA_PRICE && cans > 0) {
-                                extent.vending.update(true, true);
+                                extent.vending.update(true);
                             }
                         }
                     }
 
                 });
 
-            this.makeBehavior([this.vending], null, (extent) => {
+            this.behavior([this.vending], null, (extent) => {
                 if (extent.vending.justUpdatedTo(true)) {
-                    extent.sideEffect('vend, start timeout timer',(extent) => {
+                    extent.sideEffect((extent) => {
                         extent.vendTimeoutTimerRunning = true;
                         extent.sodasVended += 1;
-                    });
+                    }, 'vend, start timeout timer');
                 } else if (extent.vending.justUpdatedTo(false)) {
-                    extent.sideEffect('stop, timeout timer',(extent) => {
+                    extent.sideEffect((extent) => {
                         extent.vendTimeoutTimerRunning = false;
-                    });
+                    }, 'stop, timeout timer');
                 }
             });
 
-            this.makeBehavior(
+            this.behavior(
                 [this.timeoutAction, this.fixJamAction],
                 [this.jammed],
                 (extent) => {
                     // if we started vending
                     if (extent.vending.traceValue && extent.timeoutAction.justUpdated) {
-                        extent.jammed.update(true, true);
+                        extent.jammed.update(true);
                     } else if (extent.jammed.value && extent.fixJamAction.justUpdated) {
-                        extent.jammed.update(false, true);
+                        extent.jammed.update(false);
                     }
                 }
             )

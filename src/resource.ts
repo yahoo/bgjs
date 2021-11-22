@@ -4,12 +4,22 @@
 
 
 import {Behavior} from "./behavior";
-import {Extent, Named} from "./extent";
+import {Extent} from "./extent";
 import {GraphEvent, Graph, Transient, InitialEvent} from "./bggraph";
 
-export class Resource implements Named {
-    debugName: string | null = null;
+export enum LinkType {
+    reactive,
+    order,
+}
 
+export interface Demandable {
+    resource: Resource,
+    type: LinkType
+}
+
+export class Resource implements Demandable {
+    debugName: string | null;
+    isResource: boolean = true;
     extent: Extent;
     graph: Graph;
     added: boolean = false;
@@ -23,7 +33,21 @@ export class Resource implements Named {
         extent.addResource(this);
         if (name !== undefined) {
             this.debugName = name;
+        } else {
+            this.debugName = null;
         }
+    }
+
+    get order(): Demandable {
+        return {resource: this, type: LinkType.order }
+    }
+
+    get resource(): Resource {
+        return this;
+    }
+
+    get type(): LinkType {
+        return LinkType.reactive;
     }
 
     assertValidUpdater() {
@@ -50,7 +74,20 @@ export class Resource implements Named {
         }
     }
 
+    assertValidAccessor() {
+        let graph = this.graph;
+        let currentBehavior = graph.currentBehavior;
+
+        if (currentBehavior != null && currentBehavior != this.suppliedBy && !currentBehavior.demands?.has(this)) {
+            let err: any = new Error("Cannot access the value or event of a resource inside a behavior unless it is supplied or demanded.");
+            err.resource = this;
+            err.currentBehavior = currentBehavior;
+            throw err;
+        }
+    }
+
     get justUpdated(): boolean {
+        this.assertValidAccessor();
         return false;
     }
 }
@@ -61,21 +98,28 @@ export class Moment<T = undefined> extends Resource implements Transient {
     private _happenedWhen: GraphEvent | null = null;
 
     get justUpdated(): boolean {
+        this.assertValidAccessor();
         return this._happened;
     }
 
     get value(): T | undefined {
+        this.assertValidAccessor();
         return this._happenedValue;
     }
 
     get event(): GraphEvent | null {
+        this.assertValidAccessor();
         return this._happenedWhen;
     }
 
-    updateWithAction(value: T | undefined = undefined) {
-        this.graph.action(this.debugName ?? ("Impulse From update(): " + this), () => {
+    justUpdatedTo(value: T): boolean {
+        return this.justUpdated && this._happenedValue == value;
+    }
+
+    updateWithAction(value: T | undefined = undefined, debugName?: string) {
+        this.graph.action(() => {
             this.update(value);
-        });
+        }, debugName);
         return;
     }
 
@@ -105,22 +149,27 @@ export class State<T> extends Resource implements Transient {
         this.currentState = { value: initialState, event: InitialEvent };
     }
 
-    updateWithAction(newValue: T, changesOnly: boolean) {
-        this.graph.action(this.debugName ?? ("Impulse From updateValue(): " + this), () => {
-            this.update(newValue, changesOnly);
-        });
+    updateWithAction(newValue: T, debugName?: string) {
+        this.graph.action(() => {
+            this.update(newValue);
+        }, debugName);
         return;
     }
 
-    update(newValue: T, changesOnly: boolean) {
-        this.assertValidUpdater();
-
-        if (changesOnly) {
-            if (this.currentState.value == newValue) {
-                return;
-            }
+    update(newValue: T) {
+        if (this.currentState.value == newValue) {
+            return;
         }
-        this.previousState = this.currentState;
+        this.updateForce(newValue);
+    }
+
+    updateForce(newValue: T) {
+        this.assertValidUpdater();
+        if (this.graph.currentEvent != null && this.currentState.event.sequence < this.graph.currentEvent?.sequence) {
+            // captures trace as the value before any updates
+            this.previousState = this.currentState;
+        }
+
         this.currentState = { value: newValue, event: this.graph.currentEvent! };
         this.graph.resourceTouched(this);
         this.graph.trackTransient(this);
@@ -131,15 +180,17 @@ export class State<T> extends Resource implements Transient {
     }
 
     get value(): T {
+        this.assertValidAccessor();
         return this.currentState.value;
     }
 
     get event(): GraphEvent {
+        this.assertValidAccessor();
         return this.currentState.event;
     }
 
     private get trace(): StateHistory<T> {
-        if (this.justUpdated) {
+        if (this.currentState.event === this.graph.currentEvent) {
             return this.previousState!;
         } else {
             return this.currentState;
@@ -155,7 +206,8 @@ export class State<T> extends Resource implements Transient {
     }
 
     get justUpdated(): boolean {
-        return this.event === this.graph.currentEvent
+        this.assertValidAccessor();
+        return this.currentState.event === this.graph.currentEvent
     }
 
     justUpdatedTo(toState: T): boolean {

@@ -3,19 +3,19 @@
 //
 
 
-import { 
-    Graph, 
-    GraphEvent, 
+import {
+    Graph,
+    GraphEvent,
     BehaviorGraphDateProvider,
     Behavior,
     State,
     Moment,
     Resource,
-    Extent
- } from '../index';
- 
-let g : Graph;
-let setupExt : Extent;
+    Extent, InitialEvent
+} from '../index';
+
+let g: Graph;
+let setupExt: Extent;
 let ext: Extent;
 let r_a: State<number>;
 let r_b: State<number>;
@@ -23,9 +23,9 @@ let r_c: State<number>;
 beforeEach(() => {
     g = new Graph();
     setupExt = new Extent(g)
-    r_a = new State<number>( setupExt,0, 'r_a');
-    r_b = new State<number>( setupExt,0, 'r_b');
-    r_c = new State<number>( setupExt,0, 'r_c');
+    r_a = setupExt.state<number>(0, 'r_a');
+    r_b = setupExt.state<number>(0, 'r_b');
+    r_c = setupExt.state<number>(0, 'r_c');
     setupExt.addToGraphWithAction();
     ext = new Extent(g);
 });
@@ -42,7 +42,7 @@ describe('State Resource', () => {
 
     test('initial state', () => {
         // |> When we create a new state resource
-        let sr1 = new State<number>( ext,1, 'sr1');
+        let sr1 = ext.state<number>(1, 'sr1');
 
         // |> It has an initial value
         expect(sr1.value).toBe(1);
@@ -51,11 +51,11 @@ describe('State Resource', () => {
 
     test('updates', () => {
         // |> Given a state in the graph
-        let sr1 = new State<number>( ext,1, 'sr1');
+        let sr1 = ext.state<number>(1, 'sr1');
         ext.addToGraphWithAction();
 
         // |> When it is updated
-        sr1.updateWithAction(2, false);
+        sr1.updateWithAction(2);
 
         expect(sr1.value).toBe(2);
         expect(sr1.event).toBe(g.lastEvent);
@@ -63,33 +63,48 @@ describe('State Resource', () => {
 
     test('filters duplicates', () => {
         // |> Given a state in the graph
-        let sr1 = new State<number>( ext,1, 'sr1');
+        let sr1 = ext.state<number>(1, 'sr1');
         ext.addToGraphWithAction();
 
         // |> When updated with same value and filtering on
         let entered = sr1.event;
-        sr1.updateWithAction(1, true);
+        sr1.updateWithAction(1);
 
         // |> Then update doesn't happen
         expect(sr1.event).not.toBe(g.lastEvent);
         expect(sr1.event).toBe(entered);
     });
 
+    test('can override duplicate filter', () => {
+        // |> Given a state in the graph
+        let sr1 = ext.state<number>(1, 'sr1');
+        ext.addToGraphWithAction();
+
+        // |> When updated with same value and filtering off
+        let entered = sr1.event;
+        g.action(() => {
+            sr1.updateForce(1);
+        })
+
+        // |> Then update does happen
+        expect(sr1.event).toBe(g.lastEvent);
+    });
+
     test('can be a nullable state', () => {
         // Motivation: nullable states are useful for modeling false/true with data
 
         // |> Given a nullable state
-        let sr1 = new State<number | null>( ext,null, 'sr1');
+        let sr1 = ext.state<number | null>(null, 'sr1');
         ext.addToGraphWithAction();
 
         // |> When updated
-        sr1.updateWithAction(1, false);
+        sr1.updateWithAction(1);
 
         // |> Then it will have that new state
         expect(sr1.value).toBe(1);
 
         // |> And updated to null
-        sr1.updateWithAction(null, false);
+        sr1.updateWithAction(null);
 
         // |> Then it will have null state
         expect(sr1.value).toBeNull();
@@ -97,12 +112,12 @@ describe('State Resource', () => {
 
     test('works in pushEvent', () => {
         // |> Given a state
-        let sr1 = new State<number>( ext,0, 'sr1');
+        let sr1 = ext.state<number>(0, 'sr1');
         ext.addToGraphWithAction();
 
         // |> When updated in push event
-        ext.action('update', () => {
-            sr1.update(1, false);
+        ext.action(() => {
+            sr1.update(1);
         });
 
         // |> Then state is updated
@@ -111,23 +126,19 @@ describe('State Resource', () => {
 
     test('works as demand and supply', () => {
         // |> Given state resources and behaviors
-        let sr1 = new State<number>( ext,0, 'sr1');
-        let sr2 = new State<number>( ext,0, 'sr2');
+        let sr1 = ext.state<number>(0, 'sr1');
+        let sr2 = ext.state<number>(0, 'sr2');
         let ran = false;
-        ext.makeBehavior([sr1], [sr2], (extent) => {
-            if (sr1.justUpdated) {
-                sr2.update(1, false);
-            }
+        ext.behavior([sr1], [sr2], (extent) => {
+            sr2.update(1);
         });
-        ext.makeBehavior([sr2], null, (extent) => {
-            if (sr2.justUpdated) {
-                ran = true;
-            }
+        ext.behavior([sr2], null, (extent) => {
+            ran = true;
         });
         ext.addToGraphWithAction();
 
         // |> When event is started
-        sr1.updateWithAction(1, false);
+        sr1.updateWithAction(1);
 
         // |> Then subsequent behaviors are run
         expect(ran).toBeTruthy();
@@ -135,12 +146,12 @@ describe('State Resource', () => {
 
     test('justChanged', () => {
         // |> Given a state resource
-        let sr1 = new State<number>( ext,0, 'sr1');
+        let sr1 = ext.state<number>(0, 'sr1');
         let changed = false;
         let changedTo = false;
         let changedFrom = false;
         let changedToFrom = false;
-        ext.makeBehavior([sr1], null, (extent) => {
+        ext.behavior([sr1], null, (extent) => {
             changed = sr1.justUpdated;
             changedTo = sr1.justUpdatedTo(1);
             changedFrom = sr1.justUpdatedFrom(0);
@@ -149,7 +160,7 @@ describe('State Resource', () => {
         ext.addToGraphWithAction();
 
         // |> When it updates
-        sr1.updateWithAction(1, false);
+        sr1.updateWithAction(1);
 
         // |> Then its justChangedMethods work
         expect(changed).toBeTruthy();
@@ -163,18 +174,16 @@ describe('State Resource', () => {
 
     test('trace tracks before and after values', () => {
         // |> Given a behavior that updates a value
-        let sr1 = new State<number>( ext,0, 'sr1');
-        let mr1 = new Moment(ext, 'mr1');
+        let sr1 = ext.state<number>(0, 'sr1');
+        let mr1 = ext.moment('mr1');
         let before: number | null = null;
         let after: number | null = null;
         let afterEntered: GraphEvent | null = null;
-        ext.makeBehavior([mr1], [sr1], (extent) => {
-            if (mr1.justUpdated) {
-                before = sr1.traceValue;
-                sr1.update(1, false);
-                after = sr1.traceValue;
-                afterEntered = sr1.traceEvent;
-            }
+        ext.behavior([mr1], [sr1], (extent) => {
+            before = sr1.traceValue;
+            sr1.update(1);
+            after = sr1.traceValue;
+            afterEntered = sr1.traceEvent;
         });
         let beforeEvent = sr1.event;
         ext.addToGraphWithAction();
@@ -189,14 +198,34 @@ describe('State Resource', () => {
         expect(afterEntered).toBe(beforeEvent);
     });
 
+    test('trace is value from start of event, not previous value', () => {
+        // |> Given a state resource in the graph
+        let sr1 = ext.state<number>(0);
+        ext.addToGraphWithAction();
+
+        // |> When it is updated multiple times in action (or behavior)
+        var traceValue;
+        var traceEvent;
+        g.action(() => {
+            sr1.update(1);
+            sr1.update(2);
+            g.sideEffect(() => {
+                traceValue = sr1.traceValue;
+                traceEvent = sr1.traceEvent;
+            });
+        });
+
+        // |> Then trace is still the value from beginning of
+        expect(traceValue).toBe(0);
+        expect(traceEvent).toBe(InitialEvent);
+    });
+
     test('start state is transient after updates', () => {
         // |> Given a state resource
-        let sr1 = new State<number>( ext,0, 'sr1');
-        let mr1 = new Moment(ext, 'mr1');
-        ext.makeBehavior([mr1], [sr1], (extent) => {
-            if (mr1.justUpdated) {
-                sr1.update(1, false);
-            }
+        let sr1 = ext.state<number>(0, 'sr1');
+        let mr1 = ext.moment('mr1');
+        ext.behavior([mr1], [sr1], (extent) => {
+            sr1.update(1);
         });
         ext.addToGraphWithAction();
 
@@ -209,16 +238,14 @@ describe('State Resource', () => {
     });
 
     test('can update state for non-supplied resource when adding', () => {
-        let sr1 = new State<number>( ext,0, 'sr1');
+        let sr1 = ext.state<number>(0, 'sr1');
         let didRun = false;
-        ext.makeBehavior([sr1], null, extent => {
-            if (sr1.justUpdated) {
-                didRun = true;
-            }
+        ext.behavior([sr1], null, extent => {
+            didRun = true;
         });
 
-        g.action('adding', () => {
-            sr1.update(1, false);
+        g.action(() => {
+            sr1.update(1);
             ext.addToGraph();
         });
 
@@ -229,25 +256,23 @@ describe('State Resource', () => {
 
         test('check update state needs state resource to be part of graph', () => {
             // |> Given a state resource not part of the graph
-            let sr1 = new State<number>( ext,0, 'sr1');
+            let sr1 = ext.state<number>(0, 'sr1');
 
             // |> When it is updated
             // |> Then an error is raised
             expect(() => {
-                sr1.update(1, false);
+                sr1.update(1);
             }).toThrow();
         });
 
         test('check supplied state is updated by supplier', () => {
             // |> Given a supplied state resource
-            let sr1 = new State<number>( ext,0, 'sr1');
+            let sr1 = ext.state<number>(0, 'sr1');
             let mr1 = new Moment(ext, 'mr1');
-            ext.makeBehavior([mr1], [sr1], extent => {
+            ext.behavior([mr1], [sr1], extent => {
             });
-            ext.makeBehavior([mr1], null, extent => {
-                if (mr1.justUpdated) {
-                    sr1.update(1, false);
-                }
+            ext.behavior([mr1], null, extent => {
+                sr1.update(1);
             });
             ext.addToGraphWithAction();
 
@@ -260,12 +285,10 @@ describe('State Resource', () => {
 
         test('check measured state is update by push event', () => {
             // |> Given a state resource that is not supplied
-            let sr1 = new State<number>( ext,0, 'sr1');
+            let sr1 = ext.state<number>(0, 'sr1');
             let mr1 = new Moment(ext, 'mr1');
-            ext.makeBehavior([mr1], null, extent => {
-                if (mr1.justUpdated) {
-                    sr1.update(1, false);
-                }
+            ext.behavior([mr1], null, extent => {
+                sr1.update(1);
             });
             ext.addToGraphWithAction();
 
@@ -277,23 +300,21 @@ describe('State Resource', () => {
         });
 
         test('check update outside event is an error', () => {
-            let sr1 = new State<number>( ext,0, 'mr1');
+            let sr1 = ext.state<number>(0, 'mr1');
             ext.addToGraphWithAction();
             expect(() => {
-                sr1.update(2, false);
+                sr1.update(2);
             }).toThrow();
         });
 
         test('update when supplied by another behavior is an error', () => {
-            let sr1 = new State<number>(ext, 0, 'sr1');
+            let sr1 = ext.state<number>(0, 'sr1');
             let mr1 = new Moment(ext, 'mr1');
-            ext.makeBehavior([mr1], null, extent => {
-                if (mr1.justUpdated) {
-                    sr1.update(2, false)
-                }
+            ext.behavior([mr1], null, extent => {
+                sr1.update(2)
             });
-            ext.makeBehavior(null, [sr1], extent => {
-               sr1.update(3, false);
+            ext.behavior(null, [sr1], extent => {
+                sr1.update(3);
             });
             ext.addToGraphWithAction();
 
@@ -303,12 +324,10 @@ describe('State Resource', () => {
         });
 
         test('unsupplied resource throws if not from action', () => {
-            let sr1 = new State<number>(ext, 0, 'sr1');
+            let sr1 = ext.state<number>(0, 'sr1');
             let mr1 = new Moment(ext, 'mr1');
-            ext.makeBehavior([mr1], null, extent => {
-                if (mr1.justUpdated) {
-                    sr1.update(2, false)
-                }
+            ext.behavior([mr1], null, extent => {
+                sr1.update(2)
             });
             ext.addToGraphWithAction()
 
@@ -316,6 +335,76 @@ describe('State Resource', () => {
                 mr1.updateWithAction();
             }).toThrow();
 
+        });
+
+        test('cannot access value inside behavior if not supply or demand', () => {
+            let sr1 = ext.state(1);
+            let sr2 = ext.state(1);
+            let sr3 = ext.state(1);
+            let sr4 = ext.state(1);
+            let sr5 = ext.state(1);
+
+            // |> Given resource that are supplied and demanded
+            ext.behavior([sr1], [sr2], ext => {
+                sr1.value;
+                sr1.event;
+                sr1.justUpdated;
+                sr2.value;
+                sr2.event;
+                sr2.justUpdated;
+            });
+            ext.addToGraphWithAction();
+
+            // |> When they are accessed inside a behavior during an event
+            // |> Then it will succeed
+            sr1.updateWithAction(2);
+
+            // |> And when they are accessed outside an event or behavior
+            // |> Then it will succeed
+            sr1.value;
+            sr1.event;
+            sr1.justUpdated;
+
+            // |> And when we access a non-supplied resource inside an action
+            // |> Then it will succeed
+            g.action(() => {
+                sr1.value;
+            });
+
+            // |> But Given behaviors that access value, event, or justUpdated for a resource
+            // that is not supplied or demanded
+            let ext2 = new Extent(g);
+            ext2.behavior([sr3], null, ext => {
+                sr2.value;
+            });
+
+            ext2.behavior([sr4], null, ext => {
+                sr2.event;
+            });
+
+            ext2.behavior([sr5], null, ext => {
+                sr2.justUpdated;
+            });
+            ext2.addToGraphWithAction();
+
+            // |> Then it will fail
+            expect(() => {
+                sr3.updateWithAction(2);
+            }).toThrow();
+
+            expect(() => {
+                sr4.updateWithAction(2);
+            }).toThrow();
+
+            expect(() => {
+                sr5.updateWithAction(2);
+            }).toThrow();
+
+            // |> And when we access a supplied resource from an action
+            // |> Then it will fail
+            expect(() => {
+                sr2.updateWithAction(2);
+            }).toThrow();
         });
     });
 });
@@ -326,17 +415,15 @@ describe('Moment Resource', () => {
         // |> Given a moment in the graph
         let mr1 = new Moment(ext, 'mr1');
         let afterUpdate = false;
-        ext.makeBehavior([mr1], null, (extent) => {
-            if (mr1.justUpdated) {
-                afterUpdate = true;
-            }
+        ext.behavior([mr1], null, (extent) => {
+            afterUpdate = true;
         });
         ext.addToGraphWithAction();
 
         // |> When it is read in the graph (and was not updated)
         let beforeUpdate = false;
         let happenedEvent = null;
-        ext.action('initial', () => {
+        ext.action(() => {
             beforeUpdate = mr1.justUpdated;
             mr1.update();
             happenedEvent = ext.graph.currentEvent;
@@ -361,10 +448,10 @@ describe('Moment Resource', () => {
         // Given a moment with data
         let mr1 = new Moment<number>(ext, 'mr1');
         let afterUpdate: unknown;
-        ext.makeBehavior([mr1], null, (extent) => {
-            if (mr1.justUpdated) {
-                afterUpdate = mr1.value;
-            }
+        let updatedToOne = false;
+        ext.behavior([mr1], null, (extent) => {
+            afterUpdate = mr1.value;
+            updatedToOne = mr1.justUpdatedTo(1);
         });
         ext.addToGraphWithAction();
 
@@ -373,21 +460,20 @@ describe('Moment Resource', () => {
 
         // |> Then the data is visible in subsequent behaviors
         expect(afterUpdate).toBe(1);
-
+        expect(updatedToOne).toBeTruthy();
+        
         // but is transient outside event
         expect(mr1.value).toBeUndefined();
     });
 
     test('non-supplied moment can happen when adding', () => {
-        let mr1 = new Moment(ext, 'mr1');
+        let mr1 = ext.moment('mr1');
         let didRun = false;
-        ext.makeBehavior([mr1], null, extent => {
-            if (mr1.justUpdated) {
-                didRun = true;
-            }
+        ext.behavior([mr1], null, extent => {
+            didRun = true;
         });
 
-        g.action('adding', () => {
+        g.action(() => {
             mr1.update();
             ext.addToGraph();
         });
@@ -399,7 +485,7 @@ describe('Moment Resource', () => {
 
         test('check happen requires graph', () => {
             // |> Given a moment resource not part of the graph
-            let mr1 = new Moment(ext, 'mr1');
+            let mr1 = ext.moment('mr1');
 
             // |> When it is updated
             // |> Then an error is raised
@@ -410,14 +496,12 @@ describe('Moment Resource', () => {
 
         test('check supplied moment catches wrong updater', () => {
             // |> Given a supplied state resource
-            let mr1 = new Moment(ext, 'mr1');
-            let mr2 = new Moment(ext, 'mr2');
-            ext.makeBehavior([mr1], [mr2], extent => {
+            let mr1 = ext.moment('mr1');
+            let mr2 = ext.moment('mr2');
+            ext.behavior([mr1], [mr2], extent => {
             });
-            ext.makeBehavior([mr1], null, extent => {
-                if (mr1.justUpdated) {
-                    mr2.update();
-                }
+            ext.behavior([mr1], null, extent => {
+                mr2.update();
             });
             ext.addToGraphWithAction();
 
@@ -430,14 +514,12 @@ describe('Moment Resource', () => {
 
         test('check measured moment catches wrong updater', () => {
             // |> Given a measured moment resource
-            let mr1 = new Moment(ext, 'mr1');
-            let mr2 = new Moment(ext, 'mr2');
-            ext.makeBehavior([mr1], null, extent => {
+            let mr1 = ext.moment('mr1');
+            let mr2 = ext.moment('mr2');
+            ext.behavior([mr1], null, extent => {
             });
-            ext.makeBehavior([mr1], null, extent => {
-                if (mr1.justUpdated) {
-                    mr2.update();
-                }
+            ext.behavior([mr1], null, extent => {
+                mr2.update();
             });
             ext.addToGraphWithAction();
 
@@ -449,10 +531,80 @@ describe('Moment Resource', () => {
         });
 
         test('check moment happens outside event is an error', () => {
-            let mr1 = new Moment(ext, 'mr1');
+            let mr1 = ext.moment('mr1');
             ext.addToGraphWithAction();
             expect(() => {
                 mr1.update();
+            }).toThrow();
+        });
+
+        test('cannot access value inside behavior if not supply or demand', () => {
+            let mr1 = ext.moment();
+            let mr2 = ext.moment();
+            let mr3 = ext.moment();
+            let mr4 = ext.moment();
+            let mr5 = ext.moment();
+
+            // |> Given resource that are supplied and demanded
+            ext.behavior([mr1], [mr2], ext => {
+                mr1.value;
+                mr1.event;
+                mr1.justUpdated;
+                mr2.value;
+                mr2.event;
+                mr2.justUpdated;
+            });
+            ext.addToGraphWithAction();
+
+            // |> When they are accessed inside a behavior during an event
+            // |> Then it will succeed
+            mr1.updateWithAction();
+
+            // |> And when they are accessed outside an event or behavior
+            // |> Then it will succeed
+            mr1.value;
+            mr1.event;
+            mr1.justUpdated;
+
+            // |> And when we access a non-supplied resource inside an action
+            // |> Then it will succeed
+            g.action(() => {
+                mr1.value;
+            });
+
+            // |> But Given behaviors that access value, event, or justUpdated for a resource
+            // that is not supplied or demanded
+            let ext2 = new Extent(g);
+            ext2.behavior([mr3], null, ext => {
+                mr2.value;
+            });
+
+            ext2.behavior([mr4], null, ext => {
+                mr2.event;
+            });
+
+            ext2.behavior([mr5], null, ext => {
+                mr2.justUpdated;
+            });
+            ext2.addToGraphWithAction();
+
+            // |> Then it will fail
+            expect(() => {
+                mr3.updateWithAction();
+            }).toThrow();
+
+            expect(() => {
+                mr4.updateWithAction();
+            }).toThrow();
+
+            expect(() => {
+                mr5.updateWithAction();
+            }).toThrow();
+
+            // |> And when we access a supplied resource from an action
+            // |> Then it will fail
+            expect(() => {
+                mr2.updateWithAction();
             }).toThrow();
         });
 
@@ -462,13 +614,11 @@ describe('Moment Resource', () => {
 describe('dependencies', () => {
 
     test('a activates b', () => {
-        ext.makeBehavior([r_a], [r_b], extent => {
-            if (r_a.justUpdated) {
-                r_b.update(2 * r_a.value, false);
-            }
+        ext.behavior([r_a], [r_b], extent => {
+            r_b.update(2 * r_a.value);
         });
         ext.addToGraphWithAction();
-        r_a.updateWithAction(1, false);
+        r_a.updateWithAction(1);
 
         expect(r_b.value).toBe(2);
         expect(r_a.event).toBe(r_b.event);
@@ -476,22 +626,23 @@ describe('dependencies', () => {
 
     test('behavior activated once per event', () => {
         let called = 0;
-        ext.makeBehavior([r_a, r_b], [r_c], extent => {
+        ext.behavior([r_a, r_b], [r_c], extent => {
             called += 1;
         });
 
         ext.addToGraphWithAction();
 
-        g.action('test', () => {
-            r_a.update(1, true);
-            r_b.update(2, true);
+        g.action(() => {
+            r_a.update(1);
+            r_b.update(2);
         });
 
         expect(called).toBe(1);
     });
 
     test('duplicates are filtered out', () => {
-        let b1 = ext.makeBehavior([r_a, r_a], [r_b, r_b], extent => {});
+        let b1 = ext.behavior([r_a, r_a], [r_b, r_b], extent => {
+        });
         ext.addToGraphWithAction();
 
         expect(b1.demands!.size).toBe(1);
@@ -499,50 +650,63 @@ describe('dependencies', () => {
         expect(r_a.subsequents!.size).toBe(1);
     });
 
-    test ('check can update resource in a different extent', () => {
+    test('ordering resources arent called', () => {
+        // |> Given a behavior with an ordering demand
+        let run = false;
+        ext.behavior([r_a, r_b.order], null, ext1 => {
+            run = true;
+        });
+        ext.addToGraphWithAction();
+
+        // |> When that demand is updated
+        r_b.updateWithAction(1);
+
+        // |> Then that behavior doesn't run
+        expect(run).toBeFalsy();
+    });
+
+    test('check can update resource in a different extent', () => {
 
         let parentExt = new Extent(g)
         let ext2 = new Extent(g);
 
-        let parent_r = new State<number>( parentExt,0, 'parent_r');
-        let parent_r2 = new State<number>( parentExt,0, 'parent_r2');
+        let parent_r = parentExt.state<number>(0, 'parent_r');
+        let parent_r2 = parentExt.state<number>(0, 'parent_r2');
 
-        let ext2_r1 = new State<number>( ext2,0, 'ext2_r1');
+        let ext2_r1 = ext2.state<number>(0, 'ext2_r1');
 
-        parentExt.makeBehavior([parent_r], [parent_r2], (extent: Extent) => {
+        parentExt.behavior([parent_r], [parent_r2], (extent: Extent) => {
             //never invoked:-(
-            parent_r2.update(parent_r.value, false)
+            parent_r2.update(parent_r.value)
         });
 
-        ext2.makeBehavior([ext2_r1], [parent_r], (extent: Extent) => {
-            parent_r.update(ext2_r1.value, false)
+        ext2.behavior([ext2_r1], [parent_r], (extent: Extent) => {
+            parent_r.update(ext2_r1.value)
         });
 
         ext2.addToGraphWithAction();
         parentExt.addToGraphWithAction()
 
-        g.action('update ext2_r1' ,() => {
-            ext2_r1.update(33, false)
+        g.action(() => {
+            ext2_r1.update(33)
         });
 
         expect(parent_r2.value).toBe(33)
     });
-    
+
 });
 
 
 describe('dynamic graph changes', () => {
 
     test('can add and update in the same event', () => {
-        let r_x: State<number> = new State( ext,0, 'r_x');
-        ext.makeBehavior([r_a], [r_x], extent => {
-            if (r_a.justUpdated) {
-                r_x.update(r_a.value * 2, true);
-            }
+        let r_x: State<number> = ext.state(0, 'r_x');
+        ext.behavior([r_a], [r_x], extent => {
+            r_x.update(r_a.value * 2);
         });
 
-        g.action('add', () => {
-            r_a.update(2, true);
+        g.action(() => {
+            r_a.update(2);
             ext.addToGraph();
         });
 
@@ -554,27 +718,25 @@ describe('dynamic graph changes', () => {
 
         // -- this is new behavior that does the work
         let ext2 = new Extent(g);
-        ext2.makeBehavior([r_b], [r_c], (extent: Extent) => {
+        ext2.behavior([r_b], [r_c], (extent: Extent) => {
             if (r_b.event != null) {
-                r_c.update(r_b.value + 1, true);
+                r_c.update(r_b.value + 1);
             }
         });
 
         // -- this behavior adds the new extent on event happening
-        ext.makeBehavior([r_a], null, (extent: Extent) => {
-            if (r_a.justUpdated) {
-                g.addExtent(ext2);
-            }
+        ext.behavior([r_a], null, (extent: Extent) => {
+            g.addExtent(ext2);
         });
         ext.addToGraphWithAction();
 
         expect(r_c.event.sequence).toEqual(0);
 
         // when that something happens
-        r_a.updateWithAction(1, true);
+        r_a.updateWithAction(1);
 
         // then that new extent should be added
-        r_b.updateWithAction(2, true);
+        r_b.updateWithAction(2);
 
         expect(r_c.value).toBe(3);
     });
@@ -586,29 +748,33 @@ describe('dynamic graph changes', () => {
 
         // create two behaviors such that a comes before b and they both come after a reordering step
         // each one keeps track of when it ran relative to the other
-        let reordering: State<null> = new State( ext,null, 'reordering');
-        let x_out = new State( ext,0, 'x_out');
-        let x_bhv = ext.makeBehavior([r_a, reordering], [x_out], (extent: Extent) => {
+        let reordering: State<null> = ext.state(null, 'reordering');
+        let x_out = ext.state(0, 'x_out');
+        let x_bhv = ext.behavior([r_a, reordering], [x_out], (extent: Extent) => {
             whenX = counter;
             counter = counter + 1;
         });
-        let y_out = new State( ext,0, 'y_out');
-        let y_bhv = ext.makeBehavior([r_a, reordering, x_out], [y_out],(extent: Extent) => {
+        let y_out = ext.state(0, 'y_out');
+        let y_bhv = ext.behavior([r_a, reordering], [y_out], (extent: Extent) => {
             whenY = counter;
             counter = counter + 1;
         });
 
-        ext.makeBehavior([r_a], [reordering], (extent: Extent) => {
-            if (r_a.justUpdated) {
-                x_bhv.setDemands([r_a, reordering, y_out]);
-                y_bhv.setDemands([r_a, reordering]);
-            }
+        ext.behavior([r_a], [reordering], (extent: Extent) => {
+            x_bhv.setDynamicDemands([y_out]);
+            y_bhv.setDynamicDemands([]);
         });
 
         ext.addToGraphWithAction();
 
+        // this sets them one way
+        g.action(() => {
+            x_bhv.setDynamicDemands([]);
+            y_bhv.setDynamicDemands([x_out]);
+        });
+
         // when event that activates re-demand behavior happens
-        r_a.updateWithAction(2, true);
+        r_a.updateWithAction(2);
 
         // X should be 3 and Y should be 2 (they are 0 and 1 when they get added)
         expect(whenX).toBeGreaterThan(whenY);
@@ -617,17 +783,15 @@ describe('dynamic graph changes', () => {
     test('removed extents remove components from graph', () => {
         // given an added behavior
 
-        let r_x = new State( ext,0, 'r_x');
-        let b_a = ext.makeBehavior([r_a], [r_b],extent => {
-            if (r_a.justUpdated) {
-                r_b.update(r_a.value + 1, true);
-            }
+        let r_x = ext.state(0, 'r_x');
+        let b_a = ext.behavior([r_a], [r_b], extent => {
+            r_b.update(r_a.value + 1);
         });
         ext.addToGraphWithAction();
 
         // when its extent is removed and its previous demand is updated
         ext.removeFromGraphWithAction();
-        r_a.updateWithAction(1, true);
+        r_a.updateWithAction(1);
 
         // then it should not get run
         expect(r_b.value).toEqual(0);
@@ -641,10 +805,12 @@ describe('dynamic graph changes', () => {
     test('removed resources are removed from foreign demands', () => {
         // |> Given we have a resource that is demanded both inside and outside extent
         let ext2 = new Extent(g);
-        let demanded1 = new Moment(ext2, 'demanded1');
-        let ext1behavior = ext.makeBehavior([demanded1], null, extent => {});
-        let ext2behavior = ext2.makeBehavior([demanded1], null, extent => {});
-        g.action("adding", () => {
+        let demanded1 = ext2.moment('demanded1');
+        let ext1behavior = ext.behavior([demanded1], null, extent => {
+        });
+        let ext2behavior = ext2.behavior([demanded1], null, extent => {
+        });
+        g.action(() => {
             ext.addToGraph();
             ext2.addToGraph();
         });
@@ -663,11 +829,13 @@ describe('dynamic graph changes', () => {
     test('removed resources are removed from foreign supplies', () => {
         // |> Given we have resources that are supplied both inside and outside extent
         let ext2 = new Extent(g);
-        let supplied1 = new Moment(ext2, 'supplied1');
-        let supplied2 = new Moment(ext2, 'supplied2');
-        let ext1behavior = ext.makeBehavior(null, [supplied1], extent => {});
-        let ext2behavior = ext2.makeBehavior(null, [supplied2], extent => {});
-        g.action("adding", () => {
+        let supplied1 = ext2.moment('supplied1');
+        let supplied2 = ext2.moment('supplied2');
+        let ext1behavior = ext.behavior(null, [supplied1], extent => {
+        });
+        let ext2behavior = ext2.behavior(null, [supplied2], extent => {
+        });
+        g.action(() => {
             ext.addToGraph();
             ext2.addToGraph();
         });
@@ -685,10 +853,11 @@ describe('dynamic graph changes', () => {
     test('removed behaviors are removed from foreign subsequents', () => {
         // |> Given we have a behavior which has foreign and local demands
         let ext2 = new Extent(g);
-        let demanded1 = new Moment(ext, 'demanded1');
-        let demanded2 = new Moment(ext2, 'demanded2');
-        let ext2behavior = ext2.makeBehavior([demanded1, demanded2], null, extent => {});
-        g.action('adding', () => {
+        let demanded1 = ext.moment('demanded1');
+        let demanded2 = ext2.moment('demanded2');
+        let ext2behavior = ext2.behavior([demanded1, demanded2], null, extent => {
+        });
+        g.action(() => {
             ext.addToGraph();
             ext2.addToGraph();
         });
@@ -707,10 +876,11 @@ describe('dynamic graph changes', () => {
     test('removed behaviors are removed as foreign suppliers', () => {
         // |> Given we have a behavior which supplies both foreign and local resources
         let ext2 = new Extent(g);
-        let supplied1 = new Moment(ext, 'supplied1');
-        let supplied2 = new Moment(ext2, 'supplied2');
-        let ext2behavior = ext2.makeBehavior(null, [supplied1, supplied2], extent => {});
-        g.action('adding', () => {
+        let supplied1 = ext.moment('supplied1');
+        let supplied2 = ext2.moment('supplied2');
+        let ext2behavior = ext2.behavior(null, [supplied1, supplied2], extent => {
+        });
+        g.action(() => {
             ext.addToGraph();
             ext2.addToGraph();
         });
@@ -728,28 +898,26 @@ describe('dynamic graph changes', () => {
 
     test('activated then removed behaviors dont run', () => {
         // given a behavior that is added
-        let remover = new State( ext,null, 'y_out');
+        let remover = ext.state(null, 'y_out');
 
         let ext2: Extent = new Extent(g);
-        let didRun : State<boolean> = new State( ext2,false, 'didRun');
-        ext2.makeBehavior([r_a, remover], [didRun], extent => {
+        let didRun: State<boolean> = ext2.state(false, 'didRun');
+        ext2.behavior([r_a, remover], [didRun], extent => {
             if (r_a.justUpdated) {
-                didRun.update(true, true);
+                didRun.update(true);
             }
         });
-        ext.makeBehavior([r_a], [remover], extent => {
-            if (r_a.justUpdated) {
-                ext2.removeFromGraph();
-            }
+        ext.behavior([r_a], [remover], extent => {
+            ext2.removeFromGraph();
         });
 
-        g.action('add', () => {
-            ext.addToGraphWithAction();
-            ext2.addToGraphWithAction();
+        g.action(() => {
+            ext.addToGraph();
+            ext2.addToGraph();
         });
 
         // when it is both activated and removed in the same event
-        r_a.updateWithAction(1, true);
+        r_a.updateWithAction(1);
 
         // then it will not run
         expect(didRun.value).toBeFalsy();
@@ -757,36 +925,33 @@ describe('dynamic graph changes', () => {
 
     test('can supply a resource by a behavior in a different extent after its subsequent is added', () => {
         // ext has resource a and process that depends on it and then it is added
-        let r_z: State<number> = new State( ext,0, 'r_z');
-        let r_y: State<number> = new State( ext,0, 'r_y');
-        ext.makeBehavior([r_y], [r_z], extent => {
-            if (r_y.justUpdated) {
-                r_z.update(r_y.value, true);
-            }
+        let r_z: State<number> = ext.state(0, 'r_z');
+        let r_y: State<number> = ext.state(0, 'r_y');
+        ext.behavior([r_y], [r_z], extent => {
+            r_z.update(r_y.value);
         });
         ext.addToGraphWithAction();
 
         // then a new extent is added that supplies it by a new behavior, it could just pass along the value
         let ext2: Extent = new Extent(g);
-        let r_x: State<number> = new State( ext2,0, 'r_x');
-        ext2.makeBehavior([r_x], [r_y], extent => {
-            if (r_x.justUpdated) {
-                r_y.update(r_x.value, true);
-            }
+        let r_x: State<number> = ext2.state(0, 'r_x');
+        ext2.behavior([r_x], [r_y], extent => {
+            r_y.update(r_x.value);
         });
         ext2.addToGraphWithAction();
 
         // then update the trigger which should pass it along to the end
-        r_x.updateWithAction(1, true);
+        r_x.updateWithAction(1);
         expect(r_z.value).toBe(1);
     });
 
     test('updating post-add demands changes them', () => {
-        let b1 = ext.makeBehavior([],[], extent => {});
+        let b1 = ext.behavior([], [], extent => {
+        });
         ext.addToGraphWithAction();
 
-        g.action('update', () => {
-            b1.setDemands([r_a]);
+        g.action(() => {
+            b1.setDynamicDemands([r_a]);
         });
 
         expect(b1.demands).toContain(r_a);
@@ -795,27 +960,28 @@ describe('dynamic graph changes', () => {
     test('changing to a demand a resource that has already been updated this event will activate behavior', () => {
         // |> Given we have a behavior that doesn't demand r_a
         let run = false;
-        let b1 = ext.makeBehavior([], [], extent => {
+        let b1 = ext.behavior([], [], extent => {
             run = true;
         });
-        ext.makeBehavior([r_a], [], extent => {
-            b1.setDemands([r_a]);
+        ext.behavior([r_a], [], extent => {
+            b1.setDynamicDemands([r_a]);
         });
         ext.addToGraphWithAction();
 
         // |> When we update the behavior to demand r_a in the same event that r_a has already run
-        r_a.updateWithAction(1, false);
+        r_a.updateWithAction(1);
 
         // |> Then our behavior will activate
         expect(run).toBeTruthy();
     });
 
     test('updating post-add supplies changes them', () => {
-        let b1 = ext.makeBehavior([],[], extent => {});
+        let b1 = ext.behavior([], [], extent => {
+        });
         ext.addToGraphWithAction();
 
-        g.action('update', () => {
-            b1.setSupplies( [r_a]);
+        g.action(() => {
+            b1.setDynamicSupplies([r_a]);
         });
 
         expect(b1.supplies).toContain(r_a);
@@ -824,11 +990,11 @@ describe('dynamic graph changes', () => {
     test('adding a post-add supply will reorder activated behaviors', () => {
 
         // first add a behavior that demands an unsupplied resource
-        let r_y: State<number> = new State( ext,0, 'r_y');
-        let r_x: State<number> = new State( ext,0, 'r_x');
-        ext.makeBehavior([r_a, r_x], [r_y],extent => {
+        let r_y: State<number> = ext.state(0, 'r_y');
+        let r_x: State<number> = ext.state(0, 'r_x');
+        ext.behavior([r_a, r_x], [r_y], extent => {
             if (r_x.justUpdated) {
-                r_y.update(r_a.value, true);
+                r_y.update(r_a.value);
             }
         });
         ext.addToGraphWithAction();
@@ -836,18 +1002,18 @@ describe('dynamic graph changes', () => {
         // then add another behavior that (will) supply the resource
         // b_a behavior should be reordered to come after b_b
         let ext2: Extent = new Extent(g);
-        let b_b = ext2.makeBehavior([r_a], null, extent => {
-            r_x.update(r_a.value, true);
+        let b_b = ext2.behavior([r_a], null, extent => {
+            r_x.update(r_a.value);
         });
         ext2.addToGraphWithAction();
 
         // update the supply to accommodate
-        g.action('supply r_x', () => {
-            b_b.setSupplies([r_x]);
+        g.action(() => {
+            b_b.setDynamicSupplies([r_x]);
         });
 
         // when action initiates updates we should get them run in order
-        r_a.updateWithAction(3, true);
+        r_a.updateWithAction(3);
 
         // if they don't get reordered then b_a will still run first since
         // both demand r_a which gets run. And that would be wrong because
@@ -858,49 +1024,218 @@ describe('dynamic graph changes', () => {
     test('changing supplies will unsupply old resources', () => {
         // |> Given we have a resource supplied by a behavior
         let m1 = new Moment(ext);
-        ext.makeBehavior(null, [m1], (extent) => {
+        let b1 = ext.behavior(null, null, (extent) => {
             // do nothing
         });
         ext.addToGraphWithAction();
+        ext.action(() => {
+            b1.setDynamicSupplies([m1])
+        });
+        expect(m1.suppliedBy).not.toBeNull();
 
         // |> When that behavior no longer supplies that original resource
-        ext.action("change supply", () => {
-            m1.suppliedBy!.setSupplies([]);
+        ext.action(() => {
+            b1.setDynamicSupplies(null);
         });
 
         // |> Then that resource should free to be supplied by another behavior
         expect(m1.suppliedBy).toBeNull();
     });
 
+    test('dynamicDemands clause updates demands', () => {
+        // |> Given a behavior with dynamicDemands
+        let m1 = ext.moment();
+        let m2 = ext.moment();
+        let m3 = ext.moment();
+        let runCount = 0;
+        let relinkBehaviorOrder = 0;
+        let behaviorOrder = 0;
+        ext.behavior()
+            .demands(m1)
+            .dynamicDemands([m2], ext1 => {
+                return [m3];
+                relinkBehaviorOrder = ext1.graph.currentBehavior!.order;
+            })
+            .runs(ext1 => {
+                runCount++;
+                behaviorOrder = ext1.graph.currentBehavior!.order;
+            });
+        ext.addToGraphWithAction();
+
+        // |> When net yet demanded resource is updated
+        m3.updateWithAction();
+
+        // |> Then behavior is not run
+        expect(runCount).toBe(0);
+
+        // |> And when an update activates a relink and we update
+        m2.updateWithAction();
+        m3.updateWithAction();
+
+        // |> Then behavior will be run
+        expect(runCount).toBe(1);
+
+        // |> And when we update original static resource
+        m1.updateWithAction();
+
+        // |> Then we expect behavior to also run
+        expect(runCount).toBe(2);
+
+        // |> Relink behavior should be a prior to its behavior
+        // This ensures that relinking happens before behavior is run
+        expect(behaviorOrder).toBeGreaterThan(relinkBehaviorOrder);
+    });
+
+    test('dynamicSupplies clause updates supplies', () => {
+        // |> Given a behavior with dynamicSupplies
+        let m1 = ext.moment();
+        let m2 = ext.moment();
+        let m3 = ext.moment();
+
+        let relinkingBehaviorOrder = 0;
+        let behaviorOrder = 0;
+        ext.behavior()
+            .demands(m1)
+            .dynamicSupplies([m2], ext1 => {
+                relinkingBehaviorOrder = ext1.graph.currentBehavior!.order;
+                return [m3];
+            })
+            .runs(ext1 => {
+                behaviorOrder = ext1.graph.currentBehavior!.order;
+                m3.update();
+            });
+        ext.addToGraphWithAction();
+
+        // |> When behavior activated before relink is activated
+        // |> Then action should throw because behavior does not supply that resource
+        expect(() => {
+            m1.update();
+        }).toThrow(); // cannot update unsupplied resource
+
+        // |> And when behavior has its supplies relinked
+        m2.updateWithAction();
+
+        // |> Then the behavior can activate and update the newly supplied resource
+        g.action(() => {
+            m1.update();
+            g.sideEffect(() => {
+                expect(m3.justUpdated).toBeTruthy();
+            });
+        });
+
+        // |> And behavior is ordered greater than the relinking behavior to ensure
+        // it is updated before running
+        expect(behaviorOrder).toBeGreaterThan(relinkingBehaviorOrder);
+    });
+
+    test('setDynamicDemands retains statics', () => {
+        // |> Given a behavior with static demands
+        let m1 = ext.moment();
+        let m2 = ext.moment();
+        let run = false;
+        let b1 = ext.behavior([m1], null, ext1 => {
+            run = true;
+        });
+        ext.addToGraphWithAction();
+
+        // |> When dynamicDemands are set
+        g.action(() => {
+            b1.setDynamicDemands([m2]);
+        });
+
+        // |> Then behavior runs on newly added dynamicDemand
+        m2.updateWithAction()
+        expect(run).toBeTruthy();
+
+        // |> And when static demand is updated
+        run = false
+        m1.updateWithAction()
+
+        // |> Then it will also update
+        expect(run).toBeTruthy();
+    });
+
+    test('setDynamicSupplies retains statics', () => {
+        // |> Given behavior that supplies one resource
+        let m1 = ext.moment();
+        let m2 = ext.moment();
+        let m3 = ext.moment();
+        let b1 = ext.behavior([m1], [m2], ext1 => {
+            m2.update();
+            m3.update();
+        });
+        ext.addToGraphWithAction();
+
+        // |> When I setDynamicSupplies to supply both and activate it
+        g.action(() => {
+            b1.setDynamicSupplies([m3]);
+        });
+
+        // |> Then behavior updates both successfully
+        g.action(() => {
+            m1.update();
+            g.sideEffect(() => {
+                expect(m2.justUpdated).toBeTruthy();
+                expect(m3.justUpdated).toBeTruthy();
+            });
+        });
+    });
+
+    test('updating demands on behavior that has already run will affect future events', () => {
+        // |> Given a behavior that demands one resource
+        let m1 = ext.moment();
+        let m2 = ext.moment();
+        let run = false;
+        ext.behavior([m1], null, ext1 => {
+            ext1.graph.currentBehavior!.setDynamicDemands([m2]);
+            run = true;
+        });
+        ext.addToGraphWithAction();
+
+        // It doesn't activate on other resource
+        m2.updateWithAction();
+        expect(run).toBeFalsy();
+
+        // |> When behavior updates demands on itself to include m2
+        m1.updateWithAction();
+        run = false;
+
+        // |> Then m2 updating will activate the behavior
+        m2.updateWithAction();
+        expect(run).toBeTruthy();
+    });
 });
+
+
 
 describe('Extents', () => {
 
     class TestExtent extends Extent {
-        r1 : State<number>;
-        r2 : State<number>;
-        b1 : Behavior;
+        r1: State<number>;
+        r2: State<number>;
+        b1: Behavior;
 
         constructor(graph: Graph) {
             super(graph);
-            this.r1 = new State( this,0, 'r1');
-            this.r2 = new State( this,0, 'custom_r2');
-            this.b1 = new Behavior(this,[this.r1], [this.r2], (extent: Extent) => {
+            this.r1 = this.state(0);
+            this.r2 = this.state(0, 'custom_r2');
+            this.b1 = this.behavior([this.r1], [this.r2], (extent: TestExtent) => {
                 if (this.r1.justUpdated) {
-                    this.r2.update(this.r1.value * 2, true);
+                    this.r2.update(this.r1.value * 2);
                 }
             });
         }
 
         injectNumber(num: number) {
-            this.r1.updateWithAction(num, true);
+            this.r1.updateWithAction(num);
         }
     }
 
     test('gets class name', () => {
         let e = new TestExtent(g);
-        expect(e.debugName).toBe('TestExtent');
-    });
+
+        expect(e.debugConstructorName).toBe('TestExtent');
+    })
 
     test('contained components picked up', () => {
         let e = new TestExtent(g);
@@ -930,10 +1265,8 @@ describe('Extents', () => {
     test('added resource is updated on adding', () => {
         let e = new Extent(g);
         let runOnAdd = false;
-        e.makeBehavior([e.addedToGraph], [], extent => {
-            if (e.addedToGraph.justUpdated) {
-                runOnAdd = true;
-            }
+        e.behavior([e.added], [], extent => {
+            runOnAdd = true;
         });
         e.addToGraphWithAction();
 
@@ -945,16 +1278,6 @@ describe('Extents', () => {
         test('check cannot add extent to graph multiple times', () => {
             expect(() => {
                 setupExt.addToGraphWithAction();
-            }).toThrow();
-        });
-
-        test('check actions on unadded extents are errors', () => {
-            let e = new TestExtent(g);
-            expect(() => {
-                e.action('impulse1', () => {});
-            }).toThrow();
-            expect(() => {
-                e.actionAsync('impulse2', () => {});
             }).toThrow();
         });
 
@@ -991,14 +1314,16 @@ describe('Graph checks', () => {
     })
 
     test('check no graph dependency cycles', () => {
-        let r_x = new State(ext,0, 'r_x');
-        let r_y = new State(ext,0, 'r_y');
-        let r_z = new State(ext, 0, 'r_z');
-        ext.makeBehavior(null, [r_z], extent => {
+        let r_x = ext.state(0, 'r_x');
+        let r_y = ext.state(0, 'r_y');
+        let r_z = ext.state(0, 'r_z');
+        ext.behavior(null, [r_z], extent => {
             // non cycle behavior
         });
-        ext.makeBehavior([r_z, r_y], [r_x], extent => {});
-        ext.makeBehavior([r_x], [r_y], extent => {});
+        ext.behavior([r_z, r_y], [r_x], extent => {
+        });
+        ext.behavior([r_x], [r_y], extent => {
+        });
 
         let caught = false;
         try {
@@ -1015,39 +1340,43 @@ describe('Graph checks', () => {
 
 
     test('check resource can only be supplied by one behavior', () => {
-        let r_x = new State( ext,0, 'r_x');
-        ext.makeBehavior([r_a], [r_x], extent => {});
-        ext.makeBehavior([r_a], [r_x], extent => {});
+        let r_x = ext.state(0, 'r_x');
+        ext.behavior([r_a], [r_x], extent => {
+        });
+        ext.behavior([r_a], [r_x], extent => {
+        });
         expect(() => {
             ext.addToGraphWithAction();
         }).toThrow();
     });
 
     test('check update demands and supplies only during event', () => {
-        let b_x = ext.makeBehavior([], [], extent => {});
+        let b_x = ext.behavior([], [], extent => {
+        });
         ext.addToGraphWithAction();
 
         expect(() => {
-            b_x.setDemands([r_a]);
+            b_x.setDynamicDemands([r_a]);
         }).toThrow();
 
         expect(() => {
-            b_x.setSupplies([r_b]);
+            b_x.setDynamicSupplies([r_b]);
         }).toThrow();
     });
 
     test('check can\'t update demands or supplies on behavior not in graph', () => {
-        let b_x = ext.makeBehavior([],[], extent => {});
+        let b_x = ext.behavior([], [], extent => {
+        });
 
         expect(() => {
-            g.action('update', () => {
-                b_x.setDemands([r_a]);
+            g.action(() => {
+                b_x.setDynamicDemands([r_a]);
             });
         }).toThrow();
 
         expect(() => {
-            g.action('update', () => {
-                b_x.setSupplies([r_a]);
+            g.action(() => {
+                b_x.setDynamicSupplies([r_a]);
             });
         }).toThrow();
 
@@ -1060,23 +1389,23 @@ describe('Graph checks', () => {
         let secondAction = false;
         ext.addToGraphWithAction();
         expect(() => {
-            g.action('throws', () => {
-                ext.sideEffect('action', (extent) => {
-                    g.action('innerAction', () => {
+            g.action(() => {
+                ext.sideEffect((extent) => {
+                    g.action(() => {
                         innerAction = true;
                     });
-                })
-                ext.sideEffect('innerEffect', (extent) => {
+                }, 'action')
+                ext.sideEffect((extent) => {
                     throw(new Error());
-                });
-                ext.sideEffect('effect', (extent) => {
+                }, 'innerEffect');
+                ext.sideEffect((extent) => {
                     innerEffect = true;
-                });
+                }, 'effect');
             });
         }).toThrow();
 
         // |> When trying to run another event
-        g.action('works', () => {
+        g.action(() => {
             secondAction = true;
         });
 
@@ -1088,30 +1417,26 @@ describe('Graph checks', () => {
     });
 
     test('handled throw in behavior should clear out queued up internals', () => {
-        let r1 = new Moment(ext, 'r1');
-        let r2 = new Moment(ext, 'r2');
-        let r3 = new Moment(ext, 'r3');
+        let r1 = ext.moment('r1');
+        let r2 = ext.moment('r2');
+        let r3 = ext.moment('r3');
         let b3: Behavior;
 
-        ext.makeBehavior([r1], [r2], extent => {
-            if (r1.justUpdated) {
-                r2.update();
-            }
+        ext.behavior([r1], [r2], extent => {
+            r2.update();
         });
-        ext.makeBehavior([r2], [r3], extent => {
-            if (r2.justUpdated) {
-                r3.update();
-                b3.setDemands([]);
-                b3.setSupplies([]);
-                throw(new Error());
-            }
+        ext.behavior([r2], [r3], extent => {
+            r3.update();
+            b3.setDynamicDemands([]);
+            b3.setDynamicSupplies([]);
+            throw(new Error());
         });
-        b3 = ext.makeBehavior([r3], null, extent => {
-           // do nothing
+        b3 = ext.behavior([r3], null, extent => {
+            // do nothing
         });
         ext.addToGraphWithAction();
         expect(() => {
-            g.action('r1', () => {
+            g.action(() => {
                 r1.update();
             });
         }).toThrow();
@@ -1126,13 +1451,13 @@ describe('Graph checks', () => {
 
     test('handled error when adding extent doesn\'t leave dangling behaviors', () => {
         // |> Given we are adding an extent
-        ext.makeBehavior(null, null, extent => {
+        ext.behavior(null, null, extent => {
             // do nothing
         });
 
         // |> When it throws when adding
         expect(() => {
-            g.action('add', () => {
+            g.action(() => {
                 ext.addToGraph();
                 throw(new Error());
             });
@@ -1144,8 +1469,8 @@ describe('Graph checks', () => {
 
     test('check cannot demand a resource from an extent that has not been added to graph', () => {
         let ext3 = new Extent(g);
-        let mr1 = new Moment(ext3, 'mr1');
-        ext.makeBehavior([mr1], null, (extent) => {
+        let mr1 = ext3.moment('mr1');
+        ext.behavior([mr1], null, (extent) => {
             // do nothing
         });
         expect(() => {
@@ -1160,28 +1485,24 @@ describe('Effects, Actions, Events', () => {
 
         let happened: boolean = false;
         // behavior a has a side effect and
-        ext.makeBehavior([r_a], [r_b], extent => {
-            if (r_a.justUpdated) {
-                extent.sideEffect('happen', extent => {
-                    happened = true;
-                });
-                r_b.update(1, true);
-            }
+        ext.behavior([r_a], [r_b], extent => {
+            extent.sideEffect(extent => {
+                happened = true;
+            }, 'happen');
+            r_b.update(1);
         });
 
         // b depends on a
         // check that side effect didn't happen during b's run
-        ext.makeBehavior([r_b], null, extent => {
-            if (r_b.justUpdated) {
-                expect(happened).toBeFalsy();
-                extent.sideEffect('after effect', (extent) => {
-                    expect(happened).toBeTruthy();
-                });
-            }
+        ext.behavior([r_b], null, extent => {
+            expect(happened).toBeFalsy();
+            extent.sideEffect((extent) => {
+                expect(happened).toBeTruthy();
+            }, 'after effect');
         });
 
         ext.addToGraphWithAction();
-        r_a.updateWithAction(1, true);
+        r_a.updateWithAction(1);
 
         // expectations happen inside behavior
     });
@@ -1191,43 +1512,37 @@ describe('Effects, Actions, Events', () => {
         let counter: number = 0;
         let whenX: number = 0;
         let whenY: number = 0;
-        ext.makeBehavior([r_a], [r_b], extent => {
-            if (r_a.justUpdated) {
-                ext.sideEffect('first', (extent) => {
-                    whenX = counter;
-                    counter += 1;
-                });
-                r_b.update(1, true);
-            }
+        ext.behavior([r_a], [r_b], extent => {
+            ext.sideEffect((extent) => {
+                whenX = counter;
+                counter += 1;
+            }, 'first');
+            r_b.update(1);
         });
-        ext.makeBehavior([r_b], null, extent => {
-            if (r_b.justUpdated) {
-                ext.sideEffect('second', (extent) => {
-                    whenY = counter;
-                    counter += 1;
-                });
-            }
+        ext.behavior([r_b], null, extent => {
+            ext.sideEffect((extent) => {
+                whenY = counter;
+                counter += 1;
+            }, 'second');
         });
 
         ext.addToGraphWithAction();
-        r_a.updateWithAction(1, true);
+        r_a.updateWithAction(1);
 
         expect(whenY).toBeGreaterThan(whenX);
     });
 
     test('transient values are cleared after effects are run', () => {
-        let r1 = new Moment(ext, 'r1');
-        ext.makeBehavior([r_a], [r1], extent => {
-            if (r_a.justUpdated) {
-                r1.update();
-                extent.sideEffect('after', (extent) => {
-                    expect(r_a.justUpdatedTo(1)).toBeTruthy();
-                    expect(r1.justUpdated).toBeTruthy();
-                });
-            }
+        let r1 = ext.moment('r1');
+        ext.behavior([r_a], [r1], extent => {
+            r1.update();
+            extent.sideEffect((extent) => {
+                expect(r_a.justUpdatedTo(1)).toBeTruthy();
+                expect(r1.justUpdated).toBeTruthy();
+            }, 'after');
         });
         ext.addToGraphWithAction();
-        r_a.updateWithAction(1, true);
+        r_a.updateWithAction(1);
 
         expect(r_a.justUpdatedTo(1)).toBeFalsy();
         expect(r1.justUpdated).toBeFalsy();
@@ -1243,9 +1558,9 @@ describe('Effects, Actions, Events', () => {
         ext.makeBehavior([r_a], null, (extent) => {
             if (r_a.justUpdated) {
                 extent.sideEffect('update b', (extent) => {
-                    ext.action('update b', () => {
+                    ext.action(() => {
                         // initiate another event
-                        r_b.update(2, false)
+                        r_b.update(2)
                     });
                 });
                 extent.sideEffect('first effect', (extent) => {
@@ -1267,7 +1582,7 @@ describe('Effects, Actions, Events', () => {
         ext.addToGraphWithAction();
 
         // |> When the side effects run
-        r_a.updateWithAction(1, false);
+        r_a.updateWithAction(1);
 
         // |> Then the side effect from the second event will run
         // after the remaining effects from the first event
@@ -1280,19 +1595,17 @@ describe('Effects, Actions, Events', () => {
     test('effects from first event complete before next event', () => {
         // |> Given event with 2 effects
         let effectCounter = 0;
-        let m1 = new Moment(ext, 'm1');
+        let m1 = ext.moment('m1');
         let eventLoopOrder, effect2Order: number | undefined;
-        ext.makeBehavior([m1], null, (extent) => {
-            if (m1.justUpdated) {
-                extent.sideEffect('effect 1', (extent) => {
-                    extent.graph.action('event2', () => {
-                        eventLoopOrder = effectCounter++;
-                    });
+        ext.behavior([m1], null, (extent) => {
+            extent.sideEffect((extent) => {
+                extent.graph.action(() => {
+                    eventLoopOrder = effectCounter++;
                 });
-                extent.sideEffect('effect 2', (extent) => {
-                    effect2Order = effectCounter++;
-                });
-            }
+            }, 'effect 1');
+            extent.sideEffect((extent) => {
+                effect2Order = effectCounter++;
+            }, 'effect 2');
         });
         ext.addToGraphWithAction();
 
@@ -1304,6 +1617,9 @@ describe('Effects, Actions, Events', () => {
         expect(eventLoopOrder).toEqual(1);
     });
 
+    /*
+    11/15/2021-- Actions created directly from within a behavior seem closer to a mistake
+    even if they could be rewritten as sideEffects. They are now disallowed.
     test('behaviors from first event complete before next event', () => {
         // Note: Initiating side effects directly from within a behavior can lead to accessing
         // and thus depending on state without being explicit about that dependency. However
@@ -1313,20 +1629,16 @@ describe('Effects, Actions, Events', () => {
         // |> Given we are in the middle of an event with multiple
         let effectCounter = 0;
         let eventLoopOrder, behavior2Order: number | undefined;
-        let m1 = new Moment(ext, 'm1');
-        let m2 = new Moment(ext, 'm2');
-        ext.makeBehavior([m1], [m2], (extent) => {
-            if (m1.justUpdated) {
-                m2.update();
-                extent.action('inside side effect', () => {
-                    eventLoopOrder = effectCounter++;
-                });
-            }
+        let m1 = ext.moment('m1');
+        let m2 = ext.moment('m2');
+        ext.behavior([m1], [m2], (extent) => {
+            m2.update();
+            extent.action(() => {
+                eventLoopOrder = effectCounter++;
+            });
         });
-        ext.makeBehavior([m2], null, extent => {
-            if (m2.justUpdated) {
-                behavior2Order = effectCounter++;
-            }
+        ext.behavior([m2], null, extent => {
+            behavior2Order = effectCounter++;
         });
         ext.addToGraphWithAction();
 
@@ -1343,23 +1655,24 @@ describe('Effects, Actions, Events', () => {
         // behavior. So if one does create a new event and there's still
         // more resources to update there we won't be able to do that
 
-        let m1 = new Moment(ext, 'm1');
-        let m2 = new Moment(ext, 'm2');
-        ext.makeBehavior([m1], [m2], (extent) => {
-            if (m1.justUpdated) {
-                extent.action('inside side effect', () => {
-                    // this will force event to finish when it runs synchronously
-                });
-                // event should have finished by the time we return up the stack
-                // causing this to fail
-                expect(() => { m2.update(); }).toThrow();
-            }
+        let m1 = ext.moment('m1');
+        let m2 = ext.moment('m2');
+        ext.behavior([m1], [m2], (extent) => {
+            extent.action(() => {
+                // this will force event to finish when it runs synchronously
+            });
+            // event should have finished by the time we return up the stack
+            // causing this to fail
+            expect(() => {
+                m2.update();
+            }).toThrow();
         });
         ext.addToGraphWithAction();
 
         m1.updateWithAction();
 
     });
+     */
 
     test('actions are run synchronously by default when there is only one', () => {
         // |> Given there are no running events
@@ -1367,7 +1680,7 @@ describe('Effects, Actions, Events', () => {
         ext.addToGraphWithAction();
 
         // |> When an action is added
-        ext.action('action', () => {
+        ext.action(() => {
             counter = counter + 1;
         });
 
@@ -1383,15 +1696,15 @@ describe('Effects, Actions, Events', () => {
         ext.addToGraphWithAction();
 
         // |> When a new action is added
-        ext.action('existing', () => {
-            ext.sideEffect('side effect', (extent) => {
-                ext.action('new', () => {
+        ext.action(() => {
+            ext.sideEffect((extent) => {
+                ext.action(() => {
                     actionIsRun = counter;
                     counter = counter + 1;
                 });
                 effectIsRun = counter;
                 counter = counter + 1;
-            });
+            }, 'side effect');
         });
 
         // |> Then it will be run after first event completes entirely
@@ -1407,15 +1720,15 @@ describe('Effects, Actions, Events', () => {
         ext.addToGraphWithAction();
 
         // |> When a new action is added asynchronously
-        ext.action('existing', () => {
-            ext.sideEffect('side effect', (extent) => {
-                ext.actionAsync('new', () => {
+        ext.action(() => {
+            ext.sideEffect((extent) => {
+                ext.actionAsync(() => {
                     actionIsRun = counter;
                     counter = counter + 1;
                 });
                 effectIsRun = counter;
                 counter = counter + 1;
-            });
+            }, 'side effect');
         });
 
         // |> Then it will be run after first event completes entirely
@@ -1426,13 +1739,97 @@ describe('Effects, Actions, Events', () => {
     test('actionAsync runs immediately if no current events', () => {
         let effectIsRun = false;
         ext.addToGraphWithAction();
-        ext.actionAsync('existing', () => {
-            ext.sideEffect('side effect', (extent) => {
+        ext.actionAsync(() => {
+            ext.sideEffect((extent) => {
                 effectIsRun = true;
-            });
+            }, 'side effect');
         });
 
         expect(effectIsRun).toBeTruthy();
+    });
+
+    test('actionAsync returns promise which is resolved asynchronously when event loop completes', () => {
+        // |> Given a promise from the actionAsync call
+        // |> When it is run
+        // |> Then the action will be started immediately with a new event loop
+        //    and it will complete side effects
+        //    and will resolve promise
+        //    which will run asynchronously after actionAsync call completes
+        let order: number[] = [];
+        let p = g.actionAsync(() => {
+            order.push(1);
+            g.sideEffect(() => {
+                order.push(2);
+            });
+        }).then(() => {
+            order.push(4);
+            expect(order).toStrictEqual([1, 2, 3, 4]);
+        });
+        order.push(3);
+        return p;
+    });
+
+    test('actionAsync exits on extent', () => {
+        // |> Given a promise from the actionAsync call
+        // |> When it is run
+        // |> Then the action will be started immediately with a new event loop
+        //    and it will complete side effects
+        //    and will resolve promise
+        //    which will run asynchronously after actionAsync call completes
+        let order: number[] = [];
+        let p = ext.actionAsync((ext1) => {
+            order.push(1);
+            ext1.sideEffect((ex) => {
+                order.push(2);
+            });
+        }).then(() => {
+            order.push(4);
+            expect(order).toStrictEqual([1, 2, 3, 4]);
+        });
+        order.push(3);
+        return p;
+    });
+
+    test('promise is resolved at the end of existing event loop', (done) => {
+        // |> Given an existing event loop
+        // |> When actionAsync are called
+        // |> They will be run at the end of the existing event loop
+        let firstCalled = false;
+        let secondCalled = false;
+        g.action(() => {
+            g.sideEffect(() => {
+                Promise.all([
+                    g.actionAsync(() => {
+                        firstCalled = true;
+                    }),
+                    g.actionAsync(() => {
+                        secondCalled = true;
+                    })
+                ]).then(() => {
+                    expect(firstCalled && secondCalled).toBeTruthy();
+                    done();
+                });
+            });
+        });
+
+    });
+
+    test('errors from async action are available', () => {
+        // |> Given a behavior that supplies a resource
+        let mr1 = ext.moment();
+        ext.behavior(null, [mr1], ext => {
+
+        });
+        ext.addToGraphWithAction();
+
+
+        // |> When an actionAsync causes error by updating a supplied resource
+        // |> Then there will be an error which is rejected asynchronously
+        return g.actionAsync(() => {
+            mr1.update(); // will fail, because its already supplied
+        }).catch(error => {
+            expect(error).not.toBeNull();
+        });
     });
 
     test('timeProvider gives an alternate time', () => {
@@ -1444,17 +1841,185 @@ describe('Effects, Actions, Events', () => {
         }
         let g2 = new Graph(tp);
         let ext3 = new Extent(g2);
-        let r1 = new State<number>( ext3,0, 'r1');
+        let r1 = ext3.state<number>(0, 'r1');
         ext3.addToGraphWithAction();
-        r1.updateWithAction(1, true);
+        r1.updateWithAction(1);
         expect(r1.event.timestamp).toEqual(new Date(1));
     });
 
     test('effects can only be run during an event', () => {
         ext.addToGraphWithAction();
         expect(() => {
-            ext.sideEffect('should throw', (extent) => {
-               // do nothing
+            ext.sideEffect((extent) => {
+                // do nothing
+            }, 'should throw');
+        }).toThrow();
+    });
+
+    test('actions have knowledge of changes for debugging', () => {
+        // |> Given a subsequent behavior
+        let m1 = ext.moment('m1')
+        let m2 = ext.moment('m2')
+        let m3 = ext.moment('m3')
+
+        let actionUpdatesDuring;
+        ext.behavior([m1], [m3], extent => {
+            m3.update()
+            actionUpdatesDuring = extent.graph.eventLoopState?.actionUpdates;
+        });
+        ext.addToGraphWithAction();
+
+        // |> When action updates multiple resources
+        g.action(() => {
+            m1.update();
+            m2.update();
+        });
+
+        // |> Then that information is available during the current event
+        expect(actionUpdatesDuring).toStrictEqual([m1, m2]);
+        expect(g.eventLoopState?.actionUpdates).toBeUndefined();
+    });
+
+    test('actions have debugName', () => {
+        let m1 = ext.moment();
+        let s1 = ext.state<number>(1);
+        let lastActionName;
+        ext.behavior([ext.added, m1, s1], null, extent => {
+            lastActionName = extent.graph.eventLoopState?.action.debugName;
+        });
+        ext.addToGraphWithAction('added');
+        expect(lastActionName).toBe('added');
+
+        g.action(() => {
+            m1.update();
+        }, '1');
+
+        expect(lastActionName).toBe('1');
+
+        g.actionAsync(() => {
+            m1.update();
+        }, '2');
+
+        expect(lastActionName).toBe('2');
+
+        m1.updateWithAction(undefined, '3');
+
+        expect(lastActionName).toBe('3');
+
+        s1.updateWithAction(2, '4');
+
+        expect(lastActionName).toBe('4');
+
+        ext.action(() => {
+            m1.update();
+        }, '5');
+
+        expect(lastActionName).toBe('5');
+
+        ext.actionAsync(() => {
+            m1.update();
+        }, '6');
+
+        expect(lastActionName).toBe('6');
+    });
+
+    test('sideEffects have debugName', () => {
+        let m1 = ext.moment();
+        let m2 = ext.moment();
+        let firstSideEffectName;
+        let secondSideEffectName;
+        ext.behavior([m1], [m2], extent => {
+            m2.update();
+            extent.sideEffect(extent1 => {
+                firstSideEffectName = extent.graph.eventLoopState?.currentSideEffect?.debugName;
+            }, '1');
+        });
+        ext.behavior([m2], null, extent => {
+            extent.sideEffect(extent1 => {
+                secondSideEffectName = extent.graph.eventLoopState?.currentSideEffect?.debugName;
+            });
+        });
+        ext.addToGraphWithAction();
+        m1.updateWithAction();
+
+        expect(firstSideEffectName).toBe('1');
+        expect(secondSideEffectName).toBeUndefined();
+    });
+
+    test('can create side effects with graph object', () => {
+        let valueAfter = 0;
+        let sideEffectName;
+        g.action(() => {
+            g.sideEffect(() => {
+                valueAfter = 1;
+                sideEffectName = g.eventLoopState?.currentSideEffect?.debugName;
+            }, 'sideEffect1');
+        });
+        expect(valueAfter).toBe(1);
+        expect(sideEffectName).toBe('sideEffect1');
+    });
+
+    test('defining behavior visible inside side effect', () => {
+        let m1 = ext.moment();
+        let definingBehavior;
+        let createdBehavior = ext.behavior([m1], null, ext => {
+            ext.sideEffect(extent => {
+                definingBehavior = extent.graph.eventLoopState!.currentSideEffect!.behavior;
+            });
+        });
+
+        ext.addToGraphWithAction();
+        m1.updateWithAction();
+
+        expect(definingBehavior).toBe(createdBehavior);
+    });
+
+    test('action inside sideEffect has extent', () => {
+        let m1 = ext.moment();
+        let insideExtent;
+        ext.behavior([m1], null, ext => {
+            ext.sideEffect(extent => {
+                extent.action(extent1 => {
+                    insideExtent = extent1;
+                });
+            });
+        });
+        ext.addToGraphWithAction();
+        m1.updateWithAction();
+
+        expect(insideExtent).toBe(ext);
+    });
+
+    test('nested actions are disallowed', () => {
+        expect(() => {
+            g.action(() => {
+                g.action(() => {
+
+                });
+            });
+        }).toThrow();
+    });
+
+    test('actions directly inside behaviors are disallowed', () => {
+        ext.behavior([ext.added], null, extent => {
+            extent.action(extent => {
+                // throws
+            });
+        });
+
+        expect(() => {
+            ext.addToGraphWithAction();
+        }).toThrow();
+    });
+
+    test('sideEffect in sideEffect doesnt make sense', () => {
+        expect(() => {
+            g.action(() => {
+                g.sideEffect(() => {
+                    g.sideEffect(() => {
+                        // throws
+                    });
+                });
             });
         }).toThrow();
     });
