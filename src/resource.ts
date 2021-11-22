@@ -112,6 +112,10 @@ export class Moment<T = undefined> extends Resource implements Transient {
         return this._happenedWhen;
     }
 
+    justUpdatedTo(value: T): boolean {
+        return this.justUpdated && this._happenedValue == value;
+    }
+
     updateWithAction(value: T | undefined = undefined, debugName?: string) {
         this.graph.action(() => {
             this.update(value);

@@ -448,8 +448,10 @@ describe('Moment Resource', () => {
         // Given a moment with data
         let mr1 = new Moment<number>(ext, 'mr1');
         let afterUpdate: unknown;
+        let updatedToOne = false;
         ext.behavior([mr1], null, (extent) => {
             afterUpdate = mr1.value;
+            updatedToOne = mr1.justUpdatedTo(1);
         });
         ext.addToGraphWithAction();
 
@@ -458,7 +460,8 @@ describe('Moment Resource', () => {
 
         // |> Then the data is visible in subsequent behaviors
         expect(afterUpdate).toBe(1);
-
+        expect(updatedToOne).toBeTruthy();
+        
         // but is transient outside event
         expect(mr1.value).toBeUndefined();
     });
