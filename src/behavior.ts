@@ -6,7 +6,7 @@
 import {Orderable} from "./bufferedqueue";
 import {Extent} from "./extent";
 import {Resource, Demandable} from "./resource";
-import {OrderingState} from "./bggraph"
+import {OrderingState} from "./graph"
 
 export class Behavior implements Orderable {
     demands: Set<Resource> | null;

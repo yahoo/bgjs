@@ -3,7 +3,7 @@
 //
 
 
-import {Graph} from "./bggraph";
+import {Graph} from "./graph";
 import {Behavior, BehaviorBuilder} from "./behavior";
 import {Moment, Resource, State, Demandable} from "./resource";
 

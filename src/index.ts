@@ -8,7 +8,7 @@ export {
     Graph,
     GraphEvent,
     InitialEvent
-} from "./bggraph";
+} from "./graph";
 
 export {
     Resource,

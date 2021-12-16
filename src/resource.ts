@@ -5,7 +5,7 @@
 
 import {Behavior} from "./behavior";
 import {Extent} from "./extent";
-import {GraphEvent, Graph, Transient, InitialEvent} from "./bggraph";
+import {GraphEvent, Graph, Transient, InitialEvent} from "./graph";
 
 export enum LinkType {
     reactive,
