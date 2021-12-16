@@ -85,21 +85,9 @@ export class Extent {
         }
     }
 
-    behavior(): BehaviorBuilder<this>
-    behavior(demands: Demandable[] | null, supplies: Resource[] | null, runBlock: (ext: this) => void): Behavior
-    behavior(demands?: Demandable[] | null, supplies?: Resource[] | null, runBlock?: (ext: this) => void): BehaviorBuilder<this> | Behavior {
+    behavior(): BehaviorBuilder<this> {
         let b: BehaviorBuilder<this> = new BehaviorBuilder(this);
-        if (demands) {
-            b.demands(...demands)
-        }
-        if (supplies) {
-            b.supplies(...supplies)
-        }
-        if (runBlock) {
-            return b.runs(runBlock);
-        } else {
-            return b;
-        }
+        return b;
     }
 
     resource(name?: string): Resource {

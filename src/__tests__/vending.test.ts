@@ -10,11 +10,13 @@ describe('Version 1: Simple Vending Machine', () => {
     class VendingMachine extends Extent {
         sodasVended: number = 0;
         buttonAction: Moment = this.moment();
-        vendEffect: Behavior = this.behavior([this.buttonAction], [], (extent: VendingMachine) => {
-            extent.sideEffect((extent) => {
-                extent.sodasVended += 1;
-            }, 'vend');
-        });
+        vendEffect: Behavior = this.behavior()
+            .demands(this.buttonAction)
+            .runs((extent: VendingMachine) => {
+                extent.sideEffect((extent) => {
+                    extent.sodasVended += 1;
+                }, 'vend');
+            });
     }
 
     test('press button, vend soda', () => {
@@ -39,26 +41,29 @@ describe('Version 2: No Free Soda', () => {
         insertCoinsAction: Moment<number> = this.moment();
         coinsTotal: State<number> = this.state(0);
 
-        vendEffect: Behavior = this.behavior([this.buttonAction, this.insertCoinsAction], [this.coinsTotal], extent => {
+        vendEffect: Behavior = this.behavior()
+            .supplies(this.coinsTotal)
+            .demands(this.buttonAction, this.insertCoinsAction)
+            .runs(extent => {
 
-            let coins = extent.coinsTotal.value;
+                let coins = extent.coinsTotal.value;
 
-            if (extent.insertCoinsAction.justUpdated) {
-                coins += extent.insertCoinsAction.value!;
-            }
-
-            if (extent.buttonAction.justUpdated) {
-                if (coins >= extent.SODA_PRICE) {
-                    coins -= extent.SODA_PRICE;
-                    extent.sideEffect((extent) => {
-                        extent.sodasVended += 1;
-                    }, 'vend');
+                if (extent.insertCoinsAction.justUpdated) {
+                    coins += extent.insertCoinsAction.value!;
                 }
-            }
 
-            extent.coinsTotal.update(coins);
+                if (extent.buttonAction.justUpdated) {
+                    if (coins >= extent.SODA_PRICE) {
+                        coins -= extent.SODA_PRICE;
+                        extent.sideEffect((extent) => {
+                            extent.sodasVended += 1;
+                        }, 'vend');
+                    }
+                }
 
-        });
+                extent.coinsTotal.update(coins);
+
+            });
     }
 
     let g: Graph;
@@ -117,45 +122,51 @@ describe('Version 3: Cans', () => {
         coinsTotal: State<number> = this.state(0);
         cansTotal: State<number> = this.state(0);
 
-        vendEffect: Behavior = this.behavior([this.buttonAction, this.insertCoinsAction, this.restockAction],
-            [this.coinsTotal, this.cansTotal], extent => {
+        vendEffect: Behavior = this.behavior()
+            .supplies(this.coinsTotal, this.cansTotal)
+            .demands(this.buttonAction, this.insertCoinsAction, this.restockAction)
+            .runs(extent => {
 
-            let coins = extent.coinsTotal.value;
-            let cans = extent.cansTotal.value;
+                let coins = extent.coinsTotal.value;
+                let cans = extent.cansTotal.value;
 
-            if (extent.insertCoinsAction.justUpdated) {
-                coins += extent.insertCoinsAction.value!;
-            }
-            if (extent.restockAction.justUpdated) {
-                cans += extent.restockAction.value!;
-            }
-            if (extent.buttonAction.justUpdated) {
-                if (coins >= extent.SODA_PRICE && cans > 0) {
-                    coins -= extent.SODA_PRICE;
-                    cans -= 1;
-                    extent.sideEffect((extent) => {
-                        extent.sodasVended += 1;
-                    }, 'vend')
+                if (extent.insertCoinsAction.justUpdated) {
+                    coins += extent.insertCoinsAction.value!;
                 }
-            }
-            extent.coinsTotal.update(coins);
-            extent.cansTotal.update(cans);
-        });
+                if (extent.restockAction.justUpdated) {
+                    cans += extent.restockAction.value!;
+                }
+                if (extent.buttonAction.justUpdated) {
+                    if (coins >= extent.SODA_PRICE && cans > 0) {
+                        coins -= extent.SODA_PRICE;
+                        cans -= 1;
+                        extent.sideEffect((extent) => {
+                            extent.sodasVended += 1;
+                        }, 'vend')
+                    }
+                }
+                extent.coinsTotal.update(coins);
+                extent.cansTotal.update(cans);
+            });
 
         constructor(graph: Graph) {
             super(graph);
 
-            this.behavior([this.coinsTotal], null, extent => {
-                extent.sideEffect((extent) => {
-                    extent.coinsDisplay = extent.coinsTotal.value;
-                }, 'coin display');
-            });
+            this.behavior()
+                .demands(this.coinsTotal)
+                .runs(extent => {
+                    extent.sideEffect((extent) => {
+                        extent.coinsDisplay = extent.coinsTotal.value;
+                    }, 'coin display');
+                });
 
-            this.behavior([this.cansTotal], null, extent => {
-                extent.sideEffect((extent) => {
-                    extent.cansDisplay = extent.cansTotal.value;
-                }, 'can display');
-            });
+            this.behavior()
+                .demands(this.cansTotal)
+                .runs(extent => {
+                    extent.sideEffect((extent) => {
+                        extent.cansDisplay = extent.cansTotal.value;
+                    }, 'can display');
+                });
 
         }
 
@@ -209,22 +220,26 @@ describe('Version 4: Vending State', () => {
         constructor(graph: Graph) {
             super(graph);
 
-            this.behavior([this.coinsTotal], null, extent => {
-                extent.sideEffect((extent) => {
-                    extent.coinsDisplay = extent.coinsTotal.value;
-                }, 'coin display');
-            });
+            this.behavior()
+                .demands(this.coinsTotal)
+                .runs(extent => {
+                    extent.sideEffect((extent) => {
+                        extent.coinsDisplay = extent.coinsTotal.value;
+                    }, 'coin display');
+                });
 
-            this.behavior([this.cansTotal], null, extent => {
-                extent.sideEffect((extent) => {
-                    extent.cansDisplay = extent.cansTotal.value;
-                }, 'can display');
-            });
+            this.behavior()
+                .demands(this.cansTotal)
+                .runs(extent => {
+                    extent.sideEffect((extent) => {
+                        extent.cansDisplay = extent.cansTotal.value;
+                    }, 'can display');
+                });
 
-            this.behavior(
-                [this.completeVendAction, this.insertCoinsAction, this.restockAction],
-                [this.coinsTotal, this.cansTotal],
-                extent => {
+            this.behavior()
+                .supplies(this.coinsTotal, this.cansTotal)
+                .demands(this.completeVendAction, this.insertCoinsAction, this.restockAction)
+                .runs(extent => {
 
                     let coins = extent.coinsTotal.value;
                     let cans = extent.cansTotal.value;
@@ -242,10 +257,10 @@ describe('Version 4: Vending State', () => {
 
                 });
 
-            this.behavior(
-                [this.coinsTotal, this.cansTotal, this.buttonAction, this.completeVendAction],
-                [this.vending],
-                (extent) => {
+            this.behavior()
+                .supplies(this.vending)
+                .demands(this.coinsTotal, this.cansTotal, this.buttonAction, this.completeVendAction)
+                .runs((extent) => {
 
                     let coins = extent.coinsTotal.value;
                     let cans = extent.cansTotal.value;
@@ -348,22 +363,26 @@ describe('Version 5: Jammed', () => {
         constructor(graph: Graph) {
             super(graph);
 
-            this.behavior([this.coinsTotal], null, extent => {
-                extent.sideEffect((extent) => {
-                    extent.coinsDisplay = extent.coinsTotal.value;
-                }, 'coin display');
-            });
+            this.behavior()
+                .demands(this.coinsTotal)
+                .runs(extent => {
+                    extent.sideEffect((extent) => {
+                        extent.coinsDisplay = extent.coinsTotal.value;
+                    }, 'coin display');
+                });
 
-            this.behavior([this.cansTotal], null, extent => {
-                extent.sideEffect(() => {
-                    extent.cansDisplay = extent.cansTotal.value
-                }, 'can display');
-            });
+            this.behavior()
+                .demands(this.cansTotal)
+                .runs(extent => {
+                    extent.sideEffect(() => {
+                        extent.cansDisplay = extent.cansTotal.value
+                    }, 'can display');
+                });
 
-            this.behavior(
-                [this.completeVendAction, this.insertCoinsAction, this.restockAction],
-                [this.coinsTotal, this.cansTotal],
-                extent => {
+            this.behavior()
+                .supplies(this.coinsTotal, this.cansTotal)
+                .demands(this.completeVendAction, this.insertCoinsAction, this.restockAction)
+                .runs(extent => {
 
                     let coins = extent.coinsTotal.value;
                     let cans = extent.cansTotal.value;
@@ -393,10 +412,10 @@ describe('Version 5: Jammed', () => {
 
                 });
 
-            this.behavior(
-                [this.coinsTotal, this.cansTotal, this.buttonAction, this.completeVendAction, this.jammed],
-                [this.vending],
-                (extent) => {
+            this.behavior()
+                .supplies(this.vending)
+                .demands(this.coinsTotal, this.cansTotal, this.buttonAction, this.completeVendAction, this.jammed)
+                .runs(extent => {
 
                     let coins = extent.coinsTotal.value;
                     let cans = extent.cansTotal.value;
@@ -418,31 +437,33 @@ describe('Version 5: Jammed', () => {
 
                 });
 
-            this.behavior([this.vending], null, (extent) => {
-                if (extent.vending.justUpdatedTo(true)) {
-                    extent.sideEffect((extent) => {
-                        extent.vendTimeoutTimerRunning = true;
-                        extent.sodasVended += 1;
-                    }, 'vend, start timeout timer');
-                } else if (extent.vending.justUpdatedTo(false)) {
-                    extent.sideEffect((extent) => {
-                        extent.vendTimeoutTimerRunning = false;
-                    }, 'stop, timeout timer');
-                }
-            });
-
-            this.behavior(
-                [this.timeoutAction, this.fixJamAction],
-                [this.jammed],
-                (extent) => {
-                    // if we started vending
-                    if (extent.vending.traceValue && extent.timeoutAction.justUpdated) {
-                        extent.jammed.update(true);
-                    } else if (extent.jammed.value && extent.fixJamAction.justUpdated) {
-                        extent.jammed.update(false);
+            this.behavior()
+                .demands(this.vending)
+                .runs(extent => {
+                    if (extent.vending.justUpdatedTo(true)) {
+                        extent.sideEffect((extent) => {
+                            extent.vendTimeoutTimerRunning = true;
+                            extent.sodasVended += 1;
+                        }, 'vend, start timeout timer');
+                    } else if (extent.vending.justUpdatedTo(false)) {
+                        extent.sideEffect((extent) => {
+                            extent.vendTimeoutTimerRunning = false;
+                        }, 'stop, timeout timer');
                     }
-                }
-            )
+                });
+
+            this.behavior()
+                .supplies(this.jammed)
+                .demands(this.timeoutAction, this.fixJamAction)
+                .runs(extent => {
+                        // if we started vending
+                        if (extent.vending.traceValue && extent.timeoutAction.justUpdated) {
+                            extent.jammed.update(true);
+                        } else if (extent.jammed.value && extent.fixJamAction.justUpdated) {
+                            extent.jammed.update(false);
+                        }
+                    }
+                )
         }
 
     }
