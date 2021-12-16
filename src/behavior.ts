@@ -37,12 +37,12 @@ export class Behavior implements Orderable {
         this.untrackedDynamicSupplies = null;
     }
 
-    setDynamicDemands(newDemands: Demandable[] | null) {
-        this.extent.graph.updateDemands(this, newDemands);
+    setDynamicDemands(newDemands: (Demandable | undefined)[] | null) {
+        this.extent.graph.updateDemands(this, newDemands?.filter(item => item != undefined) as (Demandable[] | null));
     }
 
-    setDynamicSupplies(newSupplies: Resource[] | null) {
-        this.extent.graph.updateSupplies(this, newSupplies);
+    setDynamicSupplies(newSupplies: (Resource | undefined)[] | null) {
+        this.extent.graph.updateSupplies(this, newSupplies?.filter(item => item !== undefined) as (Resource[] | null));
     }
 
 }
@@ -52,9 +52,9 @@ export class BehaviorBuilder<T extends Extent> {
     untrackedDemands: Demandable[] | null = null;
     untrackedSupplies: Resource[] | null = null;
     dynamicDemandSwitches: Demandable[] | null = null;
-    dynamicDemandLinks: ((ext: T) => Demandable[] | null) | null = null;
+    dynamicDemandLinks: ((ext: T) => (Demandable | undefined)[] | null) | null = null;
     dynamicSupplySwitches: Demandable[] | null = null;
-    dynamicSupplyLinks: ((ext: T) => Resource[] | null) | null = null;
+    dynamicSupplyLinks: ((ext: T) => (Resource | undefined)[] | null) | null = null;
 
     constructor(extent: T) {
         this.extent = extent;
@@ -70,13 +70,13 @@ export class BehaviorBuilder<T extends Extent> {
         return this;
     }
 
-    dynamicDemands(switches: Demandable[], links: ((ext: T) => Demandable[] | null)): this {
+    dynamicDemands(switches: Demandable[], links: ((ext: T) => (Demandable | undefined)[] | null)): this {
         this.dynamicDemandSwitches = switches;
         this.dynamicDemandLinks = links;
         return this;
     }
 
-    dynamicSupplies(switches: Demandable[], links: ((ext: T) => Resource[] | null)): this {
+    dynamicSupplies(switches: Demandable[], links: ((ext: T) => (Resource | undefined)[] | null)): this {
         this.dynamicSupplySwitches = switches;
         this.dynamicSupplyLinks = links;
         return this;

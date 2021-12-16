@@ -950,6 +950,37 @@ describe('dynamic graph changes', () => {
         expect(run).toBeTruthy();
     });
 
+    test('setDynamic can include undefined', () => {
+        // NOTE: This makes it easier to include a set of resources on an
+        // foreign extent that may not be there with nullish coalescing
+
+        // |> Given a behavior with dynamic demands/supplies
+        let r1 = ext.moment();
+        let r2 = ext.moment();
+        let r3 = ext.moment();
+        let didRun = false;
+        ext.behavior()
+            .dynamicDemands([r1], ext => {
+                return [r2, undefined];
+            })
+            .dynamicSupplies([r1], ext => {
+                return [r3, undefined];
+            })
+            .runs(ext1 => {
+                didRun = true;
+                r3.update();
+            });
+        ext.addToGraphWithAction();
+
+        // |> When demands/supplies relink with undefined in the list of links
+        r1.updateWithAction();
+        r2.updateWithAction();
+
+        // |> Then behavior should run as expected with undefined filtered out
+        expect(didRun).toBeTruthy();
+    });
+
+
     test('updating post-add supplies changes them', () => {
         let b1 = ext.behavior([], [], extent => {
         });
