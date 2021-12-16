@@ -41,7 +41,7 @@ const DefaultDateProvider = {
 }
 
 export class Graph {
-    dateProvider: BehaviorGraphDateProvider;
+    dateProvider: BehaviorGraphDateProvider = DefaultDateProvider;
     currentEvent: GraphEvent | null = null;
     lastEvent: GraphEvent;
     activatedBehaviors: BufferedPriorityQueue<Behavior> = new BufferedPriorityQueue();
@@ -55,9 +55,8 @@ export class Graph {
     needsOrdering: Behavior[] = [];
     eventLoopState: EventLoopState | null = null;
 
-    constructor(timeProvider = DefaultDateProvider) {
+    constructor() {
         this.lastEvent = InitialEvent;
-        this.dateProvider = timeProvider;
     }
 
     action(block: () => void, debugName?: string) {

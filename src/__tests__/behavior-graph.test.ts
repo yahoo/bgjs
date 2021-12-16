@@ -1838,14 +1838,15 @@ describe('Effects, Actions, Events', () => {
         });
     });
 
-    test('timeProvider gives an alternate time', () => {
+    test('dateProvider gives an alternate time', () => {
         let t = new Date(1);
         let tp = {
             now: () => {
                 return t;
             }
         }
-        let g2 = new Graph(tp);
+        let g2 = new Graph();
+        g2.dateProvider = tp;
         let ext3 = new Extent(g2);
         let r1 = ext3.state<number>(0, 'r1');
         ext3.addToGraphWithAction();
