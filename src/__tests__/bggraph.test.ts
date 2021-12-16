@@ -254,17 +254,6 @@ describe('State Resource', () => {
 
     describe('Checks', () => {
 
-        test('check update state needs state resource to be part of graph', () => {
-            // |> Given a state resource not part of the graph
-            let sr1 = ext.state<number>(0, 'sr1');
-
-            // |> When it is updated
-            // |> Then an error is raised
-            expect(() => {
-                sr1.update(1);
-            }).toThrow();
-        });
-
         test('check supplied state is updated by supplier', () => {
             // |> Given a supplied state resource
             let sr1 = ext.state<number>(0, 'sr1');
@@ -279,7 +268,7 @@ describe('State Resource', () => {
             // |> When it is updated by the wrong behavior
             // |> Then it should throw
             expect(() => {
-                mr1.update();
+                mr1.updateWithAction();
             }).toThrow();
         });
 
@@ -295,7 +284,7 @@ describe('State Resource', () => {
             // |> When it is updated by a behavior
             // |> Then it should throw
             expect(() => {
-                mr1.update();
+                mr1.updateWithAction();
             }).toThrow();
         });
 
@@ -332,7 +321,7 @@ describe('State Resource', () => {
             ext.addToGraphWithAction()
 
             expect(() => {
-                mr1.updateWithAction();
+                mr1.update();
             }).toThrow();
 
         });
@@ -483,17 +472,6 @@ describe('Moment Resource', () => {
 
     describe('Checks', () => {
 
-        test('check happen requires graph', () => {
-            // |> Given a moment resource not part of the graph
-            let mr1 = ext.moment('mr1');
-
-            // |> When it is updated
-            // |> Then an error is raised
-            expect(() => {
-                mr1.update();
-            }).toThrow();
-        });
-
         test('check supplied moment catches wrong updater', () => {
             // |> Given a supplied state resource
             let mr1 = ext.moment('mr1');
@@ -508,7 +486,7 @@ describe('Moment Resource', () => {
             // |> When it is updated by the wrong behavior
             // |> Then it should throw
             expect(() => {
-                mr1.update();
+                mr1.updateWithAction();
             }).toThrow();
         });
 
@@ -526,7 +504,7 @@ describe('Moment Resource', () => {
             // |> When it is updated by the wrong behavior
             // |> Then it should throw
             expect(() => {
-                mr1.update();
+                mr1.updateWithAction();
             }).toThrow();
         });
 
@@ -782,7 +760,6 @@ describe('dynamic graph changes', () => {
 
     test('removed extents remove components from graph', () => {
         // given an added behavior
-
         let r_x = ext.state(0, 'r_x');
         let b_a = ext.behavior([r_a], [r_b], extent => {
             r_b.update(r_a.value + 1);
@@ -797,8 +774,6 @@ describe('dynamic graph changes', () => {
         expect(r_b.value).toEqual(0);
 
         // and be removed
-        expect(b_a.added).toBeFalsy();
-        expect(r_x.added).toBeFalsy();
         expect(ext.addedToGraphWhen).toBeNull();
     });
 
@@ -1242,9 +1217,7 @@ describe('Extents', () => {
         e.addToGraphWithAction();
 
         expect(e.r1.graph).toBe(g);
-        expect(e.r1.added).toBeTruthy();
         expect(e.b1.extent).toBe(e);
-        expect(e.b1.added).toBeTruthy();
         expect(e.r2.value).toEqual(0);
 
         e.injectNumber(2);
@@ -1265,7 +1238,7 @@ describe('Extents', () => {
     test('added resource is updated on adding', () => {
         let e = new Extent(g);
         let runOnAdd = false;
-        e.behavior([e.added], [], extent => {
+        e.behavior([e.addedToGraph], [], extent => {
             runOnAdd = true;
         });
         e.addToGraphWithAction();
@@ -1884,7 +1857,7 @@ describe('Effects, Actions, Events', () => {
         let m1 = ext.moment();
         let s1 = ext.state<number>(1);
         let lastActionName;
-        ext.behavior([ext.added, m1, s1], null, extent => {
+        ext.behavior([ext.addedToGraph, m1, s1], null, extent => {
             lastActionName = extent.graph.eventLoopState?.action.debugName;
         });
         ext.addToGraphWithAction('added');
@@ -2001,7 +1974,7 @@ describe('Effects, Actions, Events', () => {
     });
 
     test('actions directly inside behaviors are disallowed', () => {
-        ext.behavior([ext.added], null, extent => {
+        ext.behavior([ext.addedToGraph], null, extent => {
             extent.action(extent => {
                 // throws
             });

@@ -14,7 +14,7 @@ export class Extent {
     resources: Resource[] = [];
     graph: Graph;
     addedToGraphWhen: number | null = null;
-    added: State<boolean>;
+    addedToGraph: State<boolean>;
     addedToGraphBehavior: Behavior;
 
     constructor(graph: Graph) {
@@ -22,9 +22,9 @@ export class Extent {
         this.graph = graph;
         // this hidden behavior supplies addedToGraph and gets activated independently when an
         // extent is added to the graph
-        this.added = new State<boolean>(this, false);
-        this.addedToGraphBehavior = this.behavior().supplies(this.added).runs((extent) => {
-            extent.added.update(true);
+        this.addedToGraph = new State<boolean>(this, false);
+        this.addedToGraphBehavior = this.behavior().supplies(this.addedToGraph).runs((extent) => {
+            extent.addedToGraph.update(true);
         });
     }
 

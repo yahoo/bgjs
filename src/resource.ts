@@ -22,7 +22,6 @@ export class Resource implements Demandable {
     isResource: boolean = true;
     extent: Extent;
     graph: Graph;
-    added: boolean = false;
     subsequents: Set<Behavior> = new Set();
     suppliedBy: Behavior | null = null;
     private skipChecks: boolean = false;

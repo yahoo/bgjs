@@ -15,7 +15,6 @@ export class Behavior implements Orderable {
     block: (extent: Extent) => void;
     enqueuedWhen: number | null = null;
     removedWhen: number | null = null;
-    added: boolean = false;
     extent: Extent;
     orderingState: OrderingState = OrderingState.Untracked;
     order: number = 0;

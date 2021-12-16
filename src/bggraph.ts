@@ -293,7 +293,7 @@ export class Graph {
                 let addedDemands: Resource[] | undefined;
                 for (let linkableDemand of allUntrackedDemands) {
                     let untrackedDemand = linkableDemand.resource;
-                    if (!untrackedDemand.added) {
+                    if (untrackedDemand.extent.addedToGraphWhen == null) {
                         let err: any = new Error("All demands must be added to the graph.");
                         err.currentBehavior = behavior;
                         err.untrackedDemand = untrackedDemand;
@@ -472,12 +472,11 @@ export class Graph {
     }
 
     addBehavior(behavior: Behavior) {
-        behavior.added = true;
         this.untrackedBehaviors.push(behavior)
     }
 
     updateDemands(behavior: Behavior, newDemands: Demandable[] | null) {
-        if (!behavior.added) {
+        if (behavior.extent.addedToGraphWhen == null) {
             let err: any = new Error("Behavior must belong to graph before updating demands.");
             err.behavior = behavior;
             throw err;
@@ -491,7 +490,7 @@ export class Graph {
     }
 
     updateSupplies(behavior: Behavior, newSupplies: Resource[] | null) {
-        if (!behavior.added) {
+        if (behavior.extent.addedToGraphWhen == null) {
             let err: any = new Error("Behavior must belong to graph before updating supplies.");
             err.behavior = behavior;
             throw err;
@@ -529,8 +528,6 @@ export class Graph {
             // and set supplied by to null
             resource.suppliedBy = null;
         }
-
-        resource.added = false;
     }
 
     removeBehavior(behavior: Behavior, sequence: number) {
@@ -569,11 +566,6 @@ export class Graph {
 
 
         behavior.removedWhen = sequence;
-        behavior.added = false;
-    }
-
-    addResource(resource: Resource) {
-        resource.added = true;
     }
 
     addExtent(extent: Extent) {
@@ -590,9 +582,6 @@ export class Graph {
         } else {
             extent.addedToGraphWhen = this.currentEvent.sequence;
             this.activateBehavior(extent.addedToGraphBehavior, this.currentEvent.sequence);
-            for (let resource of extent.resources) {
-                this.addResource(resource);
-            }
             for (let behavior of extent.behaviors) {
                 this.addBehavior(behavior);
             }
