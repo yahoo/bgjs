@@ -3,16 +3,8 @@
 //
 
 
-import {
-    Graph,
-    GraphEvent,
-    BehaviorGraphDateProvider,
-    Behavior,
-    State,
-    Moment,
-    Resource,
-    Extent, InitialEvent
-} from '../index';
+import {Behavior, Extent, Graph, GraphEvent, InitialEvent, Moment, Resource, State} from '../index';
+import {RelinkingOrder} from "../behavior";
 
 let g: Graph;
 let setupExt: Extent;
@@ -370,8 +362,8 @@ describe('State Resource', () => {
             ext2.behavior()
                 .demands(sr4)
                 .runs(ext => {
-                sr2.event;
-            });
+                    sr2.event;
+                });
 
             ext2.behavior().demands(sr5).runs(ext => {
                 sr2.justUpdated;
@@ -452,7 +444,7 @@ describe('Moment Resource', () => {
         // |> Then the data is visible in subsequent behaviors
         expect(afterUpdate).toBe(1);
         expect(updatedToOne).toBeTruthy();
-        
+
         // but is transient outside event
         expect(mr1.value).toBeUndefined();
     });
@@ -1094,6 +1086,30 @@ describe('dynamic graph changes', () => {
         expect(behaviorOrder).toBeGreaterThan(relinkBehaviorOrder);
     });
 
+    test('dynamicDemands clause with no static demands gets order correct', () => {
+        // |> Given a behavior with dynamic demands and no static demands
+        let m1 = ext.moment();
+        let relinkingOrder: number | null = null;
+        let behaviorOrder: number | null = null;
+        ext.behavior()
+            .dynamicDemands([m1], ext => {
+                relinkingOrder = ext.graph.currentBehavior!.order;
+                return [m1];
+            })
+            .runs(ext => {
+                behaviorOrder = ext.graph.currentBehavior!.order;
+            });
+        ext.addToGraphWithAction();
+
+        // |> When resource causes activation on both
+        g.action(() => {
+            m1.update();
+        });
+
+        // |> Expect the relinking behavior to come first
+        expect(behaviorOrder!).toBeGreaterThan(relinkingOrder!);
+    });
+
     test('dynamicSupplies clause updates supplies', () => {
         // |> Given a behavior with dynamicSupplies
         let m1 = ext.moment();
@@ -1212,8 +1228,49 @@ describe('dynamic graph changes', () => {
         m2.updateWithAction();
         expect(run).toBeTruthy();
     });
-});
 
+    test('can relink after behavior runs', () => {
+        // |> Given a behavior with subsequent relinking that demands m2
+        let m1 = ext.moment('m1');
+        let m2 = ext.moment('m2');
+
+        let didRun = false;
+
+        let relinkingOrder: number | null;
+        let behaviorOrder: number | null;
+        ext.behavior()
+            .dynamicDemands([m1, ext.addedToGraph], ext1 => {
+                if (ext.addedToGraph.justUpdated) {
+                    return [m2];
+                } else {
+                    relinkingOrder = ext1.graph.currentBehavior!.order;
+                    return [];
+                }
+            }, RelinkingOrder.relinkingOrderSubsequent)
+            .runs(ext1 => {
+                behaviorOrder = ext1.graph.currentBehavior!.order;
+                didRun = true;
+            });
+        ext.addToGraphWithAction();
+
+        // |> When m2 is removed but still demanded
+        g.action(() => {
+            m1.update();
+            m2.update();
+        });
+
+        // |> Then behavior is run first
+        expect(didRun).toBeTruthy();
+        expect(relinkingOrder!).toBeGreaterThan(behaviorOrder!);
+
+        // |> And when that resource is updated in a future event
+        didRun = false;
+        m2.updateWithAction();
+
+        // |> Then it is no longer demanded
+        expect(didRun).toBeFalsy();
+    })
+});
 
 
 describe('Extents', () => {
