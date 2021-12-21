@@ -4,6 +4,7 @@ yarn.lock
 lib
 .idea
 .vscode
+.parcel-cache
 
 # Logs
 logs

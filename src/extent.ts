@@ -3,7 +3,7 @@
 //
 
 
-import {Graph} from "./bggraph";
+import {Graph} from "./graph";
 import {Behavior, BehaviorBuilder} from "./behavior";
 import {Moment, Resource, State, Demandable} from "./resource";
 
@@ -14,7 +14,7 @@ export class Extent {
     resources: Resource[] = [];
     graph: Graph;
     addedToGraphWhen: number | null = null;
-    added: State<boolean>;
+    addedToGraph: State<boolean>;
     addedToGraphBehavior: Behavior;
 
     constructor(graph: Graph) {
@@ -22,9 +22,9 @@ export class Extent {
         this.graph = graph;
         // this hidden behavior supplies addedToGraph and gets activated independently when an
         // extent is added to the graph
-        this.added = new State<boolean>(this, false);
-        this.addedToGraphBehavior = this.behavior().supplies(this.added).runs((extent) => {
-            extent.added.update(true);
+        this.addedToGraph = new State<boolean>(this, false);
+        this.addedToGraphBehavior = this.behavior().supplies(this.addedToGraph).runs((extent) => {
+            extent.addedToGraph.update(true);
         });
     }
 
@@ -85,21 +85,9 @@ export class Extent {
         }
     }
 
-    behavior(): BehaviorBuilder<this>
-    behavior(demands: Demandable[] | null, supplies: Resource[] | null, runBlock: (ext: this) => void): Behavior
-    behavior(demands?: Demandable[] | null, supplies?: Resource[] | null, runBlock?: (ext: this) => void): BehaviorBuilder<this> | Behavior {
+    behavior(): BehaviorBuilder<this> {
         let b: BehaviorBuilder<this> = new BehaviorBuilder(this);
-        if (demands) {
-            b.demands(...demands)
-        }
-        if (supplies) {
-            b.supplies(...supplies)
-        }
-        if (runBlock) {
-            return b.runs(runBlock);
-        } else {
-            return b;
-        }
+        return b;
     }
 
     resource(name?: string): Resource {

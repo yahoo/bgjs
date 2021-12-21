@@ -6,7 +6,12 @@
 import {Orderable} from "./bufferedqueue";
 import {Extent} from "./extent";
 import {Resource, Demandable} from "./resource";
-import {OrderingState} from "./bggraph"
+import {OrderingState} from "./graph"
+
+export enum RelinkingOrder {
+    relinkingOrderPrior,
+    relinkingOrderSubsequent
+}
 
 export class Behavior implements Orderable {
     demands: Set<Resource> | null;
@@ -15,7 +20,6 @@ export class Behavior implements Orderable {
     block: (extent: Extent) => void;
     enqueuedWhen: number | null = null;
     removedWhen: number | null = null;
-    added: boolean = false;
     extent: Extent;
     orderingState: OrderingState = OrderingState.Untracked;
     order: number = 0;
@@ -38,12 +42,12 @@ export class Behavior implements Orderable {
         this.untrackedDynamicSupplies = null;
     }
 
-    setDynamicDemands(newDemands: Demandable[] | null) {
-        this.extent.graph.updateDemands(this, newDemands);
+    setDynamicDemands(newDemands: (Demandable | undefined)[] | null) {
+        this.extent.graph.updateDemands(this, newDemands?.filter(item => item != undefined) as (Demandable[] | null));
     }
 
-    setDynamicSupplies(newSupplies: Resource[] | null) {
-        this.extent.graph.updateSupplies(this, newSupplies);
+    setDynamicSupplies(newSupplies: (Resource | undefined)[] | null) {
+        this.extent.graph.updateSupplies(this, newSupplies?.filter(item => item !== undefined) as (Resource[] | null));
     }
 
 }
@@ -53,9 +57,10 @@ export class BehaviorBuilder<T extends Extent> {
     untrackedDemands: Demandable[] | null = null;
     untrackedSupplies: Resource[] | null = null;
     dynamicDemandSwitches: Demandable[] | null = null;
-    dynamicDemandLinks: ((ext: T) => Demandable[] | null) | null = null;
+    dynamicDemandLinks: ((ext: T) => (Demandable | undefined)[] | null) | null = null;
+    dynamicDemandRelinkingOrder : RelinkingOrder = RelinkingOrder.relinkingOrderPrior;
     dynamicSupplySwitches: Demandable[] | null = null;
-    dynamicSupplyLinks: ((ext: T) => Resource[] | null) | null = null;
+    dynamicSupplyLinks: ((ext: T) => (Resource | undefined)[] | null) | null = null;
 
     constructor(extent: T) {
         this.extent = extent;
@@ -71,13 +76,16 @@ export class BehaviorBuilder<T extends Extent> {
         return this;
     }
 
-    dynamicDemands(switches: Demandable[], links: ((ext: T) => Demandable[] | null)): this {
+    dynamicDemands(switches: Demandable[], links: ((ext: T) => (Demandable | undefined)[] | null), relinkingOrder?: RelinkingOrder): this {
         this.dynamicDemandSwitches = switches;
         this.dynamicDemandLinks = links;
+        if (relinkingOrder != undefined) {
+            this.dynamicDemandRelinkingOrder = relinkingOrder;
+        }
         return this;
     }
 
-    dynamicSupplies(switches: Demandable[], links: ((ext: T) => Resource[] | null)): this {
+    dynamicSupplies(switches: Demandable[], links: ((ext: T) => (Resource | undefined)[] | null)): this {
         this.dynamicSupplySwitches = switches;
         this.dynamicSupplyLinks = links;
         return this;
@@ -85,23 +93,37 @@ export class BehaviorBuilder<T extends Extent> {
 
     runs(block: (ext: T) => void): Behavior {
         let hasDynamicDemands = this.dynamicDemandSwitches != null;
+        if (this.untrackedDemands == null) { this.untrackedDemands = []; }
+        if (this.untrackedSupplies == null) { this.untrackedSupplies = []; }
         let dynamicDemandResource: Resource;
         if (hasDynamicDemands) {
             dynamicDemandResource = this.extent.resource('(BG Dynamic Demand Resource)')
-            this.untrackedDemands?.push(dynamicDemandResource);
+            if (this.dynamicDemandRelinkingOrder == RelinkingOrder.relinkingOrderPrior) {
+                this.untrackedDemands!.push(dynamicDemandResource);
+            } else {
+                this.untrackedSupplies!.push(dynamicDemandResource);
+            }
         }
 
         let hasDynamicSupplies = this.dynamicSupplySwitches != null;
         let dynamicSupplyResource: Resource;
         if (hasDynamicSupplies) {
             dynamicSupplyResource = this.extent.resource('(BG Dynamic Supply Resource)');
-            this.untrackedDemands?.push(dynamicSupplyResource);
+            this.untrackedDemands!.push(dynamicSupplyResource);
         }
 
         let mainBehavior = new Behavior(this.extent, this.untrackedDemands, this.untrackedSupplies, block as (arg0: Extent) => void);
 
         if (hasDynamicDemands) {
-            new Behavior(this.extent, this.dynamicDemandSwitches, [dynamicDemandResource!], ((extent: T) => {
+            let supplies: Resource[] = [];
+            let demands: Demandable[] | null = this.dynamicDemandSwitches;
+            if (this.dynamicDemandRelinkingOrder == RelinkingOrder.relinkingOrderPrior) {
+                supplies.push(dynamicDemandResource!);
+            } else {
+                if (demands == null) { demands = [] }
+                demands.push(dynamicDemandResource!);
+            }
+            new Behavior(this.extent, demands, supplies, ((extent: T) => {
                let demandLinks = this.dynamicDemandLinks!(extent);
                mainBehavior.setDynamicDemands(demandLinks);
             }) as (arg0: Extent) => void);
