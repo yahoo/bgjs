@@ -5,6 +5,7 @@
 
 import {Behavior, Extent, Graph, GraphEvent, InitialEvent, Moment, Resource, State} from '../index';
 import {RelinkingOrder} from "../behavior";
+import {ExtentRemoveStrategy} from "../extent";
 
 let g: Graph;
 let setupExt: Extent;
@@ -20,6 +21,7 @@ beforeEach(() => {
     r_c = setupExt.state<number>(0, 'r_c');
     setupExt.addToGraphWithAction();
     ext = new Extent(g);
+    setupExt.addChildLifetime(ext);
 });
 
 describe('State Resource', () => {
@@ -355,6 +357,7 @@ describe('State Resource', () => {
             // |> But Given behaviors that access value, event, or justUpdated for a resource
             // that is not supplied or demanded
             let ext2 = new Extent(g);
+            ext.addChildLifetime(ext2);
             ext2.behavior().demands(sr3).runs(ext => {
                 sr2.value;
             });
@@ -547,6 +550,7 @@ describe('Moment Resource', () => {
             // |> But Given behaviors that access value, event, or justUpdated for a resource
             // that is not supplied or demanded
             let ext2 = new Extent(g);
+            ext.addChildLifetime(ext2);
             ext2.behavior().demands(mr3).runs(ext => {
                 mr2.value;
             });
@@ -641,6 +645,7 @@ describe('dependencies', () => {
 
         let parentExt = new Extent(g)
         let ext2 = new Extent(g);
+        parentExt.addChildLifetime(ext2);
 
         let parent_r = parentExt.state<number>(0, 'parent_r');
         let parent_r2 = parentExt.state<number>(0, 'parent_r2');
@@ -656,8 +661,8 @@ describe('dependencies', () => {
             parent_r.update(ext2_r1.value)
         });
 
-        ext2.addToGraphWithAction();
         parentExt.addToGraphWithAction()
+        ext2.addToGraphWithAction();
 
         g.action(() => {
             ext2_r1.update(33)
@@ -690,6 +695,7 @@ describe('dynamic graph changes', () => {
 
         // -- this is new behavior that does the work
         let ext2 = new Extent(g);
+        setupExt.addChildLifetime(ext2);
         ext2.behavior().demands(r_b).supplies(r_c).runs((extent: Extent) => {
             if (r_b.event != null) {
                 r_c.update(r_b.value + 1);
@@ -771,57 +777,10 @@ describe('dynamic graph changes', () => {
         expect(ext.addedToGraphWhen).toBeNull();
     });
 
-    test('removed resources are removed from foreign demands', () => {
-        // |> Given we have a resource that is demanded both inside and outside extent
-        let ext2 = new Extent(g);
-        let demanded1 = ext2.moment('demanded1');
-        let ext1behavior = ext.behavior().demands(demanded1).runs(extent => {
-        });
-        let ext2behavior = ext2.behavior().demands(demanded1).runs(extent => {
-        });
-        g.action(() => {
-            ext.addToGraph();
-            ext2.addToGraph();
-        });
-
-        // |> When the extent that owns that resource is removed
-        ext2.removeFromGraphWithAction();
-
-        // |> Then it will no longer be demanded by the foreign behavior
-        expect(ext1behavior.demands!.size).toEqual(0);
-        // but it will be left wired in the local behavior (for performance)
-        expect(ext2behavior.demands!.size).toEqual(1);
-        // and subsequents are all removed (for performance since its faster to remove all than just foreign)
-        expect(demanded1.subsequents.size).toEqual(0);
-    });
-
-    test('removed resources are removed from foreign supplies', () => {
-        // |> Given we have resources that are supplied both inside and outside extent
-        let ext2 = new Extent(g);
-        let supplied1 = ext2.moment('supplied1');
-        let supplied2 = ext2.moment('supplied2');
-        let ext1behavior = ext.behavior().supplies(supplied1).runs(extent => {
-        });
-        let ext2behavior = ext2.behavior().supplies(supplied2).runs(extent => {
-        });
-        g.action(() => {
-            ext.addToGraph();
-            ext2.addToGraph();
-        });
-
-        // |> When the extent that owns those resources is removed
-        ext2.removeFromGraphWithAction();
-
-        // |> Then one will no longer be supplied by the foreign behavior
-        expect(ext1behavior.supplies!.size).toEqual(0);
-        expect(supplied1.suppliedBy).toBeNull();
-        // but it will be left wired in the local behavior (for performance)
-        expect(ext2behavior.supplies!.size).toEqual(1);
-    });
-
     test('removed behaviors are removed from foreign subsequents', () => {
         // |> Given we have a behavior which has foreign and local demands
         let ext2 = new Extent(g);
+        ext.addChildLifetime(ext2);
         let demanded1 = ext.moment('demanded1');
         let demanded2 = ext2.moment('demanded2');
         let ext2behavior = ext2.behavior().demands(demanded1, demanded2).runs(extent => {
@@ -830,6 +789,7 @@ describe('dynamic graph changes', () => {
             ext.addToGraph();
             ext2.addToGraph();
         });
+        expect(demanded1.subsequents.size).toEqual(1);
 
         // |> When its owning extent is removed
         ext2.removeFromGraphWithAction();
@@ -845,6 +805,7 @@ describe('dynamic graph changes', () => {
     test('removed behaviors are removed as foreign suppliers', () => {
         // |> Given we have a behavior which supplies both foreign and local resources
         let ext2 = new Extent(g);
+        ext.addChildLifetime(ext2);
         let supplied1 = ext.moment('supplied1');
         let supplied2 = ext2.moment('supplied2');
         let ext2behavior = ext2.behavior().supplies(supplied1, supplied2).runs(extent => {
@@ -870,6 +831,7 @@ describe('dynamic graph changes', () => {
         let remover = ext.state(null, 'y_out');
 
         let ext2: Extent = new Extent(g);
+        ext.addChildLifetime(ext2);
         let didRun: State<boolean> = ext2.state(false, 'didRun');
         ext2.behavior().demands(r_a, remover).supplies(didRun).runs(extent => {
             if (r_a.justUpdated) {
@@ -903,6 +865,7 @@ describe('dynamic graph changes', () => {
 
         // then a new extent is added that supplies it by a new behavior, it could just pass along the value
         let ext2: Extent = new Extent(g);
+        ext.addChildLifetime(ext2);
         let r_x: State<number> = ext2.state(0, 'r_x');
         ext2.behavior().demands(r_x).supplies(r_y).runs(extent => {
             r_y.update(r_x.value);
@@ -1002,6 +965,7 @@ describe('dynamic graph changes', () => {
         // then add another behavior that (will) supply the resource
         // b_a behavior should be reordered to come after b_b
         let ext2: Extent = new Extent(g);
+        ext.addChildLifetime(ext2);
         let b_b = ext2.behavior().demands(r_a).runs(extent => {
             r_x.update(r_a.value);
         });
@@ -1269,6 +1233,19 @@ describe('dynamic graph changes', () => {
 
         // |> Then it is no longer demanded
         expect(didRun).toBeFalsy();
+    });
+
+    test('dynamicDemands must be in the graph', () => {
+        // |> Given an extent with foreign demands that haven't been added
+        let ext1 = new Extent(g);
+        let r1 = ext1.moment();
+        let ext2 = new Extent(g);
+        ext2.behavior().dynamicDemands([ext2.addedToGraph], e => [r1]).runs(e => {});
+        // |> When that extent is added
+        // |> Then it should raise an error
+        expect(() => {
+            ext2.addToGraphWithAction();
+        }).toThrow();
     })
 });
 
@@ -1295,6 +1272,12 @@ describe('Extents', () => {
             this.r1.updateWithAction(num);
         }
     }
+
+    test('must be initialized with a graph', () => {
+        expect(() => {
+            let e = new Extent(null as any);
+        }).toThrow();
+    });
 
     test('gets class name', () => {
         let e = new TestExtent(g);
@@ -1358,6 +1341,526 @@ describe('Extents', () => {
                 e.removeFromGraph();
             }).toThrow();
         });
+    });
+});
+
+describe('Extent Lifetimes', () => {
+    describe('Unified', () => {
+        test('have same lifetime', () => {
+            // |> Given two extents
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+
+            // |> When they are unified
+            ext1.unifyLifetime(ext2);
+
+            // |> Then they will have same lifetime
+            expect(ext1.lifetime).toEqual(ext2.lifetime);
+            expect(ext1.lifetime!.extents).toContain(ext1);
+            expect(ext1.lifetime!.extents).toContain(ext2);
+        });
+
+        test('added in reverse have same lifetime', () => {
+            // |> Given two extents
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+
+            // |> When unified in reverse order
+            ext2.unifyLifetime(ext1);
+
+            // |> The will have same lifetime
+            expect(ext1.lifetime).toEqual(ext2.lifetime);
+            expect(ext1.lifetime!.extents).toContain(ext1);
+            expect(ext1.lifetime!.extents).toContain(ext2);
+        });
+
+        test('must be established before adding', () => {
+            // |> Given two extents
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+
+            // |> When unified after adding one extent
+            // |> Then it will throw an error
+            expect(() => {
+                g.action(() => {
+                    ext1.addToGraph();
+                    ext2.unifyLifetime(ext1);
+                    ext2.addToGraph();
+                });
+            }).toThrow();
+        });
+
+        test('merged other unified', () => {
+            // |> Given two sets of unified lifetimes
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            ext1.unifyLifetime(ext2);
+            let ext3 = new Extent(g);
+            let ext4 = new Extent(g);
+            ext3.unifyLifetime(ext4);
+
+            // |> When one from each is unified
+            ext1.unifyLifetime(ext3);
+
+            // |> Then all 4 become unified
+            expect(ext2.lifetime).toBe(ext4.lifetime);
+            expect(ext1.lifetime!.extents).toContain(ext1);
+            expect(ext1.lifetime!.extents).toContain(ext2);
+            expect(ext1.lifetime!.extents).toContain(ext3);
+            expect(ext1.lifetime!.extents).toContain(ext4);
+        });
+
+        test('can link as static demands', () => {
+            // |> Given two unified lifetime extents with a foreign supply and demand
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            let r1 = ext1.moment();
+            let r2 = ext1.moment();
+            ext2.behavior()
+                .supplies(r2)
+                .demands(r1)
+                .runs(e => {});
+            ext1.unifyLifetime(ext2);
+
+            // |> When they are added
+            // |> Then it should be allowed
+            expect(() => {
+                g.action(() => {
+                    ext1.addToGraph();
+                    ext2.addToGraph();
+                });
+            }).not.toThrow();
+        });
+
+        test('independent lifetimes cannot link as static demands', () => {
+            // |> Given two independent with foreign demand
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            let r1 = ext1.moment();
+            ext2.behavior()
+                .demands(r1)
+                .runs(e => {});
+
+            // |> When they are added
+            // |> Then it should raise an error
+            expect(() => {
+                g.action(() => {
+                    ext1.addToGraph();
+                    ext2.addToGraph();
+                });
+            }).toThrow();
+        });
+
+        test('independent lifetimes cannot link as static supplies', () => {
+            // |> Given two independent extents with a foreign supply
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            let r1 = ext1.moment();
+            ext2.behavior()
+                .supplies(r1)
+                .runs(e => {});
+
+            // |> When they are both added
+            // |> Then it should raise an error
+            expect(() => {
+                g.action(() => {
+                    ext1.addToGraph();
+                    ext2.addToGraph();
+                });
+            }).toThrow();
+        });
+
+        test('can remove each other', () => {
+            // |> Given two unified extents
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            ext1.unifyLifetime(ext2);
+            g.action(() => {
+                ext1.addToGraph();
+                ext2.addToGraph();
+            });
+
+            // |> Then we remove one with flag for removing contained lifetimes
+            g.action(() => {
+                ext1.removeFromGraph(ExtentRemoveStrategy.containedLifetimes);
+            });
+
+            // |> Then unified are also removed
+            expect(ext2.addedToGraphWhen).toBe(null);
+        });
+    });
+
+    describe('Children', () => {
+        test('cannot be added before', () => {
+            // |> Given parent extent
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            ext1.addChildLifetime(ext2);
+
+            // |> When child is added first
+            // |> Then it should raise an error
+            expect(() => {
+                ext2.addToGraphWithAction();
+            }).toThrow();
+        });
+
+        test('can be added simultaneously', () => {
+            // |> Given parent extent
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            ext1.addChildLifetime(ext2);
+
+            // |> When they are added simultaneously
+            // |> Then it should be fine
+            expect(() => {
+                g.action(() => {
+                    ext1.addToGraph();
+                    ext2.addToGraph();
+                });
+            }).not.toThrow();
+        });
+
+        test('can establish child relationship in subsequent events', () => {
+            // |> Given an added extent
+            let ext1 = new Extent(g);
+            ext1.addToGraphWithAction();
+
+            // |> When we create and set a child relationship in a subsequent event
+            // |> Then it should be fine
+            let ext2 = new Extent(g);
+            expect(() => {
+                ext1.addChildLifetime(ext2);
+                ext2.addToGraphWithAction();
+            }).not.toThrow();
+        });
+
+        test('can supply/demand up lifetimes', () => {
+            // |> Given parent relationship with links up to parent
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            ext1.addChildLifetime(ext2);
+            let r1 = ext1.moment();
+            let r2 = ext1.moment();
+            ext2.behavior().supplies(r2).demands(r1).runs(() => {});
+            ext1.addToGraphWithAction();
+
+            // |> When we add child in subsequent event
+            // |> Then it should be fine
+            expect(() => {
+                ext2.addToGraphWithAction();
+            }).not.toThrow();
+        });
+
+        test('cannot static demand down lifetimes', () => {
+            // NOTE: Child lifetimes can be less so demands may no longer
+            // exist. They must be dynamic
+
+            // |> Given a parent relationship with demands in child
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            ext1.addChildLifetime(ext2);
+            let r1 = ext2.moment();
+            ext1.behavior().demands(r1).runs(() => {});
+
+            // |> When they are added
+            // |> Then it should raise an error
+            expect(() => {
+                g.action(() => {
+                    ext1.addToGraph();
+                    ext2.addToGraph();
+                });
+            }).toThrow();
+        });
+
+        test('cannot static supply down lifetimes', () => {
+            // |> Given a parent relationship with supply in child
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            ext1.addChildLifetime(ext2);
+            let r1 = ext2.moment();
+            ext1.behavior().supplies(r1).runs(() => {});
+
+            // |> When they are added
+            // |> Then it should raise an error
+            expect(() => {
+                g.action(() => {
+                    ext1.addToGraph();
+                    ext2.addToGraph();
+                });
+            }).toThrow();
+        })
+
+        test('can remove with parent', () => {
+            // |> Given parent lifetimes
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            let ext3 = new Extent(g);
+            ext1.addChildLifetime(ext2);
+            ext1.addChildLifetime(ext3);
+            g.action(() => {
+                ext1.addToGraph();
+                ext2.addToGraph();
+                ext3.addToGraph();
+            });
+            // |> When parent is removed with containedLifetime strategy
+            // |> Then children (and their unified) are removed
+            ext1.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes);
+            expect(ext2.addedToGraphWhen).toBe(null);
+            expect(ext3.addedToGraphWhen).toBe(null);
+        });
+    });
+
+    describe('Families', () => {
+
+        test('merge children of unified', () => {
+            // NOTE: unified get the same lifetime, so we need to retain
+            // all children if they've already been defined.
+
+            // |> Given two lifetimes with children
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            ext1.addChildLifetime(ext2);
+            let ext3 = new Extent(g);
+            let ext4 = new Extent(g);
+            ext3.addChildLifetime(ext4);
+
+            // |> When those lifetimes are merged
+            ext1.unifyLifetime(ext3);
+
+            // |> Then the children are merged
+            expect(ext1.lifetime!.children).toContain(ext2.lifetime);
+            expect(ext1.lifetime!.children).toContain(ext4.lifetime);
+            expect(ext3.lifetime!.children).toContain(ext2.lifetime);
+            expect(ext3.lifetime!.children).toContain(ext4.lifetime);
+        });
+
+        test('prevents circular children', () => {
+            // |> Given a parent relationship
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            ext1.addChildLifetime(ext2);
+
+            // |> When we try to set reverse relationship
+            // |> Then raise an error
+            expect(() => {
+                ext2.addChildLifetime(ext1);
+            }).toThrow();
+        });
+
+        test('prevent circular children through unified', () => {
+            // |> Given a parent relationship and unified of child
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            let ext3 = new Extent(g);
+            ext1.addChildLifetime(ext2);
+            ext2.unifyLifetime(ext3);
+
+            // |> When that unified tries to become parent
+            // |> Then raise an error
+            expect(() => {
+                ext3.addChildLifetime(ext1);
+            }).toThrow();
+        });
+
+        test('prevent circular children when unifying', () => {
+            // |> Given parent relationship
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            let ext3 = new Extent(g);
+            ext2.addChildLifetime(ext3);
+            ext3.addChildLifetime(ext1);
+            // |> When parent becomes unified with child
+            // |> Then raise an error
+            expect(() => {
+                ext1.unifyLifetime(ext2);
+            }).toThrow();
+        });
+
+        test('can supply/demand up multiple generation lifetimes', () => {
+            // |> Given multiple generations
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            let ext3 = new Extent(g);
+            ext1.addChildLifetime(ext2);
+            ext2.addChildLifetime(ext3);
+            let r1 = ext1.moment();
+            let r2 = ext1.moment();
+
+            // |> When we link up multiple generations
+            ext3.behavior().supplies(r2).demands(r1).runs(() => {});
+            ext1.addToGraphWithAction();
+            ext2.addToGraphWithAction();
+
+            // |> Then it should work fine
+            expect(() => {
+                ext3.addToGraphWithAction();
+            }).not.toThrow();
+        });
+
+        test('can supply/demand up and across generations lifetimes', () => {
+            // |> Given multiple generations with unified lifetimes
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            let ext3 = new Extent(g);
+            ext1.unifyLifetime(ext2);
+            ext2.addChildLifetime(ext3);
+            let r1 = ext1.moment();
+            let r2 = ext1.moment();
+
+            // |> When we try to link up and across
+            ext3.behavior().supplies(r2).demands(r1).runs(() => {});
+            g.action(() => {
+                ext1.addToGraph();
+                ext2.addToGraph();
+            });
+
+            // |> Then it will also be fine
+            expect(() => {
+                ext3.addToGraphWithAction();
+            }).not.toThrow();
+        });
+
+        test('can remove multiple levels of children', () => {
+            // |> Given multiple generations of children and unified
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            let ext3 = new Extent(g);
+            let ext4 = new Extent(g);
+            let ext5 = new Extent(g);
+            ext1.addChildLifetime(ext2);
+            ext2.unifyLifetime(ext3);
+            ext2.addChildLifetime(ext4);
+            ext4.unifyLifetime(ext5);
+            ext1.addToGraphWithAction();
+            g.action(() => {
+                ext2.addToGraph();
+                ext3.addToGraph();
+            });
+            g.action(() => {
+                ext4.addToGraph();
+                ext5.addToGraph();
+            });
+
+            // |> When we remove parent with containedLifetimes strategy
+            ext1.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes);
+
+            // |> Then children and unified are recursively removed
+            expect(ext3.addedToGraphWhen).toBe(null);
+            expect(ext4.addedToGraphWhen).toBe(null);
+            expect(ext5.addedToGraphWhen).toBe(null);
+        });
+    });
+
+    describe('Integrity', function () {
+
+        test('confirm containing lifetimes have been added', () => {
+            // |> Given we have removed one unified extent
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            ext1.unifyLifetime(ext2);
+
+            // |> When event completes without having removed other member of unified
+            // |> Then raise an error
+            expect(() => {
+                ext1.addToGraphWithAction();
+            }).toThrow();
+        });
+
+        test('confirm contained lifetimes have been removed', () => {
+            // |> Given we have removed a parent
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            ext1.addChildLifetime(ext2);
+            ext1.addToGraphWithAction();
+            ext2.addToGraphWithAction();
+
+            // |> When event ends without removing child
+            // |> Then raise an error
+            expect(() => {
+                ext1.removeFromGraphWithAction();
+            }).toThrow();
+        });
+
+        test('confirm dynamic demands are unwound', () => {
+            // |> Given dynamic demands across foreign relationship
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            let r1 = ext2.moment();
+            ext1.behavior()
+                .dynamicDemands([ext1.addedToGraph], ext => [r1])
+                .runs(ext => {});
+            g.action(() => {
+                ext1.addToGraph();
+                ext2.addToGraph();
+            });
+
+            // |> When one extent is removed without fixing the dynamicDemand to that extent
+            // |> Then raise an error
+            expect(() => {
+                ext2.removeFromGraphWithAction();
+            }).toThrow();
+        });
+
+        test('confirm dynamic supplies are unwound', () => {
+            // |> Given dynamic supply across foreign relationship
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            let r1 = ext2.moment();
+            ext1.behavior()
+                .dynamicSupplies([ext1.addedToGraph], ext => [r1])
+                .runs(ext => {});
+            g.action(() => {
+                ext1.addToGraph();
+                ext2.addToGraph();
+            });
+
+            // |> When one extent is removed without fixing the dynamicSupply to that extent
+            // |> Then raise an error
+            expect(() => {
+                ext2.removeFromGraphWithAction();
+            }).toThrow();
+        });
+
+        test('can opt out of lifetime validations', () => {
+            // NOTE: Lifetime validations have to iterate through links which can be
+            // slow and unnecessary in production
+
+            // |> Given we turn off lifetime validations
+            g.validateLifetimes = false;
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            ext1.unifyLifetime(ext2);
+
+            // |> When adding only one member of unified
+            // |> Then don't throw
+            expect(() => {
+                ext1.addToGraphWithAction();
+            }).not.toThrow();
+
+            // |> And when removing only one member of unified
+            ext2.addToGraphWithAction();
+
+            // |> Then don't throw
+            expect(() => {
+                ext1.removeFromGraphWithAction();
+            }).not.toThrow();
+        });
+
+        test('can opt out of static link lifetime checks', () => {
+            // |> Given we turn off lifetime validations
+            g.validateLifetimes = false;
+            let ext1 = new Extent(g);
+            let ext2 = new Extent(g);
+            let r1 = ext1.moment();
+            let r2 = ext1.moment();
+
+            // |> When we try to link staticly across incompatible lifetimes
+            ext2.behavior().demands(r1).supplies(r2).runs(() => {});
+
+            // |> Then don't throw
+            ext1.addToGraphWithAction();
+            ext2.addToGraphWithAction();
+        })
     });
 });
 
