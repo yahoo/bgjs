@@ -24,21 +24,21 @@ class ExtentLifetime {
         }
     }
 
-    addSibling(extent: Extent) {
+    unify(extent: Extent) {
         if (extent.addedToGraphWhen != null) {
-            let err: any = new Error("Sibling relationship must be established before adding any extent to graph.");
+            let err: any = new Error("Same lifetime relationship must be established before adding any extent to graph.");
             err.extent = extent;
             throw err;
         }
         if (extent.lifetime != null) {
-            // merge existing siblings and children into one lifetime
+            // merge existing lifetimes and children into one lifetime heirarchy
             // move children first
             if (extent.lifetime.children != null) {
                 for (let child of extent.lifetime.children) {
                     this.addChildLifetime(child);
                 }
             }
-            // then make any extents in sibling lifetime part of this one
+            // then make any extents in other lifetime part of this one
             for (let ext of extent.lifetime.extents) {
                 ext.lifetime = this;
                 this.extents.add(ext);
@@ -75,7 +75,7 @@ class ExtentLifetime {
 
     hasCompatibleLifetime(lifetime: ExtentLifetime | null): boolean {
         if (this === lifetime) {
-            // siblings
+            // unified
             return true;
         } else if (lifetime != null) {
             // parents
@@ -138,11 +138,11 @@ export class Extent {
         });
     }
 
-    addSiblingLifetime(extent: Extent) {
+    unifyLifetime(extent: Extent) {
         if (this.lifetime == null) {
             this.lifetime = new ExtentLifetime(this);
         }
-        this.lifetime.addSibling(extent);
+        this.lifetime.unify(extent);
     }
 
     addChildLifetime(extent: Extent) {

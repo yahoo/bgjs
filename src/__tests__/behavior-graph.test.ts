@@ -1345,14 +1345,14 @@ describe('Extents', () => {
 });
 
 describe('Extent Lifetimes', () => {
-    describe('Siblings', () => {
+    describe('Unified', () => {
         test('have same lifetime', () => {
             // |> Given two extents
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
 
-            // |> When they are made siblings
-            ext1.addSiblingLifetime(ext2);
+            // |> When they are unified
+            ext1.unifyLifetime(ext2);
 
             // |> Then they will have same lifetime
             expect(ext1.lifetime).toEqual(ext2.lifetime);
@@ -1365,8 +1365,8 @@ describe('Extent Lifetimes', () => {
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
 
-            // |> When setting siblings in reverse order
-            ext2.addSiblingLifetime(ext1);
+            // |> When unified in reverse order
+            ext2.unifyLifetime(ext1);
 
             // |> The will have same lifetime
             expect(ext1.lifetime).toEqual(ext2.lifetime);
@@ -1379,30 +1379,30 @@ describe('Extent Lifetimes', () => {
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
 
-            // |> When sibling relationship is established after adding one extent
+            // |> When unified after adding one extent
             // |> Then it will throw an error
             expect(() => {
                 g.action(() => {
                     ext1.addToGraph();
-                    ext2.addSiblingLifetime(ext1);
+                    ext2.unifyLifetime(ext1);
                     ext2.addToGraph();
                 });
             }).toThrow();
         });
 
-        test('merged other siblings', () => {
-            // |> Given two sets of siblings
+        test('merged other unified', () => {
+            // |> Given two sets of unified lifetimes
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
-            ext1.addSiblingLifetime(ext2);
+            ext1.unifyLifetime(ext2);
             let ext3 = new Extent(g);
             let ext4 = new Extent(g);
-            ext3.addSiblingLifetime(ext4);
+            ext3.unifyLifetime(ext4);
 
-            // |> When one from each is made a sibling
-            ext1.addSiblingLifetime(ext3);
+            // |> When one from each is unified
+            ext1.unifyLifetime(ext3);
 
-            // |> Then all 4 become siblings
+            // |> Then all 4 become unified
             expect(ext2.lifetime).toBe(ext4.lifetime);
             expect(ext1.lifetime!.extents).toContain(ext1);
             expect(ext1.lifetime!.extents).toContain(ext2);
@@ -1411,7 +1411,7 @@ describe('Extent Lifetimes', () => {
         });
 
         test('can link as static demands', () => {
-            // |> Given two sibling extents with a foreign supply and demand
+            // |> Given two unified lifetime extents with a foreign supply and demand
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
             let r1 = ext1.moment();
@@ -1420,7 +1420,7 @@ describe('Extent Lifetimes', () => {
                 .supplies(r2)
                 .demands(r1)
                 .runs(e => {});
-            ext1.addSiblingLifetime(ext2);
+            ext1.unifyLifetime(ext2);
 
             // |> When they are added
             // |> Then it should be allowed
@@ -1432,8 +1432,8 @@ describe('Extent Lifetimes', () => {
             }).not.toThrow();
         });
 
-        test('non-siblings cannot link as static demands', () => {
-            // |> Given two non siblings with foreign demand
+        test('independent lifetimes cannot link as static demands', () => {
+            // |> Given two independent with foreign demand
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
             let r1 = ext1.moment();
@@ -1451,8 +1451,8 @@ describe('Extent Lifetimes', () => {
             }).toThrow();
         });
 
-        test('non-siblings cannot link as static supplies', () => {
-            // |> Given two non siblings with a foreign supply
+        test('independent lifetimes cannot link as static supplies', () => {
+            // |> Given two independent extents with a foreign supply
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
             let r1 = ext1.moment();
@@ -1471,10 +1471,10 @@ describe('Extent Lifetimes', () => {
         });
 
         test('can remove each other', () => {
-            // |> Given two sibling extents
+            // |> Given two unified extents
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
-            ext1.addSiblingLifetime(ext2);
+            ext1.unifyLifetime(ext2);
             g.action(() => {
                 ext1.addToGraph();
                 ext2.addToGraph();
@@ -1485,7 +1485,7 @@ describe('Extent Lifetimes', () => {
                 ext1.removeFromGraph(ExtentRemoveStrategy.containedLifetimes);
             });
 
-            // |> Then siblings are also removed
+            // |> Then unified are also removed
             expect(ext2.addedToGraphWhen).toBe(null);
         });
     });
@@ -1603,7 +1603,7 @@ describe('Extent Lifetimes', () => {
                 ext3.addToGraph();
             });
             // |> When parent is removed with containedLifetime strategy
-            // |> Then children (and their siblings) are removed
+            // |> Then children (and their unified) are removed
             ext1.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes);
             expect(ext2.addedToGraphWhen).toBe(null);
             expect(ext3.addedToGraphWhen).toBe(null);
@@ -1612,8 +1612,8 @@ describe('Extent Lifetimes', () => {
 
     describe('Families', () => {
 
-        test('merge children of siblings', () => {
-            // NOTE: siblings get the same lifetime, so we need to retain
+        test('merge children of unified', () => {
+            // NOTE: unified get the same lifetime, so we need to retain
             // all children if they've already been defined.
 
             // |> Given two lifetimes with children
@@ -1625,7 +1625,7 @@ describe('Extent Lifetimes', () => {
             ext3.addChildLifetime(ext4);
 
             // |> When those lifetimes are merged
-            ext1.addSiblingLifetime(ext3);
+            ext1.unifyLifetime(ext3);
 
             // |> Then the children are merged
             expect(ext1.lifetime!.children).toContain(ext2.lifetime);
@@ -1647,32 +1647,32 @@ describe('Extent Lifetimes', () => {
             }).toThrow();
         });
 
-        test('prevent circular children through siblings', () => {
-            // |> Given a parent relationship and sibling of child
+        test('prevent circular children through unified', () => {
+            // |> Given a parent relationship and unified of child
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
             let ext3 = new Extent(g);
             ext1.addChildLifetime(ext2);
-            ext2.addSiblingLifetime(ext3);
+            ext2.unifyLifetime(ext3);
 
-            // |> When that sibling tries to become parent
+            // |> When that unified tries to become parent
             // |> Then raise an error
             expect(() => {
                 ext3.addChildLifetime(ext1);
             }).toThrow();
         });
 
-        test('prevent circular children when merging siblings', () => {
+        test('prevent circular children when unifying', () => {
             // |> Given parent relationship
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
             let ext3 = new Extent(g);
             ext2.addChildLifetime(ext3);
             ext3.addChildLifetime(ext1);
-            // |> When parent becomes sibling of child
+            // |> When parent becomes unified with child
             // |> Then raise an error
             expect(() => {
-                ext1.addSiblingLifetime(ext2);
+                ext1.unifyLifetime(ext2);
             }).toThrow();
         });
 
@@ -1698,11 +1698,11 @@ describe('Extent Lifetimes', () => {
         });
 
         test('can supply/demand up and across generations lifetimes', () => {
-            // |> Given multiple generations with siblings
+            // |> Given multiple generations with unified lifetimes
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
             let ext3 = new Extent(g);
-            ext1.addSiblingLifetime(ext2);
+            ext1.unifyLifetime(ext2);
             ext2.addChildLifetime(ext3);
             let r1 = ext1.moment();
             let r2 = ext1.moment();
@@ -1721,16 +1721,16 @@ describe('Extent Lifetimes', () => {
         });
 
         test('can remove multiple levels of children', () => {
-            // |> Given multiple generations of children and siblings
+            // |> Given multiple generations of children and unified
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
             let ext3 = new Extent(g);
             let ext4 = new Extent(g);
             let ext5 = new Extent(g);
             ext1.addChildLifetime(ext2);
-            ext2.addSiblingLifetime(ext3);
+            ext2.unifyLifetime(ext3);
             ext2.addChildLifetime(ext4);
-            ext4.addSiblingLifetime(ext5);
+            ext4.unifyLifetime(ext5);
             ext1.addToGraphWithAction();
             g.action(() => {
                 ext2.addToGraph();
@@ -1744,7 +1744,7 @@ describe('Extent Lifetimes', () => {
             // |> When we remove parent with containedLifetimes strategy
             ext1.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes);
 
-            // |> Then children and siblings are recursively removed
+            // |> Then children and unified are recursively removed
             expect(ext3.addedToGraphWhen).toBe(null);
             expect(ext4.addedToGraphWhen).toBe(null);
             expect(ext5.addedToGraphWhen).toBe(null);
@@ -1754,12 +1754,12 @@ describe('Extent Lifetimes', () => {
     describe('Integrity', function () {
 
         test('confirm containing lifetimes have been added', () => {
-            // |> Given we have removed one sibling
+            // |> Given we have removed one unified extent
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
-            ext1.addSiblingLifetime(ext2);
+            ext1.unifyLifetime(ext2);
 
-            // |> When event completes without having removed other sibling
+            // |> When event completes without having removed other member of unified
             // |> Then raise an error
             expect(() => {
                 ext1.addToGraphWithAction();
@@ -1829,15 +1829,15 @@ describe('Extent Lifetimes', () => {
             g.validateLifetimes = false;
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
-            ext1.addSiblingLifetime(ext2);
+            ext1.unifyLifetime(ext2);
 
-            // |> When adding only one sibling
+            // |> When adding only one member of unified
             // |> Then don't throw
             expect(() => {
                 ext1.addToGraphWithAction();
             }).not.toThrow();
 
-            // |> And when removing only one sibling
+            // |> And when removing only one member of unified
             ext2.addToGraphWithAction();
 
             // |> Then don't throw

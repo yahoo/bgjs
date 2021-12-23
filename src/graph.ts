@@ -197,7 +197,7 @@ export class Graph {
             }
         }
         if (needAdding.size > 0) {
-            let err: any = new Error("All extents with sibling or parent lifetimes must be added during the same event.");
+            let err: any = new Error("All extents with unified or parent lifetimes must be added during the same event.");
             err.nonAddedExtents = needAdding;
             throw err;
         }
@@ -216,7 +216,7 @@ export class Graph {
             }
         }
         if (needRemoving.size > 0) {
-            let err: any = new Error("All extents with sibling or child lifetimes must be removed during the same event.");
+            let err: any = new Error("All extents with unified or child lifetimes must be removed during the same event.");
             err.nonAddedExtents = needRemoving;
             throw err;
         }
@@ -317,7 +317,7 @@ export class Graph {
                 if (behavior.untrackedSupplies != null) {
                     for (let supply of behavior.untrackedSupplies) {
                         if (this.validateLifetimes && !behavior.extent.hasCompatibleLifetime(supply.extent)) {
-                            let err: any = new Error("Static supplies can only be with extents with the sibling or parent lifetimes.");
+                            let err: any = new Error("Static supplies can only be with extents with the unified or parent lifetimes.");
                             err.currentBehavior = behavior;
                             err.supply = supply;
                             throw err;
@@ -363,7 +363,7 @@ export class Graph {
                 if (behavior.untrackedDemands != null) {
                     for (let demand of behavior.untrackedDemands) {
                         if (this.validateLifetimes && !behavior.extent.hasCompatibleLifetime(demand.resource.extent)) {
-                            let err: any = new Error("Static demands can only be with extents with the sibling or parent lifetimes.");
+                            let err: any = new Error("Static demands can only be with extents with the unified or parent lifetimes.");
                             err.currentBehavior = behavior;
                             err.demand = demand.resource;
                             throw err;
