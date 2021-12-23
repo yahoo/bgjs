@@ -54,6 +54,9 @@ export class Graph {
     updatedTransients: Transient[] = [];
     needsOrdering: Behavior[] = [];
     eventLoopState: EventLoopState | null = null;
+    extentsAdded: Extent[] = [];
+    extentsRemoved: Extent[] = [];
+    validateLifetimes: boolean = true;
 
     constructor() {
         this.lastEvent = InitialEvent;
@@ -116,6 +119,17 @@ export class Graph {
                     continue;
                 }
 
+                if (this.validateLifetimes) {
+                    if (this.extentsAdded.length > 0) {
+                        this.validateAddedExtents();
+                        this.extentsAdded.length = 0;
+                    }
+                    if (this.extentsRemoved.length > 0) {
+                        this.validateRemovedExtents();
+                        this.extentsRemoved.length = 0;
+                    }
+                }
+
                 let effect = this.effects.shift();
                 if (effect) {
                     this.eventLoopState!.phase = EventLoopPhase.sideEffects;
@@ -161,10 +175,70 @@ export class Graph {
                 this.modifiedDemandBehaviors.length = 0;
                 this.modifiedSupplyBehaviors.length = 0;
                 this.untrackedBehaviors.length = 0;
+                this.extentsAdded.length = 0;
+                this.extentsRemoved.length = 0;
                 throw(error);
             }
             // no more tasks so we can exit the event loop
             break;
+        }
+    }
+
+    private validateAddedExtents() {
+        // ensure extents with same lifetime also got added
+        let needAdding: Set<Extent> = new Set();
+        for (let added of this.extentsAdded) {
+            if (added.lifetime != null) {
+                for (let ext of added.lifetime.getAllContainingExtents()) {
+                    if (ext.addedToGraphWhen == null) {
+                        needAdding.add(ext);
+                    }
+                }
+            }
+        }
+        if (needAdding.size > 0) {
+            let err: any = new Error("All extents with sibling or parent lifetimes must be added during the same event.");
+            err.nonAddedExtents = needAdding;
+            throw err;
+        }
+    }
+
+    private validateRemovedExtents() {
+        // validate extents with contained lifetimes are also removed
+        let needRemoving: Set<Extent> = new Set();
+        for (let removed of this.extentsRemoved) {
+            if (removed.lifetime != null) {
+                for (let ext of removed.lifetime.getAllContainedExtents()) {
+                    if (ext.addedToGraphWhen != null) {
+                        needRemoving.add(ext);
+                    }
+                }
+            }
+        }
+        if (needRemoving.size > 0) {
+            let err: any = new Error("All extents with sibling or child lifetimes must be removed during the same event.");
+            err.nonAddedExtents = needRemoving;
+            throw err;
+        }
+
+        // validate removed resources are not still linked to remaining behaviors
+        for (let removed of this.extentsRemoved) {
+            for (let resource of removed.resources) {
+                for (let demandedBy of resource.subsequents) {
+                    if (demandedBy.extent.addedToGraphWhen != null) {
+                        let err: any = new Error("Remaining behaviors must remove dynamicDemands to removed resources.");
+                        err.remainingBehavior = demandedBy;
+                        err.removedResource = resource;
+                        throw err;
+                    }
+                }
+                if (resource.suppliedBy != null && resource.suppliedBy.extent.addedToGraphWhen != null) {
+                    let err: any = new Error("Remaining behaviors must remove dynamicSupplies to removed resources.");
+                    err.remainingBehavior = resource.suppliedBy;
+                    err.removedResource = resource;
+                    throw err;
+                }
+            }
         }
     }
 
@@ -240,6 +314,17 @@ export class Graph {
     private addUntrackedSupplies() {
         if (this.modifiedSupplyBehaviors.length > 0) {
             for (let behavior of this.modifiedSupplyBehaviors) {
+                if (behavior.untrackedSupplies != null) {
+                    for (let supply of behavior.untrackedSupplies) {
+                        if (this.validateLifetimes && !behavior.extent.hasCompatibleLifetime(supply.extent)) {
+                            let err: any = new Error("Static supplies can only be with extents with the sibling or parent lifetimes.");
+                            err.currentBehavior = behavior;
+                            err.supply = supply;
+                            throw err;
+                        }
+                    }
+                }
+
                 let allUntrackedSupplies = [...(behavior.untrackedSupplies ?? []), ...(behavior.untrackedDynamicSupplies ?? [])];
 
                 if (behavior.supplies != null) {
@@ -275,6 +360,16 @@ export class Graph {
     private addUntrackedDemands(sequence: number) {
         if (this.modifiedDemandBehaviors.length > 0) {
             for (let behavior of this.modifiedDemandBehaviors) {
+                if (behavior.untrackedDemands != null) {
+                    for (let demand of behavior.untrackedDemands) {
+                        if (this.validateLifetimes && !behavior.extent.hasCompatibleLifetime(demand.resource.extent)) {
+                            let err: any = new Error("Static demands can only be with extents with the sibling or parent lifetimes.");
+                            err.currentBehavior = behavior;
+                            err.demand = demand.resource;
+                            throw err;
+                        }
+                    }
+                }
                 let allUntrackedDemands = [...(behavior.untrackedDemands ?? []), ...(behavior.untrackedDynamicDemands ?? [])];
 
                 let removedDemands: Resource[] | undefined;
@@ -502,32 +597,6 @@ export class Graph {
         this.modifiedSupplyBehaviors.push(behavior);
     }
 
-    removeResource(resource: Resource) {
-
-        // any foreign behaviors that demand this resource should have
-        // it removed as a demand
-        let removed = false;
-        for (let subsequent of resource.subsequents) {
-            if (subsequent.extent != resource.extent) {
-                subsequent.demands?.delete(resource);
-                removed = true;
-            }
-        }
-        // and clear out all subsequents since its faster than removing
-        // them one at a time
-        if (removed) {
-            resource.subsequents.clear();
-        }
-
-
-        // any foreign behaviors that supply this resource should have
-        // it removed as a supply
-        if (resource.suppliedBy?.extent != resource.extent) {
-            resource.suppliedBy?.supplies?.delete(resource);
-            // and set supplied by to null
-            resource.suppliedBy = null;
-        }
-    }
 
     removeBehavior(behavior: Behavior, sequence: number) {
         // If we demand a foreign resource then we should be
@@ -578,12 +647,29 @@ export class Graph {
             let err: any = new Error("Extents can only be added during an event.");
             err.extent = extent;
             throw err;
-        } else {
-            extent.addedToGraphWhen = this.currentEvent.sequence;
-            this.activateBehavior(extent.addedToGraphBehavior, this.currentEvent.sequence);
-            for (let behavior of extent.behaviors) {
-                this.addBehavior(behavior);
+        }
+
+        if (this.validateLifetimes) {
+            if (extent.lifetime != null) {
+                if (extent.lifetime.addedToGraphWhen == null) {
+                    // first extent in lifetime being added
+                    extent.lifetime.addedToGraphWhen = this.currentEvent.sequence;
+                }
+                if (extent.lifetime.parent != null) {
+                    if (extent.lifetime.parent.addedToGraphWhen == null) {
+                        let err: any = new Error("Extent with child lifetime must be added after parent.");
+                        err.extent = extent;
+                        throw err;
+                    }
+                }
             }
+        }
+
+        extent.addedToGraphWhen = this.currentEvent.sequence;
+        this.extentsAdded.push(extent);
+        this.activateBehavior(extent.addedToGraphBehavior, this.currentEvent.sequence);
+        for (let behavior of extent.behaviors) {
+            this.addBehavior(behavior);
         }
     }
 
@@ -593,9 +679,7 @@ export class Graph {
             err.extent = extent;
             throw err;
         } else {
-            for (let resource of extent.resources) {
-                this.removeResource(resource);
-            }
+            this.extentsRemoved.push(extent);
             for (let behavior of extent.behaviors) {
                 this.removeBehavior(behavior, this.currentEvent.sequence);
             }

@@ -7,6 +7,110 @@ import {Graph} from "./graph";
 import {Behavior, BehaviorBuilder} from "./behavior";
 import {Moment, Resource, State, Demandable} from "./resource";
 
+export enum ExtentRemoveStrategy {
+    extentOnly,
+    containedLifetimes
+}
+
+class ExtentLifetime {
+    addedToGraphWhen: number | null = null;
+    extents: Set<Extent> = new Set();
+    children: Set<ExtentLifetime> | null = null;
+    parent: ExtentLifetime | null = null;
+    constructor(extent: Extent) {
+        this.extents.add(extent);
+        if (extent.addedToGraphWhen != null) {
+            this.addedToGraphWhen = extent.addedToGraphWhen;
+        }
+    }
+
+    addSibling(extent: Extent) {
+        if (extent.addedToGraphWhen != null) {
+            let err: any = new Error("Sibling relationship must be established before adding any extent to graph.");
+            err.extent = extent;
+            throw err;
+        }
+        if (extent.lifetime != null) {
+            // merge existing siblings and children into one lifetime
+            // move children first
+            if (extent.lifetime.children != null) {
+                for (let child of extent.lifetime.children) {
+                    this.addChildLifetime(child);
+                }
+            }
+            // then make any extents in sibling lifetime part of this one
+            for (let ext of extent.lifetime.extents) {
+                ext.lifetime = this;
+                this.extents.add(ext);
+            }
+        } else {
+            extent.lifetime = this;
+            this.extents.add(extent);
+        }
+    }
+
+    addChild(extent:Extent) {
+        if (extent.lifetime == null) {
+            extent.lifetime = new ExtentLifetime(extent);
+        }
+        this.addChildLifetime(extent.lifetime!);
+    }
+
+    addChildLifetime(lifetime: ExtentLifetime) {
+        let myLifetime : ExtentLifetime | null = this;
+        while (myLifetime != null) {
+            if (myLifetime === lifetime) {
+                let err: any = new Error("Child lifetime cannot be a transitive parent.");
+                err.extent = lifetime;
+                throw err;
+            }
+            myLifetime = myLifetime.parent;
+        }
+        lifetime.parent = this;
+        if (this.children == null) {
+            this.children = new Set<ExtentLifetime>();
+        }
+        this.children!.add(lifetime);
+    }
+
+    hasCompatibleLifetime(lifetime: ExtentLifetime | null): boolean {
+        if (this === lifetime) {
+            // siblings
+            return true;
+        } else if (lifetime != null) {
+            // parents
+            if (this.parent != null) {
+                return this.parent.hasCompatibleLifetime(lifetime);
+            }
+        }
+        return false;
+    }
+
+    getAllContainedExtents(): Extent[] {
+        let extents = [];
+        for (let ext of this.extents) {
+            extents.push(ext);
+        }
+        if (this.children != null) {
+            for (let childLifetime of this.children) {
+                extents.push(...childLifetime.getAllContainedExtents());
+            }
+        }
+        return extents;
+    }
+
+    getAllContainingExtents(): Extent[] {
+        let extents = [];
+        for (let ext of this.extents) {
+            extents.push(ext);
+        }
+        if (this.parent != null) {
+            extents.push(...this.parent.getAllContainingExtents());
+        }
+        return extents;
+    }
+}
+
 export class Extent {
     debugConstructorName: string | undefined;
     debugName: string | undefined;
@@ -16,8 +120,14 @@ export class Extent {
     addedToGraphWhen: number | null = null;
     addedToGraph: State<boolean>;
     addedToGraphBehavior: Behavior;
+    lifetime: ExtentLifetime | null = null;
 
     constructor(graph: Graph) {
+        if (graph === null || graph === undefined) {
+            let err: any = new Error("Extent must be initialized with an instance of Graph");
+            err.extent = this;
+            throw err;
+        }
         this.debugConstructorName = this.constructor.name;
         this.graph = graph;
         // this hidden behavior supplies addedToGraph and gets activated independently when an
@@ -26,6 +136,30 @@ export class Extent {
         this.addedToGraphBehavior = this.behavior().supplies(this.addedToGraph).runs((extent) => {
             extent.addedToGraph.update(true);
         });
+    }
+
+    addSiblingLifetime(extent: Extent) {
+        if (this.lifetime == null) {
+            this.lifetime = new ExtentLifetime(this);
+        }
+        this.lifetime.addSibling(extent);
+    }
+
+    addChildLifetime(extent: Extent) {
+        if (this.lifetime == null) {
+            this.lifetime = new ExtentLifetime(this);
+        }
+        this.lifetime.addChild(extent);
+    }
+
+    hasCompatibleLifetime(extent: Extent) {
+        if (this === extent) {
+            return true;
+        } else if (this.lifetime != null) {
+            return (this.lifetime.hasCompatibleLifetime(extent.lifetime));
+        } else {
+            return false;
+        }
     }
 
     addBehavior(behavior: Behavior) {
@@ -53,17 +187,23 @@ export class Extent {
         }
     }
 
-    removeFromGraphWithAction(debugName?: string) {
+    removeFromGraphWithAction(strategy?: ExtentRemoveStrategy, debugName?: string) {
         this.action(() => {
-            this.removeFromGraph();
+            this.removeFromGraph(strategy);
         }, debugName);
     }
 
-    removeFromGraph() {
+    removeFromGraph(strategy?: ExtentRemoveStrategy) {
         let graph = this.graph;
         if (graph.currentEvent != null) {
             if (this.addedToGraphWhen != null) {
-                graph.removeExtent(this);
+                if (strategy == ExtentRemoveStrategy.extentOnly || strategy === undefined || this.lifetime === null) {
+                    graph.removeExtent(this);
+                } else {
+                    for (let ext of this.lifetime.getAllContainedExtents()) {
+                        graph.removeExtent(ext);
+                    }
+                }
             }
         } else {
             let err: any = new Error("removeFromGraph must be called within an event.");
