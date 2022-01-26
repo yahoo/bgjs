@@ -4,10 +4,9 @@
 
 
 export {
-    BehaviorGraphDateProvider,
+    DateProvider,
     Graph,
-    GraphEvent,
-    InitialEvent
+    GraphEvent
 } from "./graph";
 
 export {
@@ -17,9 +16,11 @@ export {
 } from "./resource"
 
 export {
-    Extent
+    Extent,
+    ExtentRemoveStrategy
 } from "./extent"
 
 export {
-    Behavior
+    Behavior,
+    RelinkingOrder
 } from "./behavior"

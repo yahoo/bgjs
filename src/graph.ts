@@ -26,11 +26,11 @@ interface SideEffect {
 interface Action {
     block: (extent: Extent | null) => void;
     extent: Extent | null;
-    resolve: (() => void) | null;
+    resolve: ((value: any) => void) | null;
     debugName?: string;
 }
 
-export interface BehaviorGraphDateProvider {
+export interface DateProvider {
     now(): Date
 }
 
@@ -41,7 +41,7 @@ const DefaultDateProvider = {
 }
 
 export class Graph {
-    dateProvider: BehaviorGraphDateProvider = DefaultDateProvider;
+    dateProvider: DateProvider = DefaultDateProvider;
     currentEvent: GraphEvent | null = null;
     lastEvent: GraphEvent;
     activatedBehaviors: BufferedPriorityQueue<Behavior> = new BufferedPriorityQueue();
@@ -59,7 +59,7 @@ export class Graph {
     validateLifetimes: boolean = true;
 
     constructor() {
-        this.lastEvent = InitialEvent;
+        this.lastEvent = GraphEvent.initialEvent;
     }
 
     action(block: () => void, debugName?: string) {
@@ -145,7 +145,7 @@ export class Graph {
 
                 if (this.currentEvent) {
                     if (this.eventLoopState!.action.resolve != undefined) {
-                        this.eventLoopState!.action.resolve();
+                        this.eventLoopState!.action.resolve(undefined);
                     }
                     this.clearTransients();
                     this.lastEvent = this.currentEvent!;
@@ -505,7 +505,7 @@ export class Graph {
         if (behavior.orderingState == OrderingState.Ordering) {
             let err: any = new Error("Behavior dependency cycle detected.");
             err.currentBehavior = behavior;
-            err.cycle = this.cycleForBehavior(behavior);
+            err.cycle = this.debugCycleForBehavior(behavior);
             throw err;
         }
 
@@ -534,7 +534,7 @@ export class Graph {
         }
     }
 
-    cycleForBehavior(behavior: Behavior): Resource[] {
+    debugCycleForBehavior(behavior: Behavior): Resource[] {
         let stack: Resource[] = [];
         let output: Resource[] = [];
         if (this.cycleDFS(behavior, behavior, stack)) {
@@ -691,6 +691,7 @@ export class Graph {
 export class GraphEvent {
     sequence: number;
     timestamp: Date;
+    static readonly initialEvent: GraphEvent = new GraphEvent(0, new Date(0));
 
     constructor(sequence: number, timestamp: Date) {
         this.sequence = sequence;
@@ -717,8 +718,6 @@ export class EventLoopState {
         this.actionUpdates = [];
     }
 }
-
-export const InitialEvent: GraphEvent = new GraphEvent(0, new Date(0));
 
 export interface Transient {
     clear(): void;

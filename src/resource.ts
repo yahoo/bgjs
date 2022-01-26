@@ -5,7 +5,7 @@
 
 import {Behavior} from "./behavior";
 import {Extent} from "./extent";
-import {GraphEvent, Graph, Transient, InitialEvent} from "./graph";
+import {GraphEvent, Graph, Transient} from "./graph";
 
 export enum LinkType {
     reactive,
@@ -145,7 +145,7 @@ export class State<T> extends Resource implements Transient {
 
     constructor(extent: Extent, initialState: T, name?: string) {
         super(extent, name);
-        this.currentState = { value: initialState, event: InitialEvent };
+        this.currentState = { value: initialState, event: GraphEvent.initialEvent };
     }
 
     updateWithAction(newValue: T, debugName?: string) {
@@ -156,7 +156,7 @@ export class State<T> extends Resource implements Transient {
     }
 
     update(newValue: T) {
-        if (this.currentState.value == newValue) {
+        if (this.currentState.value === newValue) {
             return;
         }
         this.updateForce(newValue);
