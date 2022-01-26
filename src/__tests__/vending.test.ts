@@ -3,7 +3,7 @@
 //
 
 
-import {Behavior, Extent, Graph, InitialEvent, Moment, State} from '../index';
+import {Behavior, Extent, Graph, GraphEvent, Moment, State} from '../index';
 
 describe('Version 1: Simple Vending Machine', () => {
 
@@ -505,7 +505,7 @@ describe('Version 5: Jammed', () => {
         v.completeVendAction.updateWithAction();
         v.timeoutAction.updateWithAction();
         expect(v.jammed.value).toBe(false);
-        expect(v.jammed.event).toBe(InitialEvent); // never jams
+        expect(v.jammed.event).toBe(GraphEvent.initialEvent); // never jams
     });
 
     test('fix jam clears the jammed state', () => {

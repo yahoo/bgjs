@@ -3,9 +3,7 @@
 //
 
 
-import {Behavior, Extent, Graph, GraphEvent, InitialEvent, Moment, Resource, State} from '../index';
-import {RelinkingOrder} from "../behavior";
-import {ExtentRemoveStrategy} from "../extent";
+import {Behavior, Extent, Graph, GraphEvent, Moment, Resource, State} from '../index';
 
 let g: Graph;
 let setupExt: Extent;
@@ -67,6 +65,21 @@ describe('State Resource', () => {
         // |> Then update doesn't happen
         expect(sr1.event).not.toBe(g.lastEvent);
         expect(sr1.event).toBe(entered);
+    });
+
+    test('filters with ===', () => {
+        // NOTE: we don't want to coerce various truthy and falsy values.
+        // |> Given a state in the graph
+        let sr1 = ext.state<number | boolean>(0, 'sr1');
+        ext.addToGraphWithAction();
+
+        // |> When updated with another falsy value and filtering on
+        let entered = sr1.event;
+        sr1.updateWithAction(false);
+
+        // |> Then the update does happen
+        expect(sr1.event).toBe(g.lastEvent);
+        expect(sr1.event).not.toBe(entered);
     });
 
     test('can override duplicate filter', () => {
@@ -211,7 +224,7 @@ describe('State Resource', () => {
 
         // |> Then trace is still the value from beginning of
         expect(traceValue).toBe(0);
-        expect(traceEvent).toBe(InitialEvent);
+        expect(traceEvent).toBe(GraphEvent.initialEvent);
     });
 
     test('start state is transient after updates', () => {
@@ -1193,7 +1206,7 @@ describe('dynamic graph changes', () => {
         expect(run).toBeTruthy();
     });
 
-    test('can relink after behavior runs', () => {
+    test('can relink dynamicDemands after a behavior runs', () => {
         // |> Given a behavior with subsequent relinking that demands m2
         let m1 = ext.moment('m1');
         let m2 = ext.moment('m2');
@@ -1210,7 +1223,7 @@ describe('dynamic graph changes', () => {
                     relinkingOrder = ext1.graph.currentBehavior!.order;
                     return [];
                 }
-            }, RelinkingOrder.relinkingOrderSubsequent)
+            }, Extent.relinkingOrderSubsequent)
             .runs(ext1 => {
                 behaviorOrder = ext1.graph.currentBehavior!.order;
                 didRun = true;
@@ -1233,6 +1246,40 @@ describe('dynamic graph changes', () => {
 
         // |> Then it is no longer demanded
         expect(didRun).toBeFalsy();
+    });
+
+    test('can relink dynamicSupplies after a behavior runs', () => {
+        // NOTE: As an example, pressing a button may say, "update state current item and move to next time"
+        // So our behavior supplies the current item's state which we update when a button press
+        // but afterwards we want to supply a new one for the next button press.
+        // Updating supplies after would apply in this situation.
+
+        // |> Given a behavior that doesn't supply anything but will dynamically afterwards
+        let s1 = ext.state<number>(0);
+        let m1 = ext.moment();
+        ext.behavior()
+            .dynamicSupplies([m1], () => {
+                return [s1];
+            }, Extent.relinkingOrderSubsequent)
+            .demands(m1)
+            .runs(() => {
+                if (g.currentBehavior!.supplies?.has(s1)) {
+                    s1.update(1);
+                }
+            })
+        ext.addToGraphWithAction();
+
+        // |> When we update m1
+        m1.updateWithAction();
+
+        // |> Then we should get no output the first time (it was just resupplied after)
+        expect(s1.value).toBe(0);
+
+        // |> And when we update m1 again
+        m1.updateWithAction();
+
+        // |> Then we should expect the previous resupplying lets us update
+        expect(s1.value).toBe(1);
     });
 
     test('dynamicDemands must be in the graph', () => {
@@ -1482,7 +1529,7 @@ describe('Extent Lifetimes', () => {
 
             // |> Then we remove one with flag for removing contained lifetimes
             g.action(() => {
-                ext1.removeFromGraph(ExtentRemoveStrategy.containedLifetimes);
+                ext1.removeFromGraph(Extent.removeContainedLifetimes);
             });
 
             // |> Then unified are also removed
@@ -1604,7 +1651,7 @@ describe('Extent Lifetimes', () => {
             });
             // |> When parent is removed with containedLifetime strategy
             // |> Then children (and their unified) are removed
-            ext1.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes);
+            ext1.removeFromGraphWithAction(Extent.removeContainedLifetimes);
             expect(ext2.addedToGraphWhen).toBe(null);
             expect(ext3.addedToGraphWhen).toBe(null);
         });
@@ -1742,7 +1789,7 @@ describe('Extent Lifetimes', () => {
             });
 
             // |> When we remove parent with containedLifetimes strategy
-            ext1.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes);
+            ext1.removeFromGraphWithAction(Extent.removeContainedLifetimes);
 
             // |> Then children and unified are recursively removed
             expect(ext3.addedToGraphWhen).toBe(null);
@@ -1894,9 +1941,9 @@ describe('Graph checks', () => {
         let caught = false;
         try {
             ext.addToGraphWithAction();
-        } catch (err) {
+        } catch (err: any) {
             caught = true;
-            let cycle: Resource[] = err.cycle;
+            let cycle: Resource[] = err.cycle as Resource[];
             expect(cycle).toHaveLength(2);
             expect(cycle[0]).toEqual(r_x);
             expect(cycle[1]).toEqual(r_y);

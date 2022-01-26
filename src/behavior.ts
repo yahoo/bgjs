@@ -61,6 +61,7 @@ export class BehaviorBuilder<T extends Extent> {
     dynamicDemandRelinkingOrder : RelinkingOrder = RelinkingOrder.relinkingOrderPrior;
     dynamicSupplySwitches: Demandable[] | null = null;
     dynamicSupplyLinks: ((ext: T) => (Resource | undefined)[] | null) | null = null;
+    dynamicSupplyRelinkingOrder : RelinkingOrder = RelinkingOrder.relinkingOrderPrior;
 
     constructor(extent: T) {
         this.extent = extent;
@@ -85,9 +86,12 @@ export class BehaviorBuilder<T extends Extent> {
         return this;
     }
 
-    dynamicSupplies(switches: Demandable[], links: ((ext: T) => (Resource | undefined)[] | null)): this {
+    dynamicSupplies(switches: Demandable[], links: ((ext: T) => (Resource | undefined)[] | null), relinkingOrder?: RelinkingOrder): this {
         this.dynamicSupplySwitches = switches;
         this.dynamicSupplyLinks = links;
+        if (relinkingOrder != undefined) {
+            this.dynamicSupplyRelinkingOrder = relinkingOrder;
+        }
         return this;
     }
 
@@ -109,7 +113,11 @@ export class BehaviorBuilder<T extends Extent> {
         let dynamicSupplyResource: Resource;
         if (hasDynamicSupplies) {
             dynamicSupplyResource = this.extent.resource('(BG Dynamic Supply Resource)');
-            this.untrackedDemands!.push(dynamicSupplyResource);
+            if (this.dynamicSupplyRelinkingOrder == RelinkingOrder.relinkingOrderPrior) {
+                this.untrackedDemands!.push(dynamicSupplyResource);
+            } else {
+                this.untrackedSupplies!.push(dynamicSupplyResource);
+            }
         }
 
         let mainBehavior = new Behavior(this.extent, this.untrackedDemands, this.untrackedSupplies, block as (arg0: Extent) => void);
@@ -130,7 +138,15 @@ export class BehaviorBuilder<T extends Extent> {
         }
 
         if (hasDynamicSupplies) {
-            new Behavior(this.extent, this.dynamicSupplySwitches, [dynamicSupplyResource!], ((extent: T) => {
+            let supplies: Resource[] = [];
+            let demands: Demandable[] | null = this.dynamicSupplySwitches;
+            if (this.dynamicSupplyRelinkingOrder == RelinkingOrder.relinkingOrderPrior) {
+                supplies.push(dynamicSupplyResource!);
+            } else {
+                if (demands == null) { demands = [] }
+                demands.push(dynamicSupplyResource!);
+            }
+            new Behavior(this.extent, demands, supplies, ((extent: T) => {
                 let supplyLinks = this.dynamicSupplyLinks!(extent);
                 mainBehavior.setDynamicSupplies(supplyLinks);
             }) as (arg0: Extent) => void);

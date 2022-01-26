@@ -4,7 +4,7 @@
 
 
 import {Graph} from "./graph";
-import {Behavior, BehaviorBuilder} from "./behavior";
+import {Behavior, BehaviorBuilder, RelinkingOrder} from "./behavior";
 import {Moment, Resource, State, Demandable} from "./resource";
 
 export enum ExtentRemoveStrategy {
@@ -121,6 +121,8 @@ export class Extent {
     addedToGraph: State<boolean>;
     addedToGraphBehavior: Behavior;
     lifetime: ExtentLifetime | null = null;
+    static readonly removeContainedLifetimes = ExtentRemoveStrategy.containedLifetimes;
+    static readonly relinkingOrderSubsequent = RelinkingOrder.relinkingOrderSubsequent;
 
     constructor(graph: Graph) {
         if (graph === null || graph === undefined) {
