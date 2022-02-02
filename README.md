@@ -1,6 +1,6 @@
 Behavior Graph is a software architecture and state management library. It greatly enhances your ability to write complex user facing software and control systems. Broadly speaking, it belongs to the category of libraries which includes Redux, MobX, Rx (Reactive Extensions), and XState. It works by providing a specialized unit of composition which we call the __behavior__. Behaviors are simple blocks of code together with their dependency relationships.
 
-## [Please See the full Documentation Site](https://yahoo.github.io/bgdocs/typescript)
+## [Please See the full Documentation Site](https://yahoo.github.io/bgdocs/docs/typescript)
 
 ## Is it any good?
 
@@ -65,4 +65,4 @@ Specifically if you are working on any of these categories, you should definitel
 ## Learning Behavior Graph
 
 While there are only a handful of basic concepts in Behavior Graph, it does require a shift in thinking.
-[Please See the full Documentation Site](https://yahoo.github.io/bgdocs/typescript)
+[Please See the full Documentation Site](https://yahoo.github.io/bgdocs/docs/typescript)
