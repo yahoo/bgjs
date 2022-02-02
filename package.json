@@ -1,6 +1,6 @@
 {
   "name": "behavior-graph",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0",
   "main": "lib/cjs/index.js",
   "module": "lib/mjs/index.js",
   "types": "lib/mjs/index.d.ts",
@@ -10,6 +10,16 @@
       "require": "./lib/cjs/index.js"
     }
   },
+  "keywords": [
+    "observables",
+    "state",
+    "architecture",
+    "state management",
+    "redux",
+    "state machine",
+    "store",
+    "effects"
+  ],
   "license": "Apache-2.0",
   "devDependencies": {
     "@types/jest": "^27.4.0",

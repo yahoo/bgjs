@@ -1,64 +1,68 @@
-# Behavior Graph
+Behavior Graph is a software architecture and state management library. It greatly enhances your ability to write complex user facing software and control systems. Broadly speaking, it belongs to the category of libraries which includes Redux, MobX, Rx (Reactive Extensions), and XState. It works by providing a specialized unit of composition which we call the __behavior__. Behaviors are simple blocks of code together with their dependency relationships.
 
-**Behavior Graph**  is a software library that greatly enhances our ability to program **user facing software** and **control systems**. Programs of this type quickly scale up in complexity as features are added. Behavior Graph directly addresses this complexity by shifting more of the burden to the computer. It works by offering the programmer a new unit of code organization called a **behavior**. Behaviors are blocks of code enriched with additional information about their stateful relationships. Using this information, Behavior Graph enforces _safe use of mutable state_, arguably the primary source of complexity in this class of software. It does this by taking on the responsibility of control flow between behaviors, ensuring they are are _run at the correct time and in the correct order_.
+## [Please See the full Documentation Site](https://yahoo.github.io/bgdocs/typescript)
 
 ## Is it any good?
 
 Yes
 
-## Documentation
+## Highlights
 
-[Introduction to Behavior Graph](https://yahoo.github.io/bgdocs/docs/typescript/intro.html)
+* Minimal boilerplate
+* Scales from the simple to the very complex
+* Incremental adoption: works alongside existing code and frameworks
+* Handles state, events, and effects all in one
+* Multi-platform (Javascript/Typescript, Kotlin, Objective-C, Swift)
 
-[Behavior Graph Programming Guide](https://yahoo.github.io/bgdocs/docs/typescript/guide.html)
+We developed Behavior Graph to address our own complexity challenges while building an iOS video playing library which is used internally throughout the suite of native Yahoo mobile apps. After years of development and production usage, it has proven to be incredibly competent at scale. We have since ported it to multiple languages including Javascript/Typescript. It is less than 1500 lines of code and contains no external dependencies.
 
-## Example
+Behavior Graph will particularly appeal to anyone with a willingness to rethink how we write software applications.
 
-To run the example project, clone the repo, and run `npm install` from the examples/browser directory first.
+## What does it look like?
 
-## Requirements
+The below block of code implements a simple counter using Behavior Graph.
+It can increment the counter or reset it back to zero.
 
-Node/NPM & Typescript
+About 70% of the concepts you need to work with Behavior Graph are contained in this one example.
 
-## Installation
+<!-- Intro-1 -->
+```javascript
+this.increment = this.moment();
+this.reset = this.moment();
+this.counter = this.state(0);
 
-If you are using Node/NPM, simply add the following dependency to your package.json:
-
-```json
-  "dependencies": {
-    "behavior-graph": "~0.5"
-  }
+this.behavior()
+  .demands(this.increment, this.reset)
+  .supplies(this.counter)
+  .runs(() => {
+    if (this.increment.justUpdated) {
+      this.counter.update(this.counter.value + 1);
+    } else if (this.reset.justUpdated) {
+      this.counter.update(0);
+    }
+  });
 ```
 
-Then access the object through an import or require
+A typical Behavior Graph program consists of dozens or hundreds of behaviors like this, each with its own responsibilities.
+The Behavior Graph library then ensures these behaviors are correctly specified and runs them at the correct time and in the correct order.
+At scale this is shockingly effective.
 
-```js
-import * as bg from 'behavior-graph';
-```
+## Is it for me?
 
-Or, if you want to import directly into the browser
+Behavior Graph is a general purpose library which you can use to organize the event driven logic in any program.
+It should also be of interest to anyone with an interest in software engineering and architectures.
 
-```html
-<script src="https://cdn.jsdelivr.net/npm/behavior-graph/lib/behavior-graph.min.js" />
-````
+Specifically if you are working on any of these categories, you should definitely consider it:
 
-Then the following should run in node or the browser
+* Web apps
+* Mobile apps
+* Desktop Applications
+* User Interfaces
+* Control Systems
+* Robots
+* Games
 
-```js
-let g = new bg.Graph();
-let e = new bg.Extent(g);
-let m = new bg.Moment(e);
-e.makeBehavior([m], null, (extent) => {
-   console.log("Hello, World!"); 
-});
+## Learning Behavior Graph
 
-e.addToGraphWithAction();
-
-g.action(null, () => {
-    m.update();
-});
-```
-
-## License
-
-Behavior Graph is available under the Apache 2.0 license. See the LICENSE file for more info.
+While there are only a handful of basic concepts in Behavior Graph, it does require a shift in thinking.
+[Please See the full Documentation Site](https://yahoo.github.io/bgdocs/typescript)
