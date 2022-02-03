@@ -62,6 +62,12 @@ Specifically if you are working on any of these categories, you should definitel
 * Robots
 * Games
 
+## How to Get It
+
+Behavior Graph is [available on NPM as `behavior-graph`](https://www.npmjs.com/package/behavior-graph).
+
+See the [Quick Start page](https://yahoo.github.io/bgdocs/docs/typescript/quickstart/) for more ways to get started.
+
 ## Learning Behavior Graph
 
 While there are only a handful of basic concepts in Behavior Graph, it does require a shift in thinking.
