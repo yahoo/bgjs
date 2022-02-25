@@ -3,7 +3,7 @@
 //
 
 
-import {Behavior, Extent, Graph, GraphEvent, Moment, State} from '../index';
+import {Behavior, Extent, Graph, GraphEvent, Moment, State} from '../index.js';
 
 describe('Version 1: Simple Vending Machine', () => {
 

@@ -1,8 +1,7 @@
 {
 	"extends": "./tsconfig-base.json",
 	"compilerOptions": {
-		"module": "esnext",
-		"outDir": "lib/mjs",
-		"target": "esnext"
-	}
+		"allowJs": true
+	},
+	"include": ["src/*", "**/__tests__/*"]
 }

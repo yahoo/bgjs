@@ -3,10 +3,10 @@
 //
 
 
-import {BufferedPriorityQueue} from "./bufferedqueue";
-import {Behavior} from "./behavior";
-import {Extent} from "./extent";
-import {Demandable, LinkType, Resource} from "./resource";
+import {BufferedPriorityQueue} from "./bufferedqueue.js";
+import {Behavior} from "./behavior.js";
+import {Extent} from "./extent.js";
+import {Demandable, LinkType, Resource} from "./resource.js";
 
 export enum OrderingState {
     Untracked, // new behaviors

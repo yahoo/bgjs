@@ -7,20 +7,20 @@ export {
     DateProvider,
     Graph,
     GraphEvent
-} from "./graph";
+} from "./graph.js";
 
 export {
     Resource,
     Moment,
     State
-} from "./resource"
+} from "./resource.js"
 
 export {
     Extent,
     ExtentRemoveStrategy
-} from "./extent"
+} from "./extent.js"
 
 export {
     Behavior,
     RelinkingOrder
-} from "./behavior"
+} from "./behavior.js"
