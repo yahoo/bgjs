@@ -1,4 +1,4 @@
-let {Extent, Graph} = require('../index');
+import {Extent, Graph} from '../index.js';
 
 // tag::login_enable_extent[]
 class LoginExtent extends Extent {

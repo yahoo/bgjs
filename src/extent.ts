@@ -3,9 +3,9 @@
 //
 
 
-import {Graph} from "./graph";
-import {Behavior, BehaviorBuilder, RelinkingOrder} from "./behavior";
-import {Moment, Resource, State, Demandable} from "./resource";
+import {Graph} from "./graph.js";
+import {Behavior, BehaviorBuilder, RelinkingOrder} from "./behavior.js";
+import {Moment, Resource, State} from "./resource.js";
 
 export enum ExtentRemoveStrategy {
     extentOnly,

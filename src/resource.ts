@@ -3,9 +3,9 @@
 //
 
 
-import {Behavior} from "./behavior";
-import {Extent} from "./extent";
-import {GraphEvent, Graph, Transient} from "./graph";
+import {Behavior} from "./behavior.js";
+import {Extent} from "./extent.js";
+import {GraphEvent, Graph, Transient} from "./graph.js";
 
 export enum LinkType {
     reactive,

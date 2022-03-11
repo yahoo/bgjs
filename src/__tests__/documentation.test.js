@@ -2,7 +2,7 @@
 //  Copyright Yahoo 2021
 //
 
-let {Behavior, Extent, Graph, GraphEvent, Moment, State} = require('../index');
+import {Behavior, Extent, Graph, GraphEvent, Moment, State} from '../index.js';
 
 class Extent1 extends Extent {
     constructor(graph) {

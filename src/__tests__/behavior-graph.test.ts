@@ -3,7 +3,7 @@
 //
 
 
-import {Behavior, Extent, Graph, GraphEvent, Moment, Resource, State} from '../index';
+import {Behavior, Extent, Graph, GraphEvent, Moment, Resource, State} from '../index.js';
 
 let g: Graph;
 let setupExt: Extent;

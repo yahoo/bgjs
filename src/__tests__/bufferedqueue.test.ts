@@ -2,7 +2,7 @@
 //  Copyright Yahoo 2021
 //
 
-import { BufferedPriorityQueue, Orderable } from "../bufferedqueue";
+import { BufferedPriorityQueue, Orderable } from "../bufferedqueue.js";
 
 class Item implements Orderable {
     order: number;

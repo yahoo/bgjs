@@ -3,10 +3,10 @@
 //
 
 
-import {Orderable} from "./bufferedqueue";
-import {Extent} from "./extent";
-import {Resource, Demandable} from "./resource";
-import {OrderingState} from "./graph"
+import {Orderable} from "./bufferedqueue.js";
+import {Extent} from "./extent.js";
+import {Resource, Demandable} from "./resource.js";
+import {OrderingState} from "./graph.js"
 
 export enum RelinkingOrder {
     relinkingOrderPrior,
