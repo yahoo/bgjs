@@ -1,6 +1,6 @@
-Behavior Graph lets you build your program out of small, easily understood pieces in a way that lets the computer do more of the work for you.
+Behavior Graph lets you build your programs out of small, easily understood pieces in a way that lets the computer do more of the work for you.
 
-It is an architecture and supporting library that simplifies the type of complexity that comes with event-driven software such as user facing applications and control systems.
+It is an architecture and supporting library that simplifies the type of complexity that comes with event-driven software, such as user facing applications and control systems.
 
 It's also a fun way to program.
 
@@ -15,16 +15,17 @@ It is particularly helpful for developers building:
 
 We originally developed it for ourselves to use in a video playing library at Yahoo. Even though we had experienced engineers and excellent test coverage, we still struggled with the complexity of the codebase. Behavior Graph is our solution.
 
-Or maybe you're the type of person who likes nerdy new software ideas. (Seriously though, who doesn't, amirite?) We guarantee you will find Behavior Graph interesting.
+It's also possible you're the type of person who likes nerdy new software ideas. (Seriously though, who doesn't, amirite?) If that's the case, we guarantee you will find Behavior Graph interesting.
 
 ## How does it Work?
 
-As programmers it is natural to partition our software into smaller tasks. Consider a typical Login form.
+As programmers it's natural to partition our software into subtasks. For example, let's consider what happens on a typical login form.
+
 1. When a user clicks on the Login button, we want to validate the Email and Password fields.
-2. If validation passes we want to make a network call to log the user in.
-3. And we want to update the UI to provide feedback in case the validation fails, or disable the login button while we are actively logging in.
+2. If validation passes, then we want to make a network call to log the user in.
+3. Additionally we want to update the UI to provide feedback in case the validation fails, or disable the login button while we are actively logging in.
   
-Most programming languages offer __functions__ as the primary tool for creating these subtasks. The code for our Login form will have `validateFields`, `networkLogin`, and `updateUI` functions. There will also be an `onLoginClick` function that looks like this:
+Most programming languages offer __functions__ as the primary tool for creating these subtasks. Conceptually we have three subtasks. So we will create three corresponding functions: `validateFields`, `networkLogin`, and `updateUI`. We will also need an additional `onLoginClick` function to run these tasks. It will look like this:
 
 ```javascript
 function onLoginClick() {
@@ -34,23 +35,24 @@ function onLoginClick() {
 }
 ```
 
-These functions are not independent, however. There are __dependency relationships__ between them that need to be respected.
+Our four functions are not independent, however. There are __dependency relationships__ between them that need to be respected.
 * `validateFields` depends on `onLoginClick` being run. 
 * `networkLogin` depends on `onLoginClick` being run, and it depends on the results of `validateFields`. 
 * `updateUI` depends on the results of both `validateFields` and `networkLogin`.
 
-__Functions__ cannot express dependency relationships directly. Instead we must call functions in a particular order to uphold these relationships.
- If we call `networkLogin()` before `validateFields()` the feature won't work. It has to be after. `networkLogin` depends on the validation in `validateFields` succeeding. 
- 
- We could partially encode the dependency relationships by using parameters and return values (aka functional programming). This gives us additional structure, but it doesn't remove the need to call these functions in a correct order. Calling something like `networkLogin(validateFields())` is still a sequence of function calls. It's just sideways.
+But looking at the code, there is nothing that says, `networkLogin` depends on `validateFields`. Instead, we implement this relationship by calling our functions in a specific order. If we were to call `networkLogin()` before `validateFields()`, the feature wouldn't work.
 
-The problem is that expressing dependency relationships in terms of sequenced function calls means work for the developer:
-* There's work to get it correct.
-* There's work to rearrange calls as dependencies (inevitably) change.
-* There's work mentally translating back from sequenced function calls to the original dependency relationships in order to understand the intent of the code.
-* And there's work fixing errors whenever any of these efforts go wrong.
+So as long as we are organizing our code using only functions, we will need to implement part of our logic in terms of ordered function calls. This is because function definitions cannot express dependency relationships directly. There is no other way.
 
-But maybe all this work isn't necessary. What if functions _could_ express dependency relationships?
+We could do more by using parameters and return values (aka functional programming), but that still wouldn't remove the need to call these functions in a valid order. Calling something like `networkLogin(validateFields())` is still a sequence of function calls.
+
+It is the job of the developer to translate these dependency relationships into sequenced function calls. This requires time and effort:
+* There's work to get it correct, which is often much more difficult than in our example here.
+* Features inevitably change, which means dependencies inevitably change. So there's work in updating our existing sequences.
+* When reading code, we must mentally translate back from function calls to the original dependency relationships. This is so we can understand the intent of the code. This is also work.
+* And finally there's work fixing errors whenever any of these efforts go wrong.
+
+We're proposing that maybe all this work isn't necessary. What if function definitions _could_ express dependency relationships?
 
 __Behavior Graph__ is a library that provides this alternative. It introduces a new unit of code organization called the __behavior__. It is a block of code together with its dependency relationships.
 
@@ -58,10 +60,10 @@ Unlike functions, behaviors are never called directly. Instead, behaviors declar
 
 This gives us:
 1. _Control flow for free_: The computer uses the dependency relationships to run our behaviors in the correct sequence. This works just like spreadsheet formulas.
-2. _Ease of maintenance_: Requirements inevitably change, and do dependencies. Control flow automatically adapts.
-3. _Legibility_: Dependency relationships are explicit. We can look at a behavior and immediately see how it interfaces with other behaviors. This is unlike functions which are often linked via calls made in some other part(s) of the code.
+2. _Ease of maintenance_: Requirements inevitably change. This means dependencies change. Control flow automatically adapts.
+3. _Legibility_: Dependency relationships are explicit. We can look at a behavior and immediately see how it interfaces with other behaviors. This is unlike function definitions which are linked via calls in some other part of the program.
 
-Behavior Graph isn't a replacement for functions. (We wrote it with functions, hello!) Instead it gives us a higher level of abstraction for partitioning our code into subtasks. It lets us say "these two blocks of code are related and here's how". And with that information both humans and the computer are better able to infer the intent of the code.
+Behavior Graph isn't a replacement for functions. (We wrote it with functions, hello!) Instead it gives us higher level abstractions for partitioning our code into subtasks. It lets us say "these two blocks of code are related and here's how". And with that information the computer is able to run things for us. And humans are better able to infer the intent of the code.
 
 ## Can I see an example?
 
@@ -73,11 +75,11 @@ These concepts aren't difficult, but you will require some orientation.
 
 ## Small
 
-Behavior Graph is a small library. It's around 1500 lines of formatted code. It has no dependencies. The Javascript is less than 6KB minified + gzip'd.
+Behavior Graph is a small library. It's around 1500 lines of formatted code. It has no dependencies.
 
 ## Incremental 
 
-It is easy to introduce into a codebase incrementally. It is designed to work side by side with existing code. We gradually migrated Yahoo's video playing library, while in production, as we became confident in Behavior Graph's feature set.
+It is easy to introduce into a codebase incrementally. It is designed to work side by side with existing code. We went through this incremental migration process ourselves.
 
 ## Scale
 
@@ -92,6 +94,16 @@ Behavior Graph has been ported to multiple platforms.
 * Swift: [BGSwift](https://github.com/yahoo/BGSwift)
 * Kotlin/Android: [bgkotlin](https://github.com/yahoo/bgkotlin)
 
+## Should I Use it in my Project?
+
+This Javascript/Typescript version is not used in production at Yahoo currently. It is a direct port from the original Objective-C. It has excellent test coverage. We are confident it works as intended.
+
+But it is also newly open sourced. You won't find blog posts and Stack Overflow answers to your questions. If you are on a team that expects that type of support you should proceed with caution.
+
+If you are building a browser based app using imperative UI libraries such as JQuery or direct DOM manipulation we think you should be fine. But if you are using any of the popular reactive UI frameworks such as React, Angular, or Ember you will need to figure out how to make that work. We do not have existing adapters.
+
+Would like to help us with any of these adapters? We would certainly love to have your help. Please reach out to us on [discord](https://discord.gg/5mvat8tc7d).
+
 ## Obtaining Behavior Graph
 
 Javascript Behavior Graph is hosted on NPM @ [behavior-graph](https://www.npmjs.com/package/behavior-graph).
@@ -103,21 +115,21 @@ Behavior Graph is also available via a number of popular CDN Services. You may p
 
 ## Documentation
 
-[Go here for the full documentation site](https://yahoo.github.io/bgdocs/docs/typescript/tutorials/).
+[Go here for the full documentation site](https://yahoo.github.io/bgdocs/docs/typescript/).
 
 While there are only a handful of basic concepts in Behavior Graph, it does require a shift in thinking. We recommend you start with the [Getting Started guide](https://yahoo.github.io/bgdocs/docs/typescript/quickstart/) then work through the [Tutorials](https://yahoo.github.io/bgdocs/docs/typescript/tutorials/tutorial-1/).
 
 ## Contact Us
 
-We really do like talking about Behavior Graph.
+We really do need help and we really do like talking about Behavior Graph.
 Discord is a good place for that.
 
 [Behavior Graph Discord](https://discord.gg/5mvat8tc7d)
 
 ## Contributing
 
-* Yes there are many interesting areas for contribution. Please ask us.
-* Don't just make a pull request. We would prefer to let you know upfront if your idea is unlikely to be accepted.
+* Yes, there are many interesting areas for contribution. Please ask us.
+* Don't just make a pull request. Talk to us first. We don't want to see you put in effort on something that won't get accepted.
 
 ## Comparisons
 
