@@ -154,7 +154,7 @@ export class Extent {
         this.lifetime.addChild(extent);
     }
 
-    hasCompatibleLifetime(extent: Extent) {
+    hasCompatibleLifetime(extent: Extent): boolean {
         if (this === extent) {
             return true;
         } else if (this.lifetime != null) {
