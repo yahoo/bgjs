@@ -18,6 +18,14 @@ We originally developed it for ourselves to use in a video playing library at Ya
 
 It's also possible you're the type of person who likes nerdy new software ideas. (Seriously though, who doesn't, amirite?) If that's the case, we guarantee you will find Behavior Graph interesting.
 
+## Can I see an example?
+
+Behavior Graph introduces a handful of new concepts.
+These concepts aren't difficult, but you will require some orientation.
+
+* We've created a [short walk-through of a Login form](https://yahoo.github.io/bgdocs/docs/js-and-typescript/code-example/) using Behavior Graph.
+* You can also take a look at [one of our tutorials](https://yahoo.github.io/bgdocs/docs/js-and-typescript/tutorial-1/).
+
 ## How does it Work?
 
 As programmers it's natural to partition our software into subtasks. For example, let's consider what happens on a typical login form.
@@ -65,14 +73,6 @@ This gives us:
 3. _Legibility_: Dependency relationships are explicit. We can look at a behavior and immediately see how it interfaces with other behaviors. This is unlike function definitions which are linked via calls in some other part of the program.
 
 Behavior Graph isn't a replacement for functions. (We wrote it with functions, hello!) Instead it gives us higher level abstractions for partitioning our code into subtasks. It lets us say "these two blocks of code are related and here's how". And with that information the computer is able to run things for us. And humans are better able to infer the intent of the code.
-
-## Can I see an example?
-
-Behavior Graph introduces a handful of new concepts.
-These concepts aren't difficult, but you will require some orientation.
-
-* We've created a [short walk-through of a Login form](https://yahoo.github.io/bgdocs/docs/js-and-typescript/code-example/) using Behavior Graph.
-* You can also take a look at [one of our tutorials](https://yahoo.github.io/bgdocs/docs/js-and-typescript/tutorial-1/).
 
 ## Small
 
