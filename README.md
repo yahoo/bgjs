@@ -1,3 +1,4 @@
+
 Behavior Graph lets you build your programs out of small, easily understood pieces in a way that lets the computer do more of the work for you.
 
 It is an architecture and supporting library that simplifies the type of complexity that comes with event-driven software, such as user facing applications and control systems.
@@ -70,8 +71,8 @@ Behavior Graph isn't a replacement for functions. (We wrote it with functions, h
 Behavior Graph introduces a handful of new concepts.
 These concepts aren't difficult, but you will require some orientation.
 
-* We've created a [short walk-through of a Login form](https://yahoo.github.io/bgdocs/docs/typescript/code-example/) using Behavior Graph.
-* You can also take a look at [one of our tutorials](https://yahoo.github.io/bgdocs/docs/typescript/tutorials/tutorial-1/).
+* We've created a [short walk-through of a Login form](https://yahoo.github.io/bgdocs/docs/js-and-typescript/code-example/) using Behavior Graph.
+* You can also take a look at [one of our tutorials](https://yahoo.github.io/bgdocs/docs/js-and-typescript/tutorial-1/).
 
 ## Small
 
@@ -115,9 +116,9 @@ Behavior Graph is also available via a number of popular CDN Services. You may p
 
 ## Documentation
 
-[Go here for the full documentation site](https://yahoo.github.io/bgdocs/docs/typescript/).
+[Go here for the full documentation site](https://yahoo.github.io/bgdocs/docs/).
 
-While there are only a handful of basic concepts in Behavior Graph, it does require a shift in thinking. We recommend you start with the [Getting Started guide](https://yahoo.github.io/bgdocs/docs/typescript/quickstart/) then work through the [Tutorials](https://yahoo.github.io/bgdocs/docs/typescript/tutorials/tutorial-1/).
+While there are only a handful of basic concepts in Behavior Graph, it does require a shift in thinking. We recommend you start with the [Getting Started guide](https://yahoo.github.io/bgdocs/docs/js-and-typescript/quickstart/) then work through the [Tutorials](https://yahoo.github.io/bgdocs/docs/js-and-typescript/tutorial-1/).
 
 ## Contact Us
 
