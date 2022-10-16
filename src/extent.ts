@@ -140,22 +140,22 @@ export class Extent {
         });
     }
 
-    unifyLifetime(extent: Extent) {
+    unifyLifetime<T extends Extent>(extent: T) {
         if (this.lifetime == null) {
             this.lifetime = new ExtentLifetime(this);
         }
         this.lifetime.unify(extent);
     }
 
-    addChildLifetime(extent: Extent) {
+    addChildLifetime<T extends Extent>(extent: T) {
         if (this.lifetime == null) {
             this.lifetime = new ExtentLifetime(this);
         }
         this.lifetime.addChild(extent);
     }
 
-    hasCompatibleLifetime(extent: Extent) {
-        if (this === extent) {
+    hasCompatibleLifetime<T extends Extent>(extent: T) {
+        if (this === extent as Extent) {
             return true;
         } else if (this.lifetime != null) {
             return (this.lifetime.hasCompatibleLifetime(extent.lifetime));
