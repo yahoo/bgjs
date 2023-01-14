@@ -117,7 +117,7 @@ describe('State Resource', () => {
         expect(sr1.value).toBeNull();
     });
 
-    test('works in pushEvent', () => {
+    test('works in action', () => {
         // |> Given a state
         let sr1 = ext.state<number>(0, 'sr1');
         ext.addToGraphWithAction();
@@ -237,7 +237,6 @@ describe('State Resource', () => {
         ext.addToGraphWithAction();
 
         // |> When it is updated
-        let beforeEvent = g.lastEvent;
         mr1.updateWithAction();
 
         // |> Then the start state is no longer available after the event
@@ -279,7 +278,7 @@ describe('State Resource', () => {
             }).toThrow();
         });
 
-        test('check measured state is update by push event', () => {
+        test('check non supplied state is updated by action', () => {
             // |> Given a state resource that is not supplied
             let sr1 = ext.state<number>(0, 'sr1');
             let mr1 = new Moment(ext, 'mr1');
@@ -500,7 +499,7 @@ describe('Moment Resource', () => {
             }).toThrow();
         });
 
-        test('check measured moment catches wrong updater', () => {
+        test('check non-supplied moment catches wrong updater', () => {
             // |> Given a measured moment resource
             let mr1 = ext.moment('mr1');
             let mr2 = ext.moment('mr2');
@@ -1030,8 +1029,8 @@ describe('dynamic graph changes', () => {
         ext.behavior()
             .demands(m1)
             .dynamicDemands([m2], ext1 => {
-                return [m3];
                 relinkBehaviorOrder = ext1.graph.currentBehavior!.order;
+                return [m3];
             })
             .runs(ext1 => {
                 runCount++;
@@ -1287,7 +1286,8 @@ describe('dynamic graph changes', () => {
         let ext1 = new Extent(g);
         let r1 = ext1.moment();
         let ext2 = new Extent(g);
-        ext2.behavior().dynamicDemands([ext2.addedToGraph], e => [r1]).runs(e => {});
+        ext2.behavior().dynamicDemands([ext2.addedToGraph], e => [r1]).runs(e => {
+        });
         // |> When that extent is added
         // |> Then it should raise an error
         expect(() => {
@@ -1309,9 +1309,7 @@ describe('Extents', () => {
             this.r1 = this.state(0);
             this.r2 = this.state(0, 'custom_r2');
             this.b1 = this.behavior().demands(this.r1).supplies(this.r2).runs((extent: TestExtent) => {
-                if (this.r1.justUpdated) {
-                    this.r2.update(this.r1.value * 2);
-                }
+                this.r2.update(this.r1.value * 2);
             });
         }
 
@@ -1478,7 +1476,8 @@ describe('Extent Lifetimes', () => {
             ext2.behavior()
                 .supplies(r2)
                 .demands(r1)
-                .runs(e => {});
+                .runs(e => {
+                });
             ext1.unifyLifetime(ext2);
 
             // |> When they are added
@@ -1498,7 +1497,8 @@ describe('Extent Lifetimes', () => {
             let r1 = ext1.moment();
             ext2.behavior()
                 .demands(r1)
-                .runs(e => {});
+                .runs(e => {
+                });
 
             // |> When they are added
             // |> Then it should raise an error
@@ -1517,7 +1517,8 @@ describe('Extent Lifetimes', () => {
             let r1 = ext1.moment();
             ext2.behavior()
                 .supplies(r1)
-                .runs(e => {});
+                .runs(e => {
+                });
 
             // |> When they are both added
             // |> Then it should raise an error
@@ -1600,7 +1601,8 @@ describe('Extent Lifetimes', () => {
             ext1.addChildLifetime(ext2);
             let r1 = ext1.moment();
             let r2 = ext1.moment();
-            ext2.behavior().supplies(r2).demands(r1).runs(() => {});
+            ext2.behavior().supplies(r2).demands(r1).runs(() => {
+            });
             ext1.addToGraphWithAction();
 
             // |> When we add child in subsequent event
@@ -1619,7 +1621,8 @@ describe('Extent Lifetimes', () => {
             let ext2 = new Extent(g);
             ext1.addChildLifetime(ext2);
             let r1 = ext2.moment();
-            ext1.behavior().demands(r1).runs(() => {});
+            ext1.behavior().demands(r1).runs(() => {
+            });
 
             // |> When they are added
             // |> Then it should raise an error
@@ -1637,7 +1640,8 @@ describe('Extent Lifetimes', () => {
             let ext2 = new Extent(g);
             ext1.addChildLifetime(ext2);
             let r1 = ext2.moment();
-            ext1.behavior().supplies(r1).runs(() => {});
+            ext1.behavior().supplies(r1).runs(() => {
+            });
 
             // |> When they are added
             // |> Then it should raise an error
@@ -1746,7 +1750,8 @@ describe('Extent Lifetimes', () => {
             let r2 = ext1.moment();
 
             // |> When we link up multiple generations
-            ext3.behavior().supplies(r2).demands(r1).runs(() => {});
+            ext3.behavior().supplies(r2).demands(r1).runs(() => {
+            });
             ext1.addToGraphWithAction();
             ext2.addToGraphWithAction();
 
@@ -1767,7 +1772,8 @@ describe('Extent Lifetimes', () => {
             let r2 = ext1.moment();
 
             // |> When we try to link up and across
-            ext3.behavior().supplies(r2).demands(r1).runs(() => {});
+            ext3.behavior().supplies(r2).demands(r1).runs(() => {
+            });
             g.action(() => {
                 ext1.addToGraph();
                 ext2.addToGraph();
@@ -1847,7 +1853,8 @@ describe('Extent Lifetimes', () => {
             let r1 = ext2.moment();
             ext1.behavior()
                 .dynamicDemands([ext1.addedToGraph], ext => [r1])
-                .runs(ext => {});
+                .runs(ext => {
+                });
             g.action(() => {
                 ext1.addToGraph();
                 ext2.addToGraph();
@@ -1867,7 +1874,8 @@ describe('Extent Lifetimes', () => {
             let r1 = ext2.moment();
             ext1.behavior()
                 .dynamicSupplies([ext1.addedToGraph], ext => [r1])
-                .runs(ext => {});
+                .runs(ext => {
+                });
             g.action(() => {
                 ext1.addToGraph();
                 ext2.addToGraph();
@@ -1914,7 +1922,8 @@ describe('Extent Lifetimes', () => {
             let r2 = ext1.moment();
 
             // |> When we try to link staticly across incompatible lifetimes
-            ext2.behavior().demands(r1).supplies(r2).runs(() => {});
+            ext2.behavior().demands(r1).supplies(r2).runs(() => {
+            });
 
             // |> Then don't throw
             ext1.addToGraphWithAction();
@@ -2173,50 +2182,6 @@ describe('Effects, Actions, Events', () => {
         expect(r1.justUpdated).toBeFalsy();
     });
 
-    /*
-    Dont know what this one tests
-    test('effects are sequenced', () => {
-        // |> Given an effect starts another event
-        let effectCounter = 0;
-        let firstEffect: number | null = null;
-        let secondEffect: number | null = null;
-        ext.makeBehavior([r_a], null, (extent) => {
-            if (r_a.justUpdated) {
-                extent.sideEffect('update b', (extent) => {
-                    ext.action(() => {
-                        // initiate another event
-                        r_b.update(2)
-                    });
-                });
-                extent.sideEffect('first effect', (extent) => {
-                    firstEffect = effectCounter;
-                    effectCounter += 1;
-                });
-            }
-        });
-
-        ext.makeBehavior([r_b], null, (extent) => {
-            if (r_b.justUpdated) {
-                extent.sideEffect('second effect', (extent) => {
-                    secondEffect = effectCounter;
-                    effectCounter += 1;
-                });
-            }
-        });
-
-        ext.addToGraphWithAction();
-
-        // |> When the side effects run
-        r_a.updateWithAction(1);
-
-        // |> Then the side effect from the second event will run
-        // after the remaining effects from the first event
-        expect(firstEffect).toBe(0);
-        expect(secondEffect).toBe(1);
-        expect(effectCounter).toBe(2);
-    });
-    */
-
     test('effects from first event complete before next event', () => {
         // |> Given event with 2 effects
         let effectCounter = 0;
@@ -2242,62 +2207,6 @@ describe('Effects, Actions, Events', () => {
         expect(eventLoopOrder).toEqual(1);
     });
 
-    /*
-    11/15/2021-- Actions created directly from within a behavior seem closer to a mistake
-    even if they could be rewritten as sideEffects. They are now disallowed.
-    test('behaviors from first event complete before next event', () => {
-        // Note: Initiating side effects directly from within a behavior can lead to accessing
-        // and thus depending on state without being explicit about that dependency. However
-        // it does not mean it is strictly an error. We should be able to synchronously initiate
-        // a new event without necessarily breaking the graph.
-
-        // |> Given we are in the middle of an event with multiple
-        let effectCounter = 0;
-        let eventLoopOrder, behavior2Order: number | undefined;
-        let m1 = ext.moment('m1');
-        let m2 = ext.moment('m2');
-        ext.behavior([m1], [m2], (extent) => {
-            m2.update();
-            extent.action(() => {
-                eventLoopOrder = effectCounter++;
-            });
-        });
-        ext.behavior([m2], null, extent => {
-            behavior2Order = effectCounter++;
-        });
-        ext.addToGraphWithAction();
-
-        // |> When an event is initiated from a prior behavior
-        m1.updateWithAction();
-
-        // |> Then the subsequent behavior will run before the next event
-        expect(behavior2Order).toEqual(0);
-        expect(eventLoopOrder).toEqual(1);
-    });
-
-    test('check updating a behavior after a side effect should throw', () => {
-        // Note: Here again, side effects shouldn't come directly from inside a
-        // behavior. So if one does create a new event and there's still
-        // more resources to update there we won't be able to do that
-
-        let m1 = ext.moment('m1');
-        let m2 = ext.moment('m2');
-        ext.behavior([m1], [m2], (extent) => {
-            extent.action(() => {
-                // this will force event to finish when it runs synchronously
-            });
-            // event should have finished by the time we return up the stack
-            // causing this to fail
-            expect(() => {
-                m2.update();
-            }).toThrow();
-        });
-        ext.addToGraphWithAction();
-
-        m1.updateWithAction();
-
-    });
-     */
 
     test('actions are run synchronously by default when there is only one', () => {
         // |> Given there are no running events
