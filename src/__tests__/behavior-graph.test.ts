@@ -1366,6 +1366,18 @@ describe('Extents', () => {
         expect(runOnAdd).toBeTruthy();
     });
 
+    test('can work with extent subtypes', () => {
+        let e = new Extent(g);
+        let t = new TestExtent(g);
+
+        let t2 = new TestExtent(g);
+        expect(() => {
+            e.addChildLifetime(t);
+            e.unifyLifetime(t2);
+            e.hasCompatibleLifetime(t);
+        }).not.toThrow();
+    });
+
     describe('Checks', () => {
 
         test('check cannot add extent to graph multiple times', () => {
