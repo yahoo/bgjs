@@ -258,6 +258,44 @@ describe('State Resource', () => {
         expect(didRun).toBeTruthy();
     });
 
+    test('just updated subscribers', () => {
+        // |> Given a state resource with subscribers
+        let sr1 = ext.state<number>(0);
+        let didRunSubscriber1 = false;
+        let checkDidRunSubscriber1BeforeEnd = false;
+        let didRunSubscriber2 = false;
+        ext.behavior().demands(sr1).runs(ext => {
+            checkDidRunSubscriber1BeforeEnd = didRunSubscriber1;
+        });
+        let unsubscribe1 = sr1.subscribeToJustUpdated(() => {
+            didRunSubscriber1 = true;
+        });
+        let unsubscribe2 = sr1.subscribeToJustUpdated(() => {
+            didRunSubscriber2 = true;
+        });
+
+        // |> When it updates
+        ext.addToGraphWithAction();
+        sr1.updateWithAction(1);
+
+        // |> Then subscribers should update
+        expect(didRunSubscriber1).toBeTruthy();
+        expect(didRunSubscriber2).toBeTruthy();
+        // and they should only update during side effect phase
+        expect(checkDidRunSubscriber1BeforeEnd).toBeFalsy();
+
+        // |> And when we unsubscribe and update
+        didRunSubscriber1 = false;
+        didRunSubscriber2 = false;
+        unsubscribe2();
+        sr1.updateWithAction(2);
+
+        // |> Then remaining subscriber should run
+        // but removed subscriber should not
+        expect(didRunSubscriber1).toBeTruthy();
+        expect(didRunSubscriber2).toBeFalsy();
+    });
+
     describe('Checks', () => {
 
         test('check supplied state is updated by supplier', () => {
@@ -478,6 +516,23 @@ describe('Moment Resource', () => {
 
         expect(didRun).toBeTruthy();
     });
+
+    test('can subscribe to moments', () => {
+        // |> Given a state resource with subscribers
+        let mr1 = ext.moment<number>();
+        let didRunSubscriber1 = false;
+        let unsubscribe1 = mr1.subscribeToJustUpdated(() => {
+            didRunSubscriber1 = true;
+        });
+
+        // |> When it updates
+        ext.addToGraphWithAction();
+        mr1.updateWithAction(1);
+
+        // |> Then subscribers should update
+        expect(didRunSubscriber1).toBeTruthy();
+    });
+
 
     describe('Checks', () => {
 

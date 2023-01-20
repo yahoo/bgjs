@@ -1,6 +1,6 @@
 {
-  "name": "behavior-graph",
-  "version": "1.1.0",
+  "name": "react-behavior-graph",
+  "version": "1.0.0",
   "main": "lib/cjs/index.js",
   "module": "lib/mjs/index.js",
   "types": "lib/mjs/index.d.ts",
@@ -23,37 +23,22 @@
     "dataflow"
   ],
   "license": "Apache-2.0",
-  "devDependencies": {
-    "@types/jest": "^27.4.0",
-    "@types/node": "^16.18.11",
-    "jest": "^27.4.5",
-    "rollup": "^2.58.3",
-    "ts-jest": "^27.1.2",
-    "typescript": "^4.5.4"
+  "peerDependencies": {
+    "behavior-graph": "..",
+    "react": ">= 18"
   },
-  "files": [
-    "lib/**/*"
-  ],
+  "devDependencies": {
+    "@types/node": "^18.11.18",
+    "@types/react": ">= 18",
+    "rollup": "^2.58.3",
+    "typescript": "~>4.9"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/yahoo/bgjs"
   },
   "scripts": {
-    "test": "jest",
     "build": "rm -rf lib/* && tsc -p tsconfig-mjs.json && tsc -p tsconfig-cjs.json && ./fixup && rollup -c rollup.config.js && echo 'Build is successful!'",
-    "test-coverage": "jest --coverage",
-    "ci-build": "npm run build",
-    "ci-test": "jest --coverage --runInBand --coverageDirectory $SD_ARTIFACTS_DIR/coverage"
-  },
-  "jest": {
-    "preset": "ts-jest/presets/js-with-ts-esm",
-    "globals": {
-      "ts-jest": {
-        "useESM": true
-      }
-    },
-    "moduleNameMapper": {
-      "^(\\.{1,2}/.*)\\.js$": "$1"
-    }
+    "ci-build": "npm run build"
   }
 }
