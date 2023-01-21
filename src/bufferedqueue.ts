@@ -26,19 +26,20 @@ export class BufferedPriorityQueue<T extends Orderable> {
         this.buffer.push(behavior);
     }
 
+    public peek() : T | undefined {
+        if (this.length == 0) {
+            return undefined;
+        } else {
+            this.heapifyBuffer();
+            return this.queue[0];
+        }
+    }
+
     public pop() : T | undefined {
         if (this.length == 0) {
             return undefined;
         } else {
-            // heapify elements in the buffer
-            for (let i = 0; i < this.buffer.length; i++) {
-                let b = this.buffer[i];
-                this.queue.push(b);
-                if (this.queue.length > 1) {
-                    this.up(this.queue.length - 1);
-                }
-            }
-            this.buffer.length = 0;
+            this.heapifyBuffer();
 
             // The min is the first one
             // We want to pop from the front (shift) but that is
@@ -53,6 +54,18 @@ export class BufferedPriorityQueue<T extends Orderable> {
             return b;
 
         }
+    }
+
+    private heapifyBuffer() {
+        // heapify elements in the buffer
+        for (let i = 0; i < this.buffer.length; i++) {
+            let b = this.buffer[i];
+            this.queue.push(b);
+            if (this.queue.length > 1) {
+                this.up(this.queue.length - 1);
+            }
+        }
+        this.buffer.length = 0;
     }
 
     public get length() : number {

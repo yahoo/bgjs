@@ -1348,7 +1348,55 @@ describe('dynamic graph changes', () => {
         expect(() => {
             ext2.addToGraphWithAction();
         }).toThrow();
-    })
+    });
+
+    test('behaviors of the same order are all run together before graph updates', () => {
+        // NOTE: Sometimes we have a number of activated behaviors that will each result in changing the graph.
+        // Ideally we can do all the changes from the different behaviors and then run the internal resorting logic once.
+        // This is an optimization.
+
+        // |> Given two behaviors with the same order.
+        // and the first one is causing a graph change.
+        let r1 = ext.moment();
+        let b3: Behavior | null = null;
+        let runOrder = 1;
+        let firstRunOrder = 0;
+        let secondRunOrder = 0;
+        let resortHappened = false;
+
+        ext.behavior()
+            .demands(r1)
+            .runs(ext => {
+                firstRunOrder = runOrder;
+                runOrder++;
+                b3!.setDynamicDemands([r1]);
+            });
+
+        ext.behavior()
+            .demands(r1)
+            .runs(ext => {
+                secondRunOrder = runOrder;
+                runOrder++;
+                if (b3!.demands?.size == 1) {
+                    resortHappened = true;
+                }
+            });
+
+        b3 = ext.behavior()
+            .runs(ext => {
+            });
+        ext.addToGraphWithAction();
+
+        // |> When we activate behaviors
+        r1.updateWithAction();
+
+        // |> Then resorting behavior runs first
+        expect(firstRunOrder).toBe(1);
+        expect(secondRunOrder).toBe(2);
+        // and resort happens after
+        expect(resortHappened).toBeFalsy();
+        expect(b3!.demands!.size).toBe(1);
+    });
 });
 
 

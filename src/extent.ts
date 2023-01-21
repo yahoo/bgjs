@@ -119,7 +119,6 @@ export class Extent {
     graph: Graph;
     addedToGraphWhen: number | null = null;
     addedToGraph: State<boolean>;
-    addedToGraphBehavior: Behavior;
     lifetime: ExtentLifetime | null = null;
     static readonly removeContainedLifetimes = ExtentRemoveStrategy.containedLifetimes;
     static readonly relinkingOrderSubsequent = RelinkingOrder.relinkingOrderSubsequent;
@@ -132,12 +131,7 @@ export class Extent {
         }
         this.debugConstructorName = this.constructor.name;
         this.graph = graph;
-        // this hidden behavior supplies addedToGraph and gets activated independently when an
-        // extent is added to the graph
         this.addedToGraph = new State<boolean>(this, false);
-        this.addedToGraphBehavior = this.behavior().supplies(this.addedToGraph).runs((extent) => {
-            extent.addedToGraph.update(true);
-        });
     }
 
     unifyLifetime<T extends Extent>(extent: T) {

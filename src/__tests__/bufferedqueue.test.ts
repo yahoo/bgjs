@@ -103,4 +103,19 @@ test('clear empties', () => {
 
     // |> All are removed
     expect(q.length).toBe(0);
-})
+});
+
+test('peak heapifies buffer and shows top', () => {
+    // |> Given one item in buffer
+    q.push(new Item(1));
+    expect(q.length).toEqual(1);
+
+    // |> When we peek
+    let item = q.peek();
+
+    // |> Then we should see that item and it should still be in queue
+    expect(item).not.toBeUndefined();
+    expect(item!.order).toEqual(1);
+    expect(q.length).toEqual(1);
+});
+

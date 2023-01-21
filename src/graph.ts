@@ -8,6 +8,10 @@ import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
 import {Demandable, LinkType, Resource} from "./resource.js";
 
+interface StateInternal<T> {
+    _updateForce(newValue: T): void;
+}
+
 export enum OrderingState {
     Untracked, // new behaviors
     NeedsOrdering, // added to list for ordering
@@ -277,11 +281,27 @@ export class Graph {
     }
 
     private runNextBehavior(sequence: number) {
-        let behavior = this.activatedBehaviors.pop();
-        if (behavior != undefined && behavior.removedWhen != sequence) {
-            this.currentBehavior = behavior;
-            behavior.block(behavior.extent);
-            this.currentBehavior = null;
+        // take top behavior off queue
+        let topBehavior = this.activatedBehaviors.pop();
+        // if no behavior left we quit
+        while (topBehavior !== undefined) {
+            if (topBehavior!.removedWhen == sequence) {
+                // if this behavior has been removed already then try next one
+                topBehavior = this.activatedBehaviors.pop();
+            } else {
+                // valid behavior, run it
+                this.currentBehavior = topBehavior!;
+                topBehavior!.block(topBehavior!.extent);
+                this.currentBehavior = null;
+                // check if there is a next behavior and it's the same ordering as the first behavior
+                let nextBehavior = this.activatedBehaviors.peek();
+                if (nextBehavior !== undefined && nextBehavior!.order == topBehavior!.order) {
+                    // if so we will try running it also
+                    topBehavior = this.activatedBehaviors.pop();
+                } else {
+                    break;
+                }
+            }
         }
     }
 
@@ -667,7 +687,9 @@ export class Graph {
 
         extent.addedToGraphWhen = this.currentEvent.sequence;
         this.extentsAdded.push(extent);
-        this.activateBehavior(extent.addedToGraphBehavior, this.currentEvent.sequence);
+        // this casting below is a hack to get at the private method so we can skip integrity checks which
+        // allow us to update addedToGraph from inside whatever behavior or action it is added
+        (extent.addedToGraph as unknown as StateInternal<boolean>)._updateForce(true);
         for (let behavior of extent.behaviors) {
             this.addBehavior(behavior);
         }

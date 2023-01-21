@@ -187,6 +187,10 @@ export class State<T> extends Resource implements Transient {
 
     updateForce(newValue: T) {
         this.assertValidUpdater();
+        this._updateForce(newValue);
+    }
+
+    private _updateForce(newValue: T) {
         if (this.graph.currentEvent != null && this.currentState.event.sequence < this.graph.currentEvent?.sequence) {
             // captures trace as the value before any updates
             this.previousState = this.currentState;
