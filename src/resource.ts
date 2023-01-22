@@ -25,6 +25,7 @@ export class Resource implements Demandable {
     subsequents: Set<Behavior> = new Set();
     suppliedBy: Behavior | null = null;
     private skipChecks: boolean = false;
+    private didUpdateSubscribers?: Set<() => void>;
 
     constructor(extent: Extent, name?: string) {
         this.extent = extent;
@@ -89,6 +90,27 @@ export class Resource implements Demandable {
         this.assertValidAccessor();
         return false;
     }
+
+    subscribeToJustUpdated(callback: () => void): (() => void) {
+        // returns an unsubscribe callback that caller can call when no longer needed
+        if (this.didUpdateSubscribers === undefined) {
+            this.didUpdateSubscribers = new Set();
+        }
+        this.didUpdateSubscribers!.add(callback);
+        return (() => {
+           this.didUpdateSubscribers!.delete(callback);
+        });
+    }
+
+    protected notifyJustUpdatedSubscribers() {
+        if (this.didUpdateSubscribers !== undefined && this.didUpdateSubscribers.size > 0) {
+            this.extent.sideEffect(ext => {
+                this.didUpdateSubscribers?.forEach(function(callback) {
+                    callback();
+                });
+            });
+        }
+    }
 }
 
 export class Moment<T = undefined> extends Resource implements Transient {
@@ -127,6 +149,7 @@ export class Moment<T = undefined> extends Resource implements Transient {
         this._happened = true;
         this._happenedValue = value;
         this._happenedWhen = this.graph.currentEvent;
+        this.notifyJustUpdatedSubscribers();
         this.graph.resourceTouched(this);
         this.graph.trackTransient(this);
     }
@@ -164,12 +187,19 @@ export class State<T> extends Resource implements Transient {
 
     updateForce(newValue: T) {
         this.assertValidUpdater();
+        this._updateForce(newValue);
+    }
+
+    private _updateForce(newValue: T) {
         if (this.graph.currentEvent != null && this.currentState.event.sequence < this.graph.currentEvent?.sequence) {
             // captures trace as the value before any updates
             this.previousState = this.currentState;
         }
 
         this.currentState = { value: newValue, event: this.graph.currentEvent! };
+
+        this.notifyJustUpdatedSubscribers();
+
         this.graph.resourceTouched(this);
         this.graph.trackTransient(this);
     }
