@@ -2054,10 +2054,11 @@ describe('Graph checks', () => {
         let r_x = ext.state(0, 'r_x');
         let r_y = ext.state(0, 'r_y');
         let r_z = ext.state(0, 'r_z');
+        let r_w = ext.state(0, 'r_w'); // non supplied
         ext.behavior().supplies(r_z).runs(extent => {
             // non cycle behavior
         });
-        ext.behavior().demands(r_z, r_y).supplies(r_x).runs(extent => {
+        ext.behavior().demands(r_w, r_z, r_y).supplies(r_x).runs(extent => {
         });
         ext.behavior().demands(r_x).supplies(r_y).runs(extent => {
         });
@@ -2066,6 +2067,9 @@ describe('Graph checks', () => {
         try {
             ext.addToGraphWithAction();
         } catch (err: any) {
+            // here we catch the cycle
+            // it should not include resources from non-cycle behaviors
+            // and it should not include resources updated in actions
             caught = true;
             let cycle: Resource[] = err.cycle as Resource[];
             expect(cycle).toHaveLength(2);

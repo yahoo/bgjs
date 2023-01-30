@@ -569,9 +569,9 @@ export class Graph {
     private cycleDFS(currentBehavior: Behavior, target: Behavior, stack: Resource[]): boolean {
         if (currentBehavior.demands != null) {
             for (let r of currentBehavior.demands) {
-                stack.push(r)
                 let b = r.suppliedBy;
                 if (b != null) {
+                    stack.push(r)
                     if (b == target) {
                         return true;
                     }
