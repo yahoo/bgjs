@@ -50,6 +50,14 @@ export class Resource implements Demandable {
         return LinkType.reactive;
     }
 
+    toString() {
+        let name = "Resource";
+        if (this.debugName != null) {
+            name = this.debugName + "(r)";
+        }
+        return name;
+    }
+
     assertValidUpdater() {
         let graph = this.graph;
         let currentBehavior = graph.currentBehavior;
@@ -133,6 +141,20 @@ export class Moment<T = undefined> extends Resource implements Transient {
         return this._happenedWhen;
     }
 
+    toString() {
+        let name = "Moment";
+        if (this.debugName != null) {
+            name = (this.debugName + "(m)" )
+        }
+        if (this._happenedValue !== undefined) {
+            name = name + "=" + this._happenedValue;
+        }
+        if (this._happenedWhen !== null) {
+            name = name + " : " + this._happenedWhen!.sequence
+        }
+        return name;
+    }
+
     justUpdatedTo(value: T): boolean {
         return this.justUpdated && this._happenedValue == value;
     }
@@ -169,6 +191,16 @@ export class State<T> extends Resource implements Transient {
     constructor(extent: Extent, initialState: T, name?: string) {
         super(extent, name);
         this.currentState = { value: initialState, event: GraphEvent.initialEvent };
+    }
+
+    toString() {
+        let name = "State";
+        if (this.debugName != null) {
+            name = (this.debugName + "(s)" );
+        }
+        name = name + "=" + this.currentState.value;
+        name = name + " : " + this.currentState.event.sequence;
+        return name;
     }
 
     updateWithAction(newValue: T, debugName?: string) {

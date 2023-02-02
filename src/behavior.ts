@@ -42,6 +42,26 @@ export class Behavior implements Orderable {
         this.untrackedDynamicSupplies = null;
     }
 
+    toString() {
+        let name = "Behavior (" + this.order + ")"
+        if (this.enqueuedWhen != null) {
+            name = name + " : " + this.enqueuedWhen
+        }
+        if (this.supplies != null && this.supplies?.size > 0) {
+            name = name + " \n Supplies:"
+            this.supplies?.forEach(item => {
+                name = name + "\n  " + item.toString()
+            });
+        }
+        if (this.demands != null && this.demands?.size > 0) {
+            name = name + " \n Demands:"
+            this.demands?.forEach(item => {
+                name = name + "\n  " + item.toString()
+            });
+        }
+        return name;
+    }
+
     setDynamicDemands(newDemands: (Demandable | undefined)[] | null) {
         this.extent.graph.updateDemands(this, newDemands?.filter(item => item != undefined) as (Demandable[] | null));
     }

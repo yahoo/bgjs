@@ -134,6 +134,10 @@ export class Extent {
         this.addedToGraph = new State<boolean>(this, false);
     }
 
+    debugHere(): string {
+        return this.graph.debugHere();
+    }
+
     unifyLifetime<T extends Extent>(extent: T) {
         if (this.lifetime == null) {
             this.lifetime = new ExtentLifetime(this);

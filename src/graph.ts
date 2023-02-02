@@ -321,6 +321,24 @@ export class Graph {
         }
     }
 
+    debugHere(): string {
+        let text = ""
+        if (this.currentEvent != null) {
+            text = "Current Event: " + this.currentEvent.sequence + "\n";
+            text = text + "Action Updates:\n";
+            this.eventLoopState?.actionUpdates.forEach(item => {
+                text = text + " " + item.toString() + "\n";
+            })
+            if (this.currentBehavior != null) {
+                text = text + "Current Behavior:\n";
+                text = text + this.currentBehavior.toString();
+            }
+        } else {
+            text = "No current event.";
+        }
+        return text
+    }
+
     private addUntrackedBehaviors() {
         if (this.untrackedBehaviors.length > 0) {
             for (let behavior of this.untrackedBehaviors) {
@@ -558,10 +576,11 @@ export class Graph {
         let stack: Resource[] = [];
         let output: Resource[] = [];
         if (this.cycleDFS(behavior, behavior, stack)) {
-            while (stack.length > 0) {
-                let rez = stack.pop();
-                output.push(rez!);
-            }
+            output = stack;
+            // while (stack.length > 0) {
+            //     let rez = stack.pop();
+            //     output.push(rez!);
+            // }
         }
         return output;
     }
