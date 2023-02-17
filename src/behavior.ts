@@ -23,6 +23,7 @@ export class Behavior implements Orderable {
     extent: Extent;
     orderingState: OrderingState = OrderingState.Untracked;
     order: number = 0;
+    _behaviorId: number;
 
     untrackedDemands: Demandable[] | null;
     untrackedDynamicDemands: Demandable[] | null;
@@ -31,6 +32,7 @@ export class Behavior implements Orderable {
 
     constructor(extent: Extent, demands: Demandable[] | null, supplies: Resource[] | null, block: (extent: Extent) => void) {
         this.extent = extent;
+        this._behaviorId = extent._newBehaviorId();
         extent.addBehavior(this);
         this.demands = null;
         this.orderingDemands = null;

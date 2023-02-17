@@ -122,6 +122,9 @@ export class Extent {
     lifetime: ExtentLifetime | null = null;
     static readonly removeContainedLifetimes = ExtentRemoveStrategy.containedLifetimes;
     static readonly relinkingOrderSubsequent = RelinkingOrder.relinkingOrderSubsequent;
+    _extentId: number;
+    _resourceIdCounter: number = 1;
+    _behaviorIdCounter: number = 1;
 
     constructor(graph: Graph) {
         if (graph === null || graph === undefined) {
@@ -129,9 +132,18 @@ export class Extent {
             err.extent = this;
             throw err;
         }
+        this._extentId = graph._newExtentId();
         this.debugConstructorName = this.constructor.name;
         this.graph = graph;
         this.addedToGraph = new State<boolean>(this, false);
+    }
+
+    _newResourceId(): number {
+        return this._resourceIdCounter++;
+    }
+
+    _newBehaviorId(): number {
+        return this._behaviorIdCounter++;
     }
 
     debugHere(): string {

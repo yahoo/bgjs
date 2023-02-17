@@ -26,10 +26,12 @@ export class Resource implements Demandable {
     suppliedBy: Behavior | null = null;
     private skipChecks: boolean = false;
     private didUpdateSubscribers?: Set<() => void>;
+    _resourceId: number;
 
     constructor(extent: Extent, name?: string) {
         this.extent = extent;
         this.graph = extent.graph;
+        this._resourceId = extent._newResourceId();
         extent.addResource(this);
         if (name !== undefined) {
             this.debugName = name;

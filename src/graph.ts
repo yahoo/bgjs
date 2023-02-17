@@ -44,6 +44,11 @@ const DefaultDateProvider = {
     }
 }
 
+let __graphIdCounter: number = 1;
+function newGraphId() {
+    return __graphIdCounter++;
+}
+
 export class Graph {
     dateProvider: DateProvider = DefaultDateProvider;
     currentEvent: GraphEvent | null = null;
@@ -61,9 +66,24 @@ export class Graph {
     extentsAdded: Extent[] = [];
     extentsRemoved: Extent[] = [];
     validateLifetimes: boolean = true;
+    _graphId: number = newGraphId();
+    _extentIdCounter: number = 1;
 
     constructor() {
         this.lastEvent = GraphEvent.initialEvent;
+
+        // @ts-ignore
+        let allGraphs:WeakSet<Graph> = globalThis.__bgAllGraphs;
+        if (allGraphs == undefined) {
+            allGraphs = new WeakSet();
+            // @ts-ignore
+            globalThis.__bgAllGraphs = allGraphs;
+        }
+        allGraphs.add(this);
+    }
+
+    _newExtentId(): number {
+        return this._extentIdCounter++;
     }
 
     action(block: () => void, debugName?: string) {

@@ -1,0 +1,11 @@
+{
+  "manifest_version": 2,
+
+  "name": "Osudio Dev Tools",
+  "version": "0.1",
+
+  "description": "Frontend Developer Tools for Osudio",
+  "author": "Osudio Frontend Team",
+
+  "devtools_page": "html/devtools.html"
+}
