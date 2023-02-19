@@ -2120,8 +2120,8 @@ describe('Graph checks', () => {
             caught = true;
             let cycle: Resource[] = err.cycle as Resource[];
             expect(cycle).toHaveLength(2);
-            expect(cycle[0]).toEqual(r_x);
-            expect(cycle[1]).toEqual(r_y);
+            expect(cycle[0]).toEqual(r_y);
+            expect(cycle[1]).toEqual(r_x);
         }
         expect(caught).toBeTruthy();
     });

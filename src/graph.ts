@@ -610,10 +610,6 @@ export class Graph {
         let output: Resource[] = [];
         if (this.cycleDFS(behavior, behavior, stack)) {
             output = stack;
-            // while (stack.length > 0) {
-            //     let rez = stack.pop();
-            //     output.push(rez!);
-            // }
         }
         return output;
     }
