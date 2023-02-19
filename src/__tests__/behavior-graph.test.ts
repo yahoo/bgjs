@@ -211,8 +211,8 @@ describe('State Resource', () => {
         ext.addToGraphWithAction();
 
         // |> When it is updated multiple times in action (or behavior)
-        var traceValue;
-        var traceEvent;
+        let traceValue;
+        let traceEvent;
         g.action(() => {
             sr1.update(1);
             sr1.update(2);
@@ -294,6 +294,53 @@ describe('State Resource', () => {
         // but removed subscriber should not
         expect(didRunSubscriber1).toBeTruthy();
         expect(didRunSubscriber2).toBeFalsy();
+    });
+
+    test('Multiple subscribes', () => {
+        // |> Given multiple subscriptions
+        let sr1 = ext.state<number>(0);
+        let sr2 = ext.state<number>(0);
+
+        let sr1UpdateCount = 0;
+        let sr2UpdateCount = 0;
+
+        let unsubscribe = ext.graph.subscribeToJustUpdated([sr1, sr2], () => {
+            if (sr1.justUpdated) {
+                sr1UpdateCount++;
+            }
+            if (sr2.justUpdated) {
+                sr2UpdateCount++;
+            }
+        });
+        ext.addToGraphWithAction();
+
+        // |> When both are updated
+        ext.action(ext => {
+            sr1.update(1);
+            sr2.update(1);
+        });
+
+        // |> Then callback is only called once
+        expect(sr1UpdateCount).toBe(1);
+        expect(sr2UpdateCount).toBe(1);
+
+        // |> And when one is updated
+        sr1.updateWithAction(2);
+
+        // |> Callback is also called
+        expect(sr1UpdateCount).toBe(2);
+        expect(sr2UpdateCount).toBe(1);
+
+        // |> And when unsubscribed and resources update
+        unsubscribe();
+        ext.action(ext => {
+            sr1.update(1);
+            sr2.update(1);
+        });
+
+        // |> Then callback is not called
+        expect(sr1UpdateCount).toBe(2);
+        expect(sr2UpdateCount).toBe(1);
     });
 
     describe('Checks', () => {
@@ -922,7 +969,7 @@ describe('dynamic graph changes', () => {
     });
 
     test('can supply a resource by a behavior in a different extent after its subsequent is added', () => {
-        // ext has resource a and process that depends on it and then it is added
+        // ext has resource a and process that depends on it, and then it is added
         let r_z: State<number> = ext.state(0, 'r_z');
         let r_y: State<number> = ext.state(0, 'r_y');
         ext.behavior().demands(r_y).supplies(r_z).runs(extent => {

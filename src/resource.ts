@@ -112,11 +112,7 @@ export class Resource implements Demandable {
 
     protected notifyJustUpdatedSubscribers() {
         if (this.didUpdateSubscribers !== undefined && this.didUpdateSubscribers.size > 0) {
-            this.extent.sideEffect(ext => {
-                this.didUpdateSubscribers?.forEach(function(callback) {
-                    callback();
-                });
-            });
+            this.graph._notifyJustUpdatedSubscribers(this.didUpdateSubscribers!);
         }
     }
 }
