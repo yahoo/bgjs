@@ -66,6 +66,7 @@ export class Graph {
     extentsAdded: Extent[] = [];
     extentsRemoved: Extent[] = [];
     validateLifetimes: boolean = true;
+    private justUpdatedCallbacks: Set<()=>void> = new Set();
     _graphId: number = newGraphId();
     _extentIdCounter: number = 1;
 
@@ -154,6 +155,10 @@ export class Graph {
                     }
                 }
 
+                if (this.justUpdatedCallbacks.size > 0) {
+                    this.turnSubscriptionsIntoSideEffects();
+                }
+
                 let effect = this.effects.shift();
                 if (effect) {
                     this.eventLoopState!.phase = EventLoopPhase.sideEffects;
@@ -195,6 +200,7 @@ export class Graph {
                 this.effects.length = 0;
                 this.currentBehavior = null;
                 this.activatedBehaviors.clear();
+                this.justUpdatedCallbacks.clear();
                 this.clearTransients();
                 this.modifiedDemandBehaviors.length = 0;
                 this.modifiedSupplyBehaviors.length = 0;
@@ -323,6 +329,33 @@ export class Graph {
                 }
             }
         }
+    }
+
+    subscribeToJustUpdated(resources: Resource[], callback: () => void): () => void {
+        let allUnsubscribes: (()=>void)[] = [];
+        for (let resource of resources) {
+            let unsubscribe = resource.subscribeToJustUpdated(callback);
+            allUnsubscribes.push(unsubscribe);
+        }
+        let bigUnsubscribe = () => {
+            for (let unsubscribe of allUnsubscribes) {
+                unsubscribe();
+            }
+        }
+        return bigUnsubscribe;
+    }
+
+    _notifyJustUpdatedSubscribers(subscribers: Set<()=>void>) {
+        subscribers.forEach(callback => {
+            this.justUpdatedCallbacks.add(callback);
+        });
+    }
+
+    private turnSubscriptionsIntoSideEffects() {
+        this.justUpdatedCallbacks.forEach(callback => {
+            this.sideEffect(callback)
+        });
+        this.justUpdatedCallbacks.clear();
     }
 
     sideEffect(block: () => void, debugName?: string) {
@@ -597,10 +630,6 @@ export class Graph {
         let output: Resource[] = [];
         if (this.cycleDFS(behavior, behavior, stack)) {
             output = stack;
-            // while (stack.length > 0) {
-            //     let rez = stack.pop();
-            //     output.push(rez!);
-            // }
         }
         return output;
     }
