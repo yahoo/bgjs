@@ -6,16 +6,16 @@
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
-    "behavior-graph": "^1.1.0",
-    "react-behavior-graph": "^1.0.0",
+    "behavior-graph": "file:../..",
     "immer": "^9.0.18",
     "react": "^18.2.0",
+    "react-behavior-graph": "^1.0.0",
     "react-dom": "^18.2.0",
     "react-scripts": "^5.0.1",
     "web-vitals": "^3.1.1"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "start": "parcel --no-cache src/index.html",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"

@@ -74,13 +74,20 @@ export class Graph {
         this.lastEvent = GraphEvent.initialEvent;
 
         // @ts-ignore
-        let allGraphs:WeakSet<Graph> = globalThis.__bgAllGraphs;
-        if (allGraphs == undefined) {
-            allGraphs = new WeakSet();
+//        let allGraphs:Map<number, WeakRef<Graph>> = globalThis.__bgAllGraphs;
+        let allGraphs:Map<number, Graph> = globalThis.__bgAllGraphs;
+        if (allGraphs === undefined) {
+            allGraphs = new Map();
             // @ts-ignore
             globalThis.__bgAllGraphs = allGraphs;
         }
-        allGraphs.add(this);
+        // @ts-ignore
+//        if (WeakRef === undefined) {
+            allGraphs.set(this._graphId, this);
+//        } else {
+            // @ts-ignore
+//            allGraphs.set(this._graphId, new WeakRef(this));
+//        }
     }
 
     _newExtentId(): number {

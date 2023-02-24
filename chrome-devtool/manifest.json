@@ -1,11 +1,17 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
 
-  "name": "Osudio Dev Tools",
+  "name": "Behavior Graph",
   "version": "0.1",
 
-  "description": "Frontend Developer Tools for Osudio",
-  "author": "Osudio Frontend Team",
-
+  "description": "Behvior Graph Debugging",
+  "author": "Sean Levin",
+  "background": {
+    "service_worker": "js/background.js"
+  },
+  "permissions": ["scripting"],
+  "host_permissions": [
+    "*://*/*"
+  ],
   "devtools_page": "html/devtools.html"
 }
