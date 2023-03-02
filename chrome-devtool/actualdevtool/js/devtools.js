@@ -37,12 +37,13 @@ function uiUpdateGraphs() {
     if (panelWindow === null || graphIds === null) {
         return;
     }
+    debugger;
     for (let i = 0; i < graphIds.length; i++) {
         let graph = graphIds[i];
-        let body = panelWindow.document.getElementById("body");
+        let body = panelWindow.document.getElementsByTagName("body")[0];
         let div = panelWindow.document.createElement("div");
-        div.innerText = graph.id;
-        body.addChild(div)
+        div.innerText = graph;
+        body.appendChild(div)
     }
 
 }
