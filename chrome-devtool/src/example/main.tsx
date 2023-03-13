@@ -1,7 +1,7 @@
 import React from 'react'
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import * as bg from "behavior-graph";
+import * as bg from "lib/mjs";
 import { AllCountersExtent } from "./AllCountersExtent";
 
 let g = new bg.Graph();

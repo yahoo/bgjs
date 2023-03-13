@@ -1,4 +1,4 @@
-import * as bg from "behavior-graph"
+import * as bg from "lib/mjs"
 import {AllCountersExtent} from "./AllCountersExtent";
 
 export class CounterExtent extends bg.Extent {
