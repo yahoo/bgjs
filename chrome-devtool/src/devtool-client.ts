@@ -44,6 +44,32 @@ export class DevtoolClient {
             case "init":
                 this.connection.clientSend(new msg.InitResponseMessage())
                 break;
+            case "list-graphs":
+            {
+                let graphs: msg.GraphSpec[] = [];
+                this.clientHook.allGraphs().forEach((value, key) => {
+                    graphs.push({
+                        id: key,
+                        debugName: ""
+                    });
+                });
+                let responseMessage = new msg.AllGraphs(graphs);
+                this.connection.clientSend(responseMessage);
+                break;
+            }
+            case "graph-details":
+            {
+                let detailsMessage = message as msg.GraphDetails;
+                let allGraphs = this.clientHook.allGraphs();
+                let graph = this.clientHook.allGraphs().get(detailsMessage.graphId);
+                if (graph === undefined) {
+                    // TODO respond with not found
+                } else {
+                    let responseMessage = new msg.GraphDetailsResponse(graph._graphId);
+                    this.connection.clientSend(responseMessage);
+                    break;
+                }
+            }
         }
     }
 }
