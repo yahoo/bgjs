@@ -7,17 +7,10 @@ import {BufferedPriorityQueue} from "./bufferedqueue.js";
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
 import {Demandable, LinkType, Resource} from "./resource.js";
+import {DateProvider, GraphEvent, OrderingState, Subscription, Transient} from "./common";
 
 interface StateInternal<T> {
     _updateForce(newValue: T): void;
-}
-
-export enum OrderingState {
-    Untracked, // new behaviors
-    NeedsOrdering, // added to list for ordering
-    Clearing, // visited while clearing dfs
-    Ordering, // visited while ordering dfs
-    Ordered // has a valid order
 }
 
 interface SideEffect {
@@ -32,15 +25,6 @@ interface Action {
     extent: Extent | null;
     resolve: ((value: any) => void) | null;
     debugName?: string;
-}
-
-export interface Subscription {
-    extent: Extent | null;
-    callback: (extent: Extent | null) => void;
-}
-
-export interface DateProvider {
-    now(): Date
 }
 
 const DefaultDateProvider = {
@@ -771,17 +755,6 @@ export class Graph {
     }
 }
 
-export class GraphEvent {
-    sequence: number;
-    timestamp: Date;
-    static readonly initialEvent: GraphEvent = new GraphEvent(0, new Date(0));
-
-    constructor(sequence: number, timestamp: Date) {
-        this.sequence = sequence;
-        this.timestamp = timestamp;
-    }
-}
-
 enum EventLoopPhase {
     queued,
     action,
@@ -801,8 +774,3 @@ export class EventLoopState {
         this.actionUpdates = [];
     }
 }
-
-export interface Transient {
-    clear(): void;
-}
-

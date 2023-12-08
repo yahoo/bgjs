@@ -5,7 +5,8 @@
 
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
-import {GraphEvent, Graph, Transient, Subscription} from "./graph.js";
+import {Graph} from "./graph.js";
+import {GraphEvent, Subscription, Transient} from "./common";
 
 export enum LinkType {
     reactive,

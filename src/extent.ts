@@ -3,9 +3,10 @@
 //
 
 
-import {Graph, Subscription} from "./graph.js";
-import {Behavior, BehaviorBuilder, RelinkingOrder} from "./behavior.js";
+import {Graph} from "./graph.js";
+import {Behavior, BehaviorBuilder} from "./behavior.js";
 import {Moment, Resource, State} from "./resource.js";
+import {RelinkingOrder} from "./common.js";
 
 export enum ExtentRemoveStrategy {
     extentOnly,

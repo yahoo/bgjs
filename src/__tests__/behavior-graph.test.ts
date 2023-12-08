@@ -1553,7 +1553,7 @@ describe('Extents', () => {
         sr1.updateWithAction(2);
         expect(subscriptionUpdateCount).toBe(1);
         expect(extPassedIn).toBe(ext2);
-        
+
         // |> if removed, then it will unsubscribe
         ext2.removeFromGraphWithAction();
         sr1.updateWithAction(3);

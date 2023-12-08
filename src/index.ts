@@ -4,9 +4,7 @@
 
 
 export {
-    DateProvider,
-    Graph,
-    GraphEvent
+    Graph
 } from "./graph.js";
 
 export {
@@ -21,6 +19,14 @@ export {
 } from "./extent.js"
 
 export {
-    Behavior,
-    RelinkingOrder
+    Behavior
 } from "./behavior.js"
+
+export {
+    GraphEvent,
+    RelinkingOrder,
+    RelinkingTarget,
+    LinkType,
+    ResourceType,
+    type DateProvider
+} from "./common.js"
