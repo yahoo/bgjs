@@ -34,6 +34,11 @@ interface Action {
     debugName?: string;
 }
 
+export interface Subscription {
+    extent: Extent | null;
+    callback: (extent: Extent | null) => void;
+}
+
 export interface DateProvider {
     now(): Date
 }
@@ -61,10 +66,10 @@ export class Graph {
     extentsAdded: Extent[] = [];
     extentsRemoved: Extent[] = [];
     validateLifetimes: boolean = true;
-    private justUpdatedCallbacks: Set<()=>void> = new Set();
+    justUpdatedCallbacks: Set<Subscription> = new Set();
 
     constructor() {
-        this.lastEvent = GraphEvent.initialEvent;
+       this.lastEvent = GraphEvent.initialEvent;
     }
 
     action(block: () => void, debugName?: string) {
@@ -312,9 +317,13 @@ export class Graph {
     }
 
     subscribeToJustUpdated(resources: Resource[], callback: () => void): () => void {
+        return this._subscribeToJustUpdated(resources, {extent: null, callback: callback});
+    }
+
+    _subscribeToJustUpdated(resources: Resource[], subscription: Subscription): () => void {
         let allUnsubscribes: (()=>void)[] = [];
         for (let resource of resources) {
-            let unsubscribe = resource.subscribeToJustUpdated(callback);
+            let unsubscribe = resource._subscribeToJustUpdated(subscription);
             allUnsubscribes.push(unsubscribe);
         }
         let bigUnsubscribe = () => {
@@ -325,15 +334,18 @@ export class Graph {
         return bigUnsubscribe;
     }
 
-    _notifyJustUpdatedSubscribers(subscribers: Set<()=>void>) {
-        subscribers.forEach(callback => {
-            this.justUpdatedCallbacks.add(callback);
+    _notifyJustUpdatedSubscribers(subscribers: Set<Subscription>) {
+        subscribers.forEach(subscription => {
+            this.justUpdatedCallbacks.add(subscription);
         });
     }
 
     private turnSubscriptionsIntoSideEffects() {
-        this.justUpdatedCallbacks.forEach(callback => {
-            this.sideEffect(callback)
+        this.justUpdatedCallbacks.forEach(subscription => {
+            // either subscription is not connected to an extent or extent is part of graph
+            if (subscription.extent == null || subscription.extent.addedToGraphWhen != null) {
+                this.sideEffectHelper({block: subscription.callback, behavior: null, extent: subscription.extent})
+            }
         });
         this.justUpdatedCallbacks.clear();
     }
@@ -753,6 +765,7 @@ export class Graph {
             for (let behavior of extent.behaviors) {
                 this.removeBehavior(behavior, this.currentEvent.sequence);
             }
+            extent.unsubscribeAll();
             extent.addedToGraphWhen = null;
         }
     }

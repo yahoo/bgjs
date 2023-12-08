@@ -1526,6 +1526,74 @@ describe('Extents', () => {
         }).not.toThrow();
     });
 
+    test('can subscribe to updates via extent', () => {
+        // Like graph subscriptions except they get the extent for context,
+        // and they automatically unsubscribe when extent is removed
+
+        // |> Given subscription
+        let sr1 = ext.state<number>(0);
+
+        let ext2: Extent = new Extent(g);
+        ext.addChildLifetime(ext2);
+
+        let subscriptionUpdateCount = 0;
+        let extPassedIn: Extent | null = null;
+        let unsubscribe = ext2.subscribeToJustUpdated([sr1], (ext) => {
+            subscriptionUpdateCount++;
+            extPassedIn = ext;
+        });
+        ext.addToGraphWithAction();
+
+        // |> subscription not run if extent not added
+        sr1.updateWithAction(1);
+        expect(subscriptionUpdateCount).toBe(0);
+
+        // |> if added, and resource is updated then it will run
+        ext2.addToGraphWithAction();
+        sr1.updateWithAction(2);
+        expect(subscriptionUpdateCount).toBe(1);
+        expect(extPassedIn).toBe(ext2);
+        
+        // |> if removed, then it will unsubscribe
+        ext2.removeFromGraphWithAction();
+        sr1.updateWithAction(3);
+        expect(subscriptionUpdateCount).toBe(1);
+        // confirm unsubscribed was called
+        expect(sr1.didUpdateSubscribers!.size).toBe(0);
+
+        // |> and unsubscribing again won't cause errors
+        unsubscribe();
+    });
+
+    test('extent removed during event will cancel activated subscrptions', () => {
+        // |> Given subscription that is activated
+        let sr1 = ext.state<number>(0);
+
+        let ext2: Extent = new Extent(g);
+        ext.addChildLifetime(ext2);
+
+        ext.behavior()
+            .demands(sr1)
+            .runs(extent => {
+                ext2.removeFromGraph();
+            });
+
+        let subscriptionUpdateCount = 0;
+        let unsubscribe = ext2.subscribeToJustUpdated([sr1], () => {
+            subscriptionUpdateCount++;
+        });
+        g.action(() => {
+            ext.addToGraph();
+            ext2.addToGraph();
+        });
+
+        // |> When extent is removed during event
+        sr1.updateWithAction(1);
+
+        // |> related subscription will be cancelled
+        expect(subscriptionUpdateCount).toBe(0);
+    });
+
     describe('Checks', () => {
 
         test('check cannot add extent to graph multiple times', () => {

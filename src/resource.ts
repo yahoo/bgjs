@@ -5,7 +5,7 @@
 
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
-import {GraphEvent, Graph, Transient} from "./graph.js";
+import {GraphEvent, Graph, Transient, Subscription} from "./graph.js";
 
 export enum LinkType {
     reactive,
@@ -24,8 +24,8 @@ export class Resource implements Demandable {
     graph: Graph;
     subsequents: Set<Behavior> = new Set();
     suppliedBy: Behavior | null = null;
-    private skipChecks: boolean = false;
-    private didUpdateSubscribers?: Set<() => void>;
+    skipChecks: boolean = false;
+    didUpdateSubscribers?: Set<Subscription>;
 
     constructor(extent: Extent, name?: string) {
         this.extent = extent;
@@ -100,13 +100,17 @@ export class Resource implements Demandable {
     }
 
     subscribeToJustUpdated(callback: () => void): (() => void) {
+        return this._subscribeToJustUpdated({extent: null, callback: callback})
+    }
+
+    _subscribeToJustUpdated(subscription: Subscription): (() => void) {
         // returns an unsubscribe callback that caller can call when no longer needed
         if (this.didUpdateSubscribers === undefined) {
             this.didUpdateSubscribers = new Set();
         }
-        this.didUpdateSubscribers!.add(callback);
+        this.didUpdateSubscribers!.add(subscription);
         return (() => {
-           this.didUpdateSubscribers!.delete(callback);
+            this.didUpdateSubscribers!.delete(subscription);
         });
     }
 
