@@ -7,17 +7,10 @@ import {BufferedPriorityQueue} from "./bufferedqueue.js";
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
 import {Demandable, LinkType, Resource} from "./resource.js";
+import {DateProvider, GraphEvent, OrderingState, Subscription, Transient} from "./common";
 
 interface StateInternal<T> {
     _updateForce(newValue: T): void;
-}
-
-export enum OrderingState {
-    Untracked, // new behaviors
-    NeedsOrdering, // added to list for ordering
-    Clearing, // visited while clearing dfs
-    Ordering, // visited while ordering dfs
-    Ordered // has a valid order
 }
 
 interface SideEffect {
@@ -32,10 +25,6 @@ interface Action {
     extent: Extent | null;
     resolve: ((value: any) => void) | null;
     debugName?: string;
-}
-
-export interface DateProvider {
-    now(): Date
 }
 
 const DefaultDateProvider = {
@@ -61,10 +50,10 @@ export class Graph {
     extentsAdded: Extent[] = [];
     extentsRemoved: Extent[] = [];
     validateLifetimes: boolean = true;
-    private justUpdatedCallbacks: Set<()=>void> = new Set();
+    justUpdatedCallbacks: Set<Subscription> = new Set();
 
     constructor() {
-        this.lastEvent = GraphEvent.initialEvent;
+       this.lastEvent = GraphEvent.initialEvent;
     }
 
     action(block: () => void, debugName?: string) {
@@ -312,9 +301,13 @@ export class Graph {
     }
 
     subscribeToJustUpdated(resources: Resource[], callback: () => void): () => void {
+        return this._subscribeToJustUpdated(resources, {extent: null, callback: callback});
+    }
+
+    _subscribeToJustUpdated(resources: Resource[], subscription: Subscription): () => void {
         let allUnsubscribes: (()=>void)[] = [];
         for (let resource of resources) {
-            let unsubscribe = resource.subscribeToJustUpdated(callback);
+            let unsubscribe = resource._subscribeToJustUpdated(subscription);
             allUnsubscribes.push(unsubscribe);
         }
         let bigUnsubscribe = () => {
@@ -325,15 +318,18 @@ export class Graph {
         return bigUnsubscribe;
     }
 
-    _notifyJustUpdatedSubscribers(subscribers: Set<()=>void>) {
-        subscribers.forEach(callback => {
-            this.justUpdatedCallbacks.add(callback);
+    _notifyJustUpdatedSubscribers(subscribers: Set<Subscription>) {
+        subscribers.forEach(subscription => {
+            this.justUpdatedCallbacks.add(subscription);
         });
     }
 
     private turnSubscriptionsIntoSideEffects() {
-        this.justUpdatedCallbacks.forEach(callback => {
-            this.sideEffect(callback)
+        this.justUpdatedCallbacks.forEach(subscription => {
+            // either subscription is not connected to an extent or extent is part of graph
+            if (subscription.extent == null || subscription.extent.addedToGraphWhen != null) {
+                this.sideEffectHelper({block: subscription.callback, behavior: null, extent: subscription.extent})
+            }
         });
         this.justUpdatedCallbacks.clear();
     }
@@ -753,19 +749,9 @@ export class Graph {
             for (let behavior of extent.behaviors) {
                 this.removeBehavior(behavior, this.currentEvent.sequence);
             }
+            extent.unsubscribeAll();
             extent.addedToGraphWhen = null;
         }
-    }
-}
-
-export class GraphEvent {
-    sequence: number;
-    timestamp: Date;
-    static readonly initialEvent: GraphEvent = new GraphEvent(0, new Date(0));
-
-    constructor(sequence: number, timestamp: Date) {
-        this.sequence = sequence;
-        this.timestamp = timestamp;
     }
 }
 
@@ -788,8 +774,3 @@ export class EventLoopState {
         this.actionUpdates = [];
     }
 }
-
-export interface Transient {
-    clear(): void;
-}
-

@@ -4,8 +4,9 @@
 
 
 import {Graph} from "./graph.js";
-import {Behavior, BehaviorBuilder, RelinkingOrder} from "./behavior.js";
+import {Behavior, BehaviorBuilder} from "./behavior.js";
 import {Moment, Resource, State} from "./resource.js";
+import {RelinkingOrder} from "./common.js";
 
 export enum ExtentRemoveStrategy {
     extentOnly,
@@ -17,6 +18,7 @@ class ExtentLifetime {
     extents: Set<Extent> = new Set();
     children: Set<ExtentLifetime> | null = null;
     parent: ExtentLifetime | null = null;
+
     constructor(extent: Extent) {
         this.extents.add(extent);
         if (extent.addedToGraphWhen != null) {
@@ -49,7 +51,7 @@ class ExtentLifetime {
         }
     }
 
-    addChild(extent:Extent) {
+    addChild(extent: Extent) {
         if (extent.lifetime == null) {
             extent.lifetime = new ExtentLifetime(extent);
         }
@@ -57,7 +59,7 @@ class ExtentLifetime {
     }
 
     addChildLifetime(lifetime: ExtentLifetime) {
-        let myLifetime : ExtentLifetime | null = this;
+        let myLifetime: ExtentLifetime | null = this;
         while (myLifetime != null) {
             if (myLifetime === lifetime) {
                 let err: any = new Error("Child lifetime cannot be a transitive parent.");
@@ -120,6 +122,7 @@ export class Extent {
     addedToGraphWhen: number | null = null;
     addedToGraph: State<boolean>;
     lifetime: ExtentLifetime | null = null;
+    unsubscribes: Set<() => void> = new Set();
     static readonly removeContainedLifetimes = ExtentRemoveStrategy.containedLifetimes;
     static readonly relinkingOrderSubsequent = RelinkingOrder.relinkingOrderSubsequent;
 
@@ -210,6 +213,19 @@ export class Extent {
             err.extent = this;
             throw err;
         }
+    }
+
+    subscribeToJustUpdated(resources: Resource[], callback: (ext: this) => void): () => void {
+        let unsubscribe = this.graph._subscribeToJustUpdated(resources, {extent: this, callback:callback as ((arg0: Extent | null) => void)});
+        this.unsubscribes.add(unsubscribe);
+        return unsubscribe;
+    }
+
+    unsubscribeAll() {
+        for (let unsubscribe of this.unsubscribes) {
+            unsubscribe();
+        }
+        this.unsubscribes.clear();
     }
 
     nameResources() {

@@ -6,12 +6,8 @@
 import {Orderable} from "./bufferedqueue.js";
 import {Extent} from "./extent.js";
 import {Resource, Demandable} from "./resource.js";
-import {OrderingState} from "./graph.js"
+import {OrderingState, RelinkingOrder} from "./common";
 
-export enum RelinkingOrder {
-    relinkingOrderPrior,
-    relinkingOrderSubsequent
-}
 
 export class Behavior implements Orderable {
     demands: Set<Resource> | null;
