@@ -13,13 +13,13 @@ class LoginExtent extends Extent {
 
         // tag::login_enable_behavior[]
         this.behavior()
-            .demands(this.email, this.password)
+            .dependsOn(this.email, this.password)
             .runs(() => {
                 const email = this.email.value;
                 const password = this.password.value;
                 const hasPassword = password.length > 0;
                 const loginEnabled = this.validEmailAddress(email) && hasPassword;
-                this.sideEffect(() => {
+                this.effect(() => {
                     this.enableLoginButton(loginEnabled);
                 });
             });
@@ -34,7 +34,7 @@ class LoginExtent extends Extent {
         this.emailValid = this.state(false);
         this.behavior()
             .supplies(this.emailValid)
-            .demands(this.email)
+            .dependsOn(this.email)
             .runs(() => {
                 const email = this.email.value;
                 const emailValid = this.validEmailAddress(email);
@@ -45,7 +45,7 @@ class LoginExtent extends Extent {
         this.passwordValid = this.state(false);
         this.behavior()
             .supplies(this.passwordValid)
-            .demands(this.password)
+            .dependsOn(this.password)
             .runs(() => {
                 const password = this.password.value;
                 const passwordValid = password.length > 0;
@@ -56,23 +56,23 @@ class LoginExtent extends Extent {
         this.loginEnabled = this.state(false);
         this.behavior()
             .supplies(this.loginEnabled)
-            .demands(this.emailValid, this.passwordValid, this.loggingIn)
+            .dependsOn(this.emailValid, this.passwordValid, this.loggingIn)
             .runs(() => {
                 const enabled = this.emailValid.value && this.passwordValid.value && !this.loggingIn.value;
                 this.loginEnabled.update(enabled);
-                this.sideEffect(() => {
+                this.effect(() => {
                     this.enableLoginButton(this.loginEnabled.value);
                 });
             });
         // end::login_complete_enable[]
 
         // tag::login_complete_login[]
-        this.loginClick = this.moment();
-        this.returnKey = this.moment();
-        this.loginComplete = this.moment();
+        this.loginClick = this.event();
+        this.returnKey = this.event();
+        this.loginComplete = this.event();
         this.behavior()
             .supplies(this.loggingIn)
-            .demands(this.loginClick, this.returnKey, this.loginComplete)
+            .dependsOn(this.loginClick, this.returnKey, this.loginComplete)
             .runs(() => {
                 if ((this.loginClick.justUpdated || this.returnKey.justUpdated) &&
                     this.loginEnabled.traceValue) {
@@ -86,7 +86,7 @@ class LoginExtent extends Extent {
                 }
 
                 if (this.loggingIn.justUpdatedTo(true)) {
-                    this.sideEffect(() => {
+                    this.effect(() => {
                         this.doLogin(this.email.value, this.password.value, (success) => {
                             this.action(() => {
                                 this.loginComplete.update(success);
@@ -104,7 +104,7 @@ class LoginExtent extends Extent {
         // this has an example of requireSync
         this.behavior()
             .supplies(this.loggingIn)
-            .demands(this.loginClick, this.returnKey, this.loginComplete)
+            .dependsOn(this.loginClick, this.returnKey, this.loginComplete)
             .runs(() => {
                 if ((this.loginClick.justUpdated || this.returnKey.justUpdated) &&
                     this.loginEnabled.traced.value) {
@@ -119,7 +119,7 @@ class LoginExtent extends Extent {
 
                 if (this.loggingIn.justUpdatedTo(true)) {
                     // tag::login_complete_loginalt[]
-                    this.sideEffect(() => {
+                    this.effect(() => {
                         this.doLogin(this.email.value, this.password.value, (success) => {
                             this.actionAsync('login call returned', () => {
                                 this.loginComplete.update(success);
@@ -136,7 +136,7 @@ class LoginExtent extends Extent {
         // tag::login_intro_short1[]
         this.behavior()
             .supplies(this.loginEnabled)
-            .demands(this.email, this.password)
+            .dependsOn(this.email, this.password)
             .runs(() => {
                 const emailValid = this.validEmailAddress(this.email.value);
                 const passwordValid = this.password.value.length > 0;
@@ -149,7 +149,7 @@ class LoginExtent extends Extent {
         // tag::login_intro_short2[]
         this.behavior()
             .supplies(this.loggingIn)
-            .demands(this.loginClick)
+            .dependsOn(this.loginClick)
             .runs(() => {
                 if (this.loginClick.justUpdated && !this.loggingIn.value) {
                     this.loggingIn.update(true);
@@ -158,7 +158,7 @@ class LoginExtent extends Extent {
 
         this.behavior()
             .supplies(this.loginEnabled)
-            .demands(this.email, this.password, this.loggingIn)
+            .dependsOn(this.email, this.password, this.loggingIn)
             .runs(() => {
                 const emailValid = this.validEmailAddress(this.email.value);
                 const passwordValid = this.password.value.length > 0;
@@ -178,14 +178,14 @@ class LoginExtent extends Extent {
         // tag::login_intro_sideeffect[]
         this.behavior()
             .supplies(this.loginEnabled)
-            .demands(this.email, this.password, this.loggingIn)
+            .dependsOn(this.email, this.password, this.loggingIn)
             .runs(() => {
                 const emailValid = this.validEmailAddress(this.email.value);
                 const passwordValid = this.password.value.length > 0;
                 const enabled = emailValid && passwordValid & !this.loggingIn.value;
                 this.loginEnabled.update(enabled);
 
-                this.sideEffect(() => {
+                this.effect(() => {
                     this.loginButton.enabled = this.loginEnabled.value;
                 });
             })
@@ -203,22 +203,22 @@ class LoginExtent extends Extent {
         this.loginEnabled = this.state(this);
         this.behavior()
             .supplies(this.loginEnabled)
-            .demands(this.email, this.password, this.loggingIn)
+            .dependsOn(this.email, this.password, this.loggingIn)
             .runs(() => {
                 const emailValid = this.validEmailAddress(this.email.value);
                 const passwordValid = this.password.value.length > 0;
                 const enabled = emailValid && passwordValid && !this.loggingIn.value;
                 this.loginEnabled.update(enabled);
-                this.sideEffect(() => {
+                this.effect(() => {
                     this.enableLoginButton(this.loginEnabled.value);
                 });
             });
 
-        this.loginClick = this.moment();
-        this.loginComplete = this.moment();
+        this.loginClick = this.event();
+        this.loginComplete = this.event();
         this.behavior()
             .supplies(this.loggingIn)
-            .demands(this.loginClick, this.loginComplete)
+            .dependsOn(this.loginClick, this.loginComplete)
             .runs(() => {
                 if (this.loginClick.justUpdated &&
                     this.loginEnabled.traceValue) {
@@ -232,7 +232,7 @@ class LoginExtent extends Extent {
                 }
 
                 if (this.loggingIn.justUpdatedTo(true)) {
-                    this.sideEffect(() => {
+                    this.effect(() => {
                         this.doLogin(this.email.value, this.password.value, (success) => {
                             this.actionAsync(() => {
                                 this.loginComplete.update(success);

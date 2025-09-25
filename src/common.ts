@@ -34,10 +34,10 @@ export enum LinkType {
     order,
 }
 
-export class ActionMoment {
+export class Moment {
     sequence: number;
     timestamp: Date;
-    static readonly initialEvent: ActionMoment = new ActionMoment(0, new Date(0));
+    static readonly initialEvent: Moment = new Moment(0, new Date(0));
 
     constructor(sequence: number, timestamp: Date) {
         this.sequence = sequence;
@@ -45,11 +45,6 @@ export class ActionMoment {
     }
 }
 
-/**
- * @deprecated Legacy name. Use ActionMoment instead.
- * This alias will be removed in a future version.
- */
-export type GraphEvent = ActionMoment;
 
 export interface Transient {
     clear(): void;

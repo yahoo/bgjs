@@ -6,8 +6,8 @@
 import {BufferedPriorityQueue} from "./bufferedqueue.js";
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
-import {Demandable, LinkType, Signal} from "./resource.js";
-import {DateProvider, ActionMoment, OrderingState, Subscription, Transient} from "./common";
+import {Dependable, LinkType, Signal} from "./resource.js";
+import {DateProvider, Moment, OrderingState, Subscription, Transient} from "./common";
 
 interface StateInternal<T> {
     _updateForce(newValue: T): void;
@@ -35,14 +35,14 @@ const DefaultDateProvider = {
 
 export class Graph {
     dateProvider: DateProvider = DefaultDateProvider;
-    currentEvent: ActionMoment | null = null;
-    lastEvent: ActionMoment;
+    currentMoment: Moment | null = null;
+    lastMoment: Moment;
     activatedBehaviors: BufferedPriorityQueue<Behavior> = new BufferedPriorityQueue();
     currentBehavior: Behavior | null = null;
     effects: SideEffect[] = [];
     actions: Action[] = [];
     untrackedBehaviors: Behavior[] = [];
-    modifiedDemandBehaviors: Behavior[] = [];
+    modifiedDependencyBehaviors: Behavior[] = [];
     modifiedSupplyBehaviors: Behavior[] = [];
     updatedTransients: Transient[] = [];
     needsOrdering: Behavior[] = [];
@@ -53,7 +53,7 @@ export class Graph {
     justUpdatedCallbacks: Set<Subscription> = new Set();
 
     constructor() {
-       this.lastEvent = ActionMoment.initialEvent;
+       this.lastMoment = Moment.initialEvent;
     }
 
     action(block: () => void, debugName?: string) {
@@ -82,7 +82,7 @@ export class Graph {
                 }
                 action.resolve = resolve;
                 this.actions.push(action);
-                if (this.currentEvent == null) {
+                if (this.currentMoment == null) {
                     this.eventLoop();
                 }
             } catch (e) {
@@ -98,12 +98,12 @@ export class Graph {
             try {
                 if (this.activatedBehaviors.length > 0 ||
                     this.untrackedBehaviors.length > 0 ||
-                    this.modifiedDemandBehaviors.length > 0 ||
+                    this.modifiedDependencyBehaviors.length > 0 ||
                     this.modifiedSupplyBehaviors.length > 0 ||
                     this.needsOrdering.length > 0) {
 
                     this.actionLoopState!.phase = ActionLoopPhase.updates;
-                    let sequence = this.currentEvent!.sequence;
+                    let sequence = this.currentMoment!.sequence;
                     this.addUntrackedBehaviors();
                     this.addUntrackedSupplies();
                     this.addUntrackedDemands(sequence);
@@ -141,21 +141,21 @@ export class Graph {
                     continue;
                 }
 
-                if (this.currentEvent) {
+                if (this.currentMoment) {
                     if (this.actionLoopState!.action.resolve != undefined) {
                         this.actionLoopState!.action.resolve(undefined);
                     }
                     this.clearTransients();
-                    this.lastEvent = this.currentEvent!;
-                    this.currentEvent = null;
+                    this.lastMoment = this.currentMoment!;
+                    this.currentMoment = null;
                     this.actionLoopState = null;
                     this.currentBehavior = null;
                 }
 
                 let action = this.actions.shift();
                 if (action) {
-                    let newEvent = new ActionMoment(this.lastEvent.sequence + 1, this.dateProvider.now());
-                    this.currentEvent = newEvent;
+                    let newEvent = new Moment(this.lastMoment.sequence + 1, this.dateProvider.now());
+                    this.currentMoment = newEvent;
                     this.actionLoopState = new ActionLoopState(action);
                     this.actionLoopState.phase = ActionLoopPhase.action;
                     action.block(action.extent);
@@ -163,7 +163,7 @@ export class Graph {
                 }
 
             } catch (error) {
-                this.currentEvent = null;
+                this.currentMoment = null;
                 this.actionLoopState = null;
                 this.actions.length = 0;
                 this.effects.length = 0;
@@ -171,7 +171,7 @@ export class Graph {
                 this.activatedBehaviors.clear();
                 this.justUpdatedCallbacks.clear();
                 this.clearTransients();
-                this.modifiedDemandBehaviors.length = 0;
+                this.modifiedDependencyBehaviors.length = 0;
                 this.modifiedSupplyBehaviors.length = 0;
                 this.untrackedBehaviors.length = 0;
                 this.extentsAdded.length = 0;
@@ -255,14 +255,14 @@ export class Graph {
     }
 
     resourceTouched(resource: Signal) {
-        if (this.currentEvent != null) {
+        if (this.currentMoment != null) {
             if (this.actionLoopState != null && this.actionLoopState.phase == ActionLoopPhase.action) {
                 this.actionLoopState.actionUpdates.push(resource);
             }
             for (let subsequent of resource.subsequents) {
                 let isOrderingDemand = subsequent.orderingDemands != null && subsequent.orderingDemands.has(resource);
                 if (!isOrderingDemand) {
-                    this.activateBehavior(subsequent, this.currentEvent.sequence);
+                    this.activateBehavior(subsequent, this.currentMoment.sequence);
                 }
             }
         }
@@ -334,20 +334,12 @@ export class Graph {
         this.justUpdatedCallbacks.clear();
     }
 
-    sideEffect(block: () => void, debugName?: string) {
+    effect(block: () => void, debugName?: string) {
         this.sideEffectHelper({debugName: debugName, block: block, behavior: null, extent: null});
     }
 
-    /**
-     * @deprecated Temporary alias during terminology migration. sideEffect will be renamed to effect.
-     * Use effect instead of sideEffect in new code.
-     */
-    effect(block: () => void, debugName?: string) {
-        this.sideEffect(block, debugName);
-    }
-
     sideEffectHelper(sideEffect: SideEffect) {
-        if (this.currentEvent == null) {
+        if (this.currentMoment == null) {
             let err: any = new Error("Effects can only be added during an event.");
             throw err;
         } else if (this.actionLoopState!.phase == ActionLoopPhase.sideEffects) {
@@ -360,8 +352,8 @@ export class Graph {
 
     debugHere(): string {
         let text = ""
-        if (this.currentEvent != null) {
-            text = "Current Event: " + this.currentEvent.sequence + "\n";
+        if (this.currentMoment != null) {
+            text = "Current Moment: " + this.currentMoment.sequence + "\n";
             text = text + "Action Updates:\n";
             this.actionLoopState?.actionUpdates.forEach(item => {
                 text = text + " " + item.toString() + "\n";
@@ -379,7 +371,7 @@ export class Graph {
     private addUntrackedBehaviors() {
         if (this.untrackedBehaviors.length > 0) {
             for (let behavior of this.untrackedBehaviors) {
-                this.modifiedDemandBehaviors.push(behavior);
+                this.modifiedDependencyBehaviors.push(behavior);
                 this.modifiedSupplyBehaviors.push(behavior);
             }
             this.untrackedBehaviors = [];
@@ -433,14 +425,14 @@ export class Graph {
     }
 
     private addUntrackedDemands(sequence: number) {
-        if (this.modifiedDemandBehaviors.length > 0) {
-            for (let behavior of this.modifiedDemandBehaviors) {
+        if (this.modifiedDependencyBehaviors.length > 0) {
+            for (let behavior of this.modifiedDependencyBehaviors) {
                 if (behavior.untrackedDemands != null) {
                     for (let demand of behavior.untrackedDemands) {
-                        if (this.validateLifetimes && !behavior.extent.hasCompatibleLifetime(demand.resource.extent)) {
+                        if (this.validateLifetimes && !behavior.extent.hasCompatibleLifetime(demand.signal.extent)) {
                             let err: any = new Error("Static demands can only be with extents with the unified or parent lifetimes.");
                             err.currentBehavior = behavior;
-                            err.demand = demand.resource;
+                            err.demand = demand.signal;
                             throw err;
                         }
                     }
@@ -450,7 +442,7 @@ export class Graph {
                 let removedDemands: Signal[] | undefined;
                 if (behavior.demands != null) {
                     for (let demand of behavior.demands) {
-                        if (!allUntrackedDemands.some(linkable => linkable.resource == demand)) {
+                        if (!allUntrackedDemands.some(linkable => linkable.signal == demand)) {
                             if (removedDemands == undefined) {
                                 removedDemands = [];
                             }
@@ -461,7 +453,7 @@ export class Graph {
 
                 let addedDemands: Signal[] | undefined;
                 for (let linkableDemand of allUntrackedDemands) {
-                    let untrackedDemand = linkableDemand.resource;
+                    let untrackedDemand = linkableDemand.signal;
                     if (untrackedDemand.extent.addedToGraphWhen == null) {
                         let err: any = new Error("All demands must be added to the graph.");
                         err.currentBehavior = behavior;
@@ -507,12 +499,12 @@ export class Graph {
                     if (newDemands == null) {
                         newDemands = new Set();
                     }
-                    newDemands.add(linkable.resource);
+                    newDemands.add(linkable.signal);
                     if (linkable.type == LinkType.order) {
                         if (orderingDemands == null) {
                             orderingDemands = new Set();
                         }
-                        orderingDemands.add(linkable.resource);
+                        orderingDemands.add(linkable.signal);
                     }
                 }
                 behavior.demands = newDemands;
@@ -530,7 +522,7 @@ export class Graph {
 
 
             }
-            this.modifiedDemandBehaviors.length = 0;
+            this.modifiedDependencyBehaviors.length = 0;
         }
     }
 
@@ -641,18 +633,18 @@ export class Graph {
         this.untrackedBehaviors.push(behavior)
     }
 
-    updateDemands(behavior: Behavior, newDemands: Demandable[] | null) {
+    updateDependencies(behavior: Behavior, newDependencies: Dependable[] | null) {
         if (behavior.extent.addedToGraphWhen == null) {
             let err: any = new Error("Behavior must belong to graph before updating demands.");
             err.behavior = behavior;
             throw err;
-        } else if (this.currentEvent == null) {
-            let err: any = new Error("Demands can only be updated during an event.");
+        } else if (this.currentMoment == null) {
+            let err: any = new Error("Dependencies can only be updated during an action.");
             err.behavior = behavior;
             throw err;
         }
-        behavior.untrackedDynamicDemands = newDemands;
-        this.modifiedDemandBehaviors.push(behavior);
+        behavior.untrackedDynamicDemands = newDependencies;
+        this.modifiedDependencyBehaviors.push(behavior);
     }
 
     updateSupplies(behavior: Behavior, newSupplies: Signal[] | null) {
@@ -660,7 +652,7 @@ export class Graph {
             let err: any = new Error("Behavior must belong to graph before updating supplies.");
             err.behavior = behavior;
             throw err;
-        } else if (this.currentEvent == null) {
+        } else if (this.currentMoment == null) {
             let err: any = new Error("Supplies can only be updated during an event.");
             err.behavior = behavior;
             throw err;
@@ -715,7 +707,7 @@ export class Graph {
             err.graph = this;
             throw err;
         }
-        if (this.currentEvent == null) {
+        if (this.currentMoment == null) {
             let err: any = new Error("Extents can only be added during an event.");
             err.extent = extent;
             throw err;
@@ -725,7 +717,7 @@ export class Graph {
             if (extent.lifetime != null) {
                 if (extent.lifetime.addedToGraphWhen == null) {
                     // first extent in lifetime being added
-                    extent.lifetime.addedToGraphWhen = this.currentEvent.sequence;
+                    extent.lifetime.addedToGraphWhen = this.currentMoment.sequence;
                 }
                 if (extent.lifetime.parent != null) {
                     if (extent.lifetime.parent.addedToGraphWhen == null) {
@@ -737,7 +729,7 @@ export class Graph {
             }
         }
 
-        extent.addedToGraphWhen = this.currentEvent.sequence;
+        extent.addedToGraphWhen = this.currentMoment.sequence;
         this.extentsAdded.push(extent);
         // this casting below is a hack to get at the private method so we can skip integrity checks which
         // allow us to update addedToGraph from inside whatever behavior or action it is added
@@ -748,14 +740,14 @@ export class Graph {
     }
 
     removeExtent(extent: Extent) {
-        if (this.currentEvent == null) {
+        if (this.currentMoment == null) {
             let err: any = new Error("Extents can only be removed during an event.");
             err.extent = extent;
             throw err;
         } else {
             this.extentsRemoved.push(extent);
             for (let behavior of extent.behaviors) {
-                this.removeBehavior(behavior, this.currentEvent.sequence);
+                this.removeBehavior(behavior, this.currentMoment.sequence);
             }
             extent.unsubscribeAll();
             extent.addedToGraphWhen = null;

@@ -3,7 +3,7 @@
 //
 
 
-import {Behavior, Extent, Graph, ActionMoment, Moment, EventSignal, Resource, State} from '../index.js';
+import {Behavior, Extent, Graph, Moment, Event, State, Signal} from '../index.js';
 
 let g: Graph;
 let setupExt: Extent;
@@ -50,7 +50,7 @@ describe('State Resource', () => {
         sr1.updateWithAction(2);
 
         expect(sr1.value).toBe(2);
-        expect(sr1.event).toBe(g.lastEvent);
+        expect(sr1.event).toBe(g.lastMoment);
     });
 
     test('filters duplicates', () => {
@@ -63,7 +63,7 @@ describe('State Resource', () => {
         sr1.updateWithAction(1);
 
         // |> Then update doesn't happen
-        expect(sr1.event).not.toBe(g.lastEvent);
+        expect(sr1.event).not.toBe(g.lastMoment);
         expect(sr1.event).toBe(entered);
     });
 
@@ -78,7 +78,7 @@ describe('State Resource', () => {
         sr1.updateWithAction(false);
 
         // |> Then the update does happen
-        expect(sr1.event).toBe(g.lastEvent);
+        expect(sr1.event).toBe(g.lastMoment);
         expect(sr1.event).not.toBe(entered);
     });
 
@@ -94,7 +94,7 @@ describe('State Resource', () => {
         })
 
         // |> Then update does happen
-        expect(sr1.event).toBe(g.lastEvent);
+        expect(sr1.event).toBe(g.lastMoment);
     });
 
     test('can be a nullable state', () => {
@@ -136,10 +136,10 @@ describe('State Resource', () => {
         let sr1 = ext.state<number>(0, 'sr1');
         let sr2 = ext.state<number>(0, 'sr2');
         let ran = false;
-        ext.behavior().demands(sr1).supplies(sr2).runs((extent) => {
+        ext.behavior().dependsOn(sr1).supplies(sr2).runs((extent) => {
             sr2.update(1);
         });
-        ext.behavior().demands(sr2).runs((extent) => {
+        ext.behavior().dependsOn(sr2).runs((extent) => {
             ran = true;
         });
         ext.addToGraphWithAction();
@@ -158,7 +158,7 @@ describe('State Resource', () => {
         let changedTo = false;
         let changedFrom = false;
         let changedToFrom = false;
-        ext.behavior().demands(sr1).runs((extent) => {
+        ext.behavior().dependsOn(sr1).runs((extent) => {
             changed = sr1.justUpdated;
             changedTo = sr1.justUpdatedTo(1);
             changedFrom = sr1.justUpdatedFrom(0);
@@ -182,11 +182,11 @@ describe('State Resource', () => {
     test('trace tracks before and after values', () => {
         // |> Given a behavior that updates a value
         let sr1 = ext.state<number>(0, 'sr1');
-        let mr1 = ext.moment('mr1');
+        let mr1 = ext.event('mr1');
         let before: number | null = null;
         let after: number | null = null;
-        let afterEntered: ActionMoment | null = null;
-        ext.behavior().demands(mr1).supplies(sr1).runs((extent) => {
+        let afterEntered: Moment | null = null;
+        ext.behavior().dependsOn(mr1).supplies(sr1).runs((extent) => {
             before = sr1.traceValue;
             sr1.update(1);
             after = sr1.traceValue;
@@ -216,7 +216,7 @@ describe('State Resource', () => {
         g.action(() => {
             sr1.update(1);
             sr1.update(2);
-            g.sideEffect(() => {
+            g.effect(() => {
                 traceValue = sr1.traceValue;
                 traceEvent = sr1.traceEvent;
             });
@@ -224,14 +224,14 @@ describe('State Resource', () => {
 
         // |> Then trace is still the value from beginning of
         expect(traceValue).toBe(0);
-        expect(traceEvent).toBe(ActionMoment.initialEvent);
+        expect(traceEvent).toBe(Moment.initialEvent);
     });
 
     test('start state is transient after updates', () => {
         // |> Given a state resource
         let sr1 = ext.state<number>(0, 'sr1');
-        let mr1 = ext.moment('mr1');
-        ext.behavior().demands(mr1).supplies(sr1).runs((extent) => {
+        let mr1 = ext.event('mr1');
+        ext.behavior().dependsOn(mr1).supplies(sr1).runs((extent) => {
             sr1.update(1);
         });
         ext.addToGraphWithAction();
@@ -246,7 +246,7 @@ describe('State Resource', () => {
     test('can update state for non-supplied resource when adding', () => {
         let sr1 = ext.state<number>(0, 'sr1');
         let didRun = false;
-        ext.behavior().demands(sr1).runs(extent => {
+        ext.behavior().dependsOn(sr1).runs(extent => {
             didRun = true;
         });
 
@@ -264,7 +264,7 @@ describe('State Resource', () => {
         let didRunSubscriber1 = false;
         let checkDidRunSubscriber1BeforeEnd = false;
         let didRunSubscriber2 = false;
-        ext.behavior().demands(sr1).runs(ext => {
+        ext.behavior().dependsOn(sr1).runs(ext => {
             checkDidRunSubscriber1BeforeEnd = didRunSubscriber1;
         });
         let unsubscribe1 = sr1.subscribeToJustUpdated(() => {
@@ -348,10 +348,10 @@ describe('State Resource', () => {
         test('check supplied state is updated by supplier', () => {
             // |> Given a supplied state resource
             let sr1 = ext.state<number>(0, 'sr1');
-            let mr1 = new EventSignal(ext, 'mr1');
-            ext.behavior().demands(mr1).supplies(sr1).runs(extent => {
+            let mr1 = new Event(ext, 'mr1');
+            ext.behavior().dependsOn(mr1).supplies(sr1).runs(extent => {
             });
-            ext.behavior().demands(mr1).runs(extent => {
+            ext.behavior().dependsOn(mr1).runs(extent => {
                 sr1.update(1);
             });
             ext.addToGraphWithAction();
@@ -366,8 +366,8 @@ describe('State Resource', () => {
         test('check non supplied state is updated by action', () => {
             // |> Given a state resource that is not supplied
             let sr1 = ext.state<number>(0, 'sr1');
-            let mr1 = new EventSignal(ext, 'mr1');
-            ext.behavior().demands(mr1).runs(extent => {
+            let mr1 = new Event(ext, 'mr1');
+            ext.behavior().dependsOn(mr1).runs(extent => {
                 sr1.update(1);
             });
             ext.addToGraphWithAction();
@@ -389,8 +389,8 @@ describe('State Resource', () => {
 
         test('update when supplied by another behavior is an error', () => {
             let sr1 = ext.state<number>(0, 'sr1');
-            let mr1 = new EventSignal(ext, 'mr1');
-            ext.behavior().demands(mr1).runs(extent => {
+            let mr1 = new Event(ext, 'mr1');
+            ext.behavior().dependsOn(mr1).runs(extent => {
                 sr1.update(2)
             });
             ext.behavior().supplies(sr1).runs(extent => {
@@ -405,8 +405,8 @@ describe('State Resource', () => {
 
         test('unsupplied resource throws if not from action', () => {
             let sr1 = ext.state<number>(0, 'sr1');
-            let mr1 = new EventSignal(ext, 'mr1');
-            ext.behavior().demands(mr1).runs(extent => {
+            let mr1 = new Event(ext, 'mr1');
+            ext.behavior().dependsOn(mr1).runs(extent => {
                 sr1.update(2)
             });
             ext.addToGraphWithAction()
@@ -425,7 +425,7 @@ describe('State Resource', () => {
             let sr5 = ext.state(1);
 
             // |> Given resource that are supplied and demanded
-            ext.behavior().demands(sr1).supplies(sr2).runs(ext => {
+            ext.behavior().dependsOn(sr1).supplies(sr2).runs(ext => {
                 sr1.value;
                 sr1.event;
                 sr1.justUpdated;
@@ -455,17 +455,17 @@ describe('State Resource', () => {
             // that is not supplied or demanded
             let ext2 = new Extent(g);
             ext.addChildLifetime(ext2);
-            ext2.behavior().demands(sr3).runs(ext => {
+            ext2.behavior().dependsOn(sr3).runs(ext => {
                 sr2.value;
             });
 
             ext2.behavior()
-                .demands(sr4)
+                .dependsOn(sr4)
                 .runs(ext => {
                     sr2.event;
                 });
 
-            ext2.behavior().demands(sr5).runs(ext => {
+            ext2.behavior().dependsOn(sr5).runs(ext => {
                 sr2.justUpdated;
             });
             ext2.addToGraphWithAction();
@@ -496,9 +496,9 @@ describe('Moment Resource', () => {
 
     test('moment happens', () => {
         // |> Given a moment in the graph
-        let mr1 = new EventSignal(ext, 'mr1');
+        let mr1 = new Event(ext, 'mr1');
         let afterUpdate = false;
-        ext.behavior().demands(mr1).runs((extent) => {
+        ext.behavior().dependsOn(mr1).runs((extent) => {
             afterUpdate = true;
         });
         ext.addToGraphWithAction();
@@ -509,7 +509,7 @@ describe('Moment Resource', () => {
         ext.action(() => {
             beforeUpdate = mr1.justUpdated;
             mr1.update();
-            happenedEvent = ext.graph.currentEvent;
+            happenedEvent = ext.graph.currentMoment;
         });
 
         // |> Then it didn't happen
@@ -524,15 +524,15 @@ describe('Moment Resource', () => {
         expect(mr1.justUpdated).toBeFalsy();
 
         // |> And event stays the same from when it last happened
-        expect(mr1.event).toEqual(happenedEvent);
+        expect(mr1.moment).toEqual(happenedEvent);
     });
 
     test('can have data', () => {
         // Given a moment with data
-        let mr1 = new EventSignal<number>(ext, 'mr1');
+        let mr1 = new Event<number>(ext, 'mr1');
         let afterUpdate: unknown;
         let updatedToOne = false;
-        ext.behavior().demands(mr1).runs((extent) => {
+        ext.behavior().dependsOn(mr1).runs((extent) => {
             afterUpdate = mr1.value;
             updatedToOne = mr1.justUpdatedTo(1);
         });
@@ -550,9 +550,9 @@ describe('Moment Resource', () => {
     });
 
     test('non-supplied moment can happen when adding', () => {
-        let mr1 = ext.moment('mr1');
+        let mr1 = ext.event('mr1');
         let didRun = false;
-        ext.behavior().demands(mr1).runs(extent => {
+        ext.behavior().dependsOn(mr1).runs(extent => {
             didRun = true;
         });
 
@@ -566,7 +566,7 @@ describe('Moment Resource', () => {
 
     test('can subscribe to moments', () => {
         // |> Given a state resource with subscribers
-        let mr1 = ext.moment<number>();
+        let mr1 = ext.event<number>();
         let didRunSubscriber1 = false;
         let unsubscribe1 = mr1.subscribeToJustUpdated(() => {
             didRunSubscriber1 = true;
@@ -585,11 +585,11 @@ describe('Moment Resource', () => {
 
         test('check supplied moment catches wrong updater', () => {
             // |> Given a supplied state resource
-            let mr1 = ext.moment('mr1');
-            let mr2 = ext.moment('mr2');
-            ext.behavior().demands(mr1).supplies(mr2).runs(extent => {
+            let mr1 = ext.event('mr1');
+            let mr2 = ext.event('mr2');
+            ext.behavior().dependsOn(mr1).supplies(mr2).runs(extent => {
             });
-            ext.behavior().demands(mr1).runs(extent => {
+            ext.behavior().dependsOn(mr1).runs(extent => {
                 mr2.update();
             });
             ext.addToGraphWithAction();
@@ -603,11 +603,11 @@ describe('Moment Resource', () => {
 
         test('check non-supplied moment catches wrong updater', () => {
             // |> Given a measured moment resource
-            let mr1 = ext.moment('mr1');
-            let mr2 = ext.moment('mr2');
-            ext.behavior().demands(mr1).runs(extent => {
+            let mr1 = ext.event('mr1');
+            let mr2 = ext.event('mr2');
+            ext.behavior().dependsOn(mr1).runs(extent => {
             });
-            ext.behavior().demands(mr1).runs(extent => {
+            ext.behavior().dependsOn(mr1).runs(extent => {
                 mr2.update();
             });
             ext.addToGraphWithAction();
@@ -620,7 +620,7 @@ describe('Moment Resource', () => {
         });
 
         test('check moment happens outside event is an error', () => {
-            let mr1 = ext.moment('mr1');
+            let mr1 = ext.event('mr1');
             ext.addToGraphWithAction();
             expect(() => {
                 mr1.update();
@@ -628,19 +628,19 @@ describe('Moment Resource', () => {
         });
 
         test('cannot access value inside behavior if not supply or demand', () => {
-            let mr1 = ext.moment();
-            let mr2 = ext.moment();
-            let mr3 = ext.moment();
-            let mr4 = ext.moment();
-            let mr5 = ext.moment();
+            let mr1 = ext.event();
+            let mr2 = ext.event();
+            let mr3 = ext.event();
+            let mr4 = ext.event();
+            let mr5 = ext.event();
 
             // |> Given resource that are supplied and demanded
-            ext.behavior().demands(mr1).supplies(mr2).runs(ext => {
+            ext.behavior().dependsOn(mr1).supplies(mr2).runs(ext => {
                 mr1.value;
-                mr1.event;
+                mr1.moment;
                 mr1.justUpdated;
                 mr2.value;
-                mr2.event;
+                mr2.moment;
                 mr2.justUpdated;
             });
             ext.addToGraphWithAction();
@@ -652,7 +652,7 @@ describe('Moment Resource', () => {
             // |> And when they are accessed outside an event or behavior
             // |> Then it will succeed
             mr1.value;
-            mr1.event;
+            mr1.moment;
             mr1.justUpdated;
 
             // |> And when we access a non-supplied resource inside an action
@@ -665,15 +665,15 @@ describe('Moment Resource', () => {
             // that is not supplied or demanded
             let ext2 = new Extent(g);
             ext.addChildLifetime(ext2);
-            ext2.behavior().demands(mr3).runs(ext => {
+            ext2.behavior().dependsOn(mr3).runs(ext => {
                 mr2.value;
             });
 
-            ext2.behavior().demands(mr4).runs(ext => {
-                mr2.event;
+            ext2.behavior().dependsOn(mr4).runs(ext => {
+                mr2.moment;
             });
 
-            ext2.behavior().demands(mr5).runs(ext => {
+            ext2.behavior().dependsOn(mr5).runs(ext => {
                 mr2.justUpdated;
             });
             ext2.addToGraphWithAction();
@@ -704,7 +704,7 @@ describe('Moment Resource', () => {
 describe('dependencies', () => {
 
     test('a activates b', () => {
-        ext.behavior().demands(r_a).supplies(r_b).runs(extent => {
+        ext.behavior().dependsOn(r_a).supplies(r_b).runs(extent => {
             r_b.update(2 * r_a.value);
         });
         ext.addToGraphWithAction();
@@ -716,7 +716,7 @@ describe('dependencies', () => {
 
     test('behavior activated once per event', () => {
         let called = 0;
-        ext.behavior().demands(r_a, r_b).supplies(r_c).runs(extent => {
+        ext.behavior().dependsOn(r_a, r_b).supplies(r_c).runs(extent => {
             called += 1;
         });
 
@@ -731,7 +731,7 @@ describe('dependencies', () => {
     });
 
     test('duplicates are filtered out', () => {
-        let b1 = ext.behavior().demands(r_a, r_a).supplies(r_b, r_b).runs(extent => {
+        let b1 = ext.behavior().dependsOn(r_a, r_a).supplies(r_b, r_b).runs(extent => {
         });
         ext.addToGraphWithAction();
 
@@ -743,7 +743,7 @@ describe('dependencies', () => {
     test('ordering resources arent called', () => {
         // |> Given a behavior with an ordering demand
         let run = false;
-        ext.behavior().demands(r_a, r_b.order).runs(ext1 => {
+        ext.behavior().dependsOn(r_a, r_b.order).runs(ext1 => {
             run = true;
         });
         ext.addToGraphWithAction();
@@ -766,12 +766,12 @@ describe('dependencies', () => {
 
         let ext2_r1 = ext2.state<number>(0, 'ext2_r1');
 
-        parentExt.behavior().demands(parent_r).supplies(parent_r2).runs((extent: Extent) => {
+        parentExt.behavior().dependsOn(parent_r).supplies(parent_r2).runs((extent: Extent) => {
             //never invoked:-(
             parent_r2.update(parent_r.value)
         });
 
-        ext2.behavior().demands(ext2_r1).supplies(parent_r).runs((extent: Extent) => {
+        ext2.behavior().dependsOn(ext2_r1).supplies(parent_r).runs((extent: Extent) => {
             parent_r.update(ext2_r1.value)
         });
 
@@ -792,7 +792,7 @@ describe('dynamic graph changes', () => {
 
     test('can add and update in the same event', () => {
         let r_x: State<number> = ext.state(0, 'r_x');
-        ext.behavior().demands(r_a).supplies(r_x).runs(extent => {
+        ext.behavior().dependsOn(r_a).supplies(r_x).runs(extent => {
             r_x.update(r_a.value * 2);
         });
 
@@ -810,14 +810,14 @@ describe('dynamic graph changes', () => {
         // -- this is new behavior that does the work
         let ext2 = new Extent(g);
         setupExt.addChildLifetime(ext2);
-        ext2.behavior().demands(r_b).supplies(r_c).runs((extent: Extent) => {
+        ext2.behavior().dependsOn(r_b).supplies(r_c).runs((extent: Extent) => {
             if (r_b.event != null) {
                 r_c.update(r_b.value + 1);
             }
         });
 
         // -- this behavior adds the new extent on event happening
-        ext.behavior().demands(r_a).runs((extent: Extent) => {
+        ext.behavior().dependsOn(r_a).runs((extent: Extent) => {
             g.addExtent(ext2);
         });
         ext.addToGraphWithAction();
@@ -842,17 +842,17 @@ describe('dynamic graph changes', () => {
         // each one keeps track of when it ran relative to the other
         let reordering: State<null> = ext.state(null, 'reordering');
         let x_out = ext.state(0, 'x_out');
-        let x_bhv = ext.behavior().demands(r_a, reordering).supplies(x_out).runs((extent: Extent) => {
+        let x_bhv = ext.behavior().dependsOn(r_a, reordering).supplies(x_out).runs((extent: Extent) => {
             whenX = counter;
             counter = counter + 1;
         });
         let y_out = ext.state(0, 'y_out');
-        let y_bhv = ext.behavior().demands(r_a, reordering).supplies(y_out).runs((extent: Extent) => {
+        let y_bhv = ext.behavior().dependsOn(r_a, reordering).supplies(y_out).runs((extent: Extent) => {
             whenY = counter;
             counter = counter + 1;
         });
 
-        ext.behavior().demands(r_a).supplies(reordering).runs((extent: Extent) => {
+        ext.behavior().dependsOn(r_a).supplies(reordering).runs((extent: Extent) => {
             x_bhv.setDynamicDemands([y_out]);
             y_bhv.setDynamicDemands([]);
         });
@@ -875,7 +875,7 @@ describe('dynamic graph changes', () => {
     test('removed extents remove components from graph', () => {
         // given an added behavior
         let r_x = ext.state(0, 'r_x');
-        let b_a = ext.behavior().demands(r_a).supplies(r_b).runs(extent => {
+        let b_a = ext.behavior().dependsOn(r_a).supplies(r_b).runs(extent => {
             r_b.update(r_a.value + 1);
         });
         ext.addToGraphWithAction();
@@ -895,9 +895,9 @@ describe('dynamic graph changes', () => {
         // |> Given we have a behavior which has foreign and local demands
         let ext2 = new Extent(g);
         ext.addChildLifetime(ext2);
-        let demanded1 = ext.moment('demanded1');
-        let demanded2 = ext2.moment('demanded2');
-        let ext2behavior = ext2.behavior().demands(demanded1, demanded2).runs(extent => {
+        let demanded1 = ext.event('demanded1');
+        let demanded2 = ext2.event('demanded2');
+        let ext2behavior = ext2.behavior().dependsOn(demanded1, demanded2).runs(extent => {
         });
         g.action(() => {
             ext.addToGraph();
@@ -920,8 +920,8 @@ describe('dynamic graph changes', () => {
         // |> Given we have a behavior which supplies both foreign and local resources
         let ext2 = new Extent(g);
         ext.addChildLifetime(ext2);
-        let supplied1 = ext.moment('supplied1');
-        let supplied2 = ext2.moment('supplied2');
+        let supplied1 = ext.event('supplied1');
+        let supplied2 = ext2.event('supplied2');
         let ext2behavior = ext2.behavior().supplies(supplied1, supplied2).runs(extent => {
         });
         g.action(() => {
@@ -947,12 +947,12 @@ describe('dynamic graph changes', () => {
         let ext2: Extent = new Extent(g);
         ext.addChildLifetime(ext2);
         let didRun: State<boolean> = ext2.state(false, 'didRun');
-        ext2.behavior().demands(r_a, remover).supplies(didRun).runs(extent => {
+        ext2.behavior().dependsOn(r_a, remover).supplies(didRun).runs(extent => {
             if (r_a.justUpdated) {
                 didRun.update(true);
             }
         });
-        ext.behavior().demands(r_a).supplies(remover).runs(extent => {
+        ext.behavior().dependsOn(r_a).supplies(remover).runs(extent => {
             ext2.removeFromGraph();
         });
 
@@ -972,7 +972,7 @@ describe('dynamic graph changes', () => {
         // ext has resource a and process that depends on it, and then it is added
         let r_z: State<number> = ext.state(0, 'r_z');
         let r_y: State<number> = ext.state(0, 'r_y');
-        ext.behavior().demands(r_y).supplies(r_z).runs(extent => {
+        ext.behavior().dependsOn(r_y).supplies(r_z).runs(extent => {
             r_z.update(r_y.value);
         });
         ext.addToGraphWithAction();
@@ -981,7 +981,7 @@ describe('dynamic graph changes', () => {
         let ext2: Extent = new Extent(g);
         ext.addChildLifetime(ext2);
         let r_x: State<number> = ext2.state(0, 'r_x');
-        ext2.behavior().demands(r_x).supplies(r_y).runs(extent => {
+        ext2.behavior().dependsOn(r_x).supplies(r_y).runs(extent => {
             r_y.update(r_x.value);
         });
         ext2.addToGraphWithAction();
@@ -1009,7 +1009,7 @@ describe('dynamic graph changes', () => {
         let b1 = ext.behavior().runs(extent => {
             run = true;
         });
-        ext.behavior().demands(r_a).runs(extent => {
+        ext.behavior().dependsOn(r_a).runs(extent => {
             b1.setDynamicDemands([r_a]);
         });
         ext.addToGraphWithAction();
@@ -1026,12 +1026,12 @@ describe('dynamic graph changes', () => {
         // foreign extent that may not be there with nullish coalescing
 
         // |> Given a behavior with dynamic demands/supplies
-        let r1 = ext.moment();
-        let r2 = ext.moment();
-        let r3 = ext.moment();
+        let r1 = ext.event();
+        let r2 = ext.event();
+        let r3 = ext.event();
         let didRun = false;
         ext.behavior()
-            .dynamicDemands([r1], ext => {
+            .dynamicDependsOn([r1], ext => {
                 return [r2, undefined];
             })
             .dynamicSupplies([r1], ext => {
@@ -1069,7 +1069,7 @@ describe('dynamic graph changes', () => {
         // first add a behavior that demands an unsupplied resource
         let r_y: State<number> = ext.state(0, 'r_y');
         let r_x: State<number> = ext.state(0, 'r_x');
-        ext.behavior().demands(r_a, r_x).supplies(r_y).runs(extent => {
+        ext.behavior().dependsOn(r_a, r_x).supplies(r_y).runs(extent => {
             if (r_x.justUpdated) {
                 r_y.update(r_a.value);
             }
@@ -1080,7 +1080,7 @@ describe('dynamic graph changes', () => {
         // b_a behavior should be reordered to come after b_b
         let ext2: Extent = new Extent(g);
         ext.addChildLifetime(ext2);
-        let b_b = ext2.behavior().demands(r_a).runs(extent => {
+        let b_b = ext2.behavior().dependsOn(r_a).runs(extent => {
             r_x.update(r_a.value);
         });
         ext2.addToGraphWithAction();
@@ -1101,7 +1101,7 @@ describe('dynamic graph changes', () => {
 
     test('changing supplies will unsupply old resources', () => {
         // |> Given we have a resource supplied by a behavior
-        let m1 = new EventSignal(ext);
+        let m1 = new Event(ext);
         let b1 = ext.behavior().runs((extent) => {
             // do nothing
         });
@@ -1122,15 +1122,15 @@ describe('dynamic graph changes', () => {
 
     test('dynamicDemands clause updates demands', () => {
         // |> Given a behavior with dynamicDemands
-        let m1 = ext.moment();
-        let m2 = ext.moment();
-        let m3 = ext.moment();
+        let m1 = ext.event();
+        let m2 = ext.event();
+        let m3 = ext.event();
         let runCount = 0;
         let relinkBehaviorOrder = 0;
         let behaviorOrder = 0;
         ext.behavior()
-            .demands(m1)
-            .dynamicDemands([m2], ext1 => {
+            .dependsOn(m1)
+            .dynamicDependsOn([m2], ext1 => {
                 relinkBehaviorOrder = ext1.graph.currentBehavior!.order;
                 return [m3];
             })
@@ -1166,11 +1166,11 @@ describe('dynamic graph changes', () => {
 
     test('dynamicDemands clause with no static demands gets order correct', () => {
         // |> Given a behavior with dynamic demands and no static demands
-        let m1 = ext.moment();
+        let m1 = ext.event();
         let relinkingOrder: number | null = null;
         let behaviorOrder: number | null = null;
         ext.behavior()
-            .dynamicDemands([m1], ext => {
+            .dynamicDependsOn([m1], ext => {
                 relinkingOrder = ext.graph.currentBehavior!.order;
                 return [m1];
             })
@@ -1190,14 +1190,14 @@ describe('dynamic graph changes', () => {
 
     test('dynamicSupplies clause updates supplies', () => {
         // |> Given a behavior with dynamicSupplies
-        let m1 = ext.moment();
-        let m2 = ext.moment();
-        let m3 = ext.moment();
+        let m1 = ext.event();
+        let m2 = ext.event();
+        let m3 = ext.event();
 
         let relinkingBehaviorOrder = 0;
         let behaviorOrder = 0;
         ext.behavior()
-            .demands(m1)
+            .dependsOn(m1)
             .dynamicSupplies([m2], ext1 => {
                 relinkingBehaviorOrder = ext1.graph.currentBehavior!.order;
                 return [m3];
@@ -1220,7 +1220,7 @@ describe('dynamic graph changes', () => {
         // |> Then the behavior can activate and update the newly supplied resource
         g.action(() => {
             m1.update();
-            g.sideEffect(() => {
+            g.effect(() => {
                 expect(m3.justUpdated).toBeTruthy();
             });
         });
@@ -1232,10 +1232,10 @@ describe('dynamic graph changes', () => {
 
     test('setDynamicDemands retains statics', () => {
         // |> Given a behavior with static demands
-        let m1 = ext.moment();
-        let m2 = ext.moment();
+        let m1 = ext.event();
+        let m2 = ext.event();
         let run = false;
-        let b1 = ext.behavior().demands(m1).runs(ext1 => {
+        let b1 = ext.behavior().dependsOn(m1).runs(ext1 => {
             run = true;
         });
         ext.addToGraphWithAction();
@@ -1259,10 +1259,10 @@ describe('dynamic graph changes', () => {
 
     test('setDynamicSupplies retains statics', () => {
         // |> Given behavior that supplies one resource
-        let m1 = ext.moment();
-        let m2 = ext.moment();
-        let m3 = ext.moment();
-        let b1 = ext.behavior().demands(m1).supplies(m2).runs(ext1 => {
+        let m1 = ext.event();
+        let m2 = ext.event();
+        let m3 = ext.event();
+        let b1 = ext.behavior().dependsOn(m1).supplies(m2).runs(ext1 => {
             m2.update();
             m3.update();
         });
@@ -1276,7 +1276,7 @@ describe('dynamic graph changes', () => {
         // |> Then behavior updates both successfully
         g.action(() => {
             m1.update();
-            g.sideEffect(() => {
+            g.effect(() => {
                 expect(m2.justUpdated).toBeTruthy();
                 expect(m3.justUpdated).toBeTruthy();
             });
@@ -1285,10 +1285,10 @@ describe('dynamic graph changes', () => {
 
     test('updating demands on behavior that has already run will affect future events', () => {
         // |> Given a behavior that demands one resource
-        let m1 = ext.moment();
-        let m2 = ext.moment();
+        let m1 = ext.event();
+        let m2 = ext.event();
         let run = false;
-        ext.behavior().demands(m1).runs(ext1 => {
+        ext.behavior().dependsOn(m1).runs(ext1 => {
             ext1.graph.currentBehavior!.setDynamicDemands([m2]);
             run = true;
         });
@@ -1309,15 +1309,15 @@ describe('dynamic graph changes', () => {
 
     test('can relink dynamicDemands after a behavior runs', () => {
         // |> Given a behavior with subsequent relinking that demands m2
-        let m1 = ext.moment('m1');
-        let m2 = ext.moment('m2');
+        let m1 = ext.event('m1');
+        let m2 = ext.event('m2');
 
         let didRun = false;
 
         let relinkingOrder: number | null;
         let behaviorOrder: number | null;
         ext.behavior()
-            .dynamicDemands([m1, ext.addedToGraph], ext1 => {
+            .dynamicDependsOn([m1, ext.addedToGraph], ext1 => {
                 if (ext.addedToGraph.justUpdated) {
                     return [m2];
                 } else {
@@ -1357,12 +1357,12 @@ describe('dynamic graph changes', () => {
 
         // |> Given a behavior that doesn't supply anything but will dynamically afterwards
         let s1 = ext.state<number>(0);
-        let m1 = ext.moment();
+        let m1 = ext.event();
         ext.behavior()
             .dynamicSupplies([m1], () => {
                 return [s1];
             }, Extent.relinkingOrderSubsequent)
-            .demands(m1)
+            .dependsOn(m1)
             .runs(() => {
                 if (g.currentBehavior!.supplies?.has(s1)) {
                     s1.update(1);
@@ -1386,9 +1386,9 @@ describe('dynamic graph changes', () => {
     test('dynamicDemands must be in the graph', () => {
         // |> Given an extent with foreign demands that haven't been added
         let ext1 = new Extent(g);
-        let r1 = ext1.moment();
+        let r1 = ext1.event();
         let ext2 = new Extent(g);
-        ext2.behavior().dynamicDemands([ext2.addedToGraph], e => [r1]).runs(e => {
+        ext2.behavior().dynamicDependsOn([ext2.addedToGraph], e => [r1]).runs(e => {
         });
         // |> When that extent is added
         // |> Then it should raise an error
@@ -1404,7 +1404,7 @@ describe('dynamic graph changes', () => {
 
         // |> Given two behaviors with the same order.
         // and the first one is causing a graph change.
-        let r1 = ext.moment();
+        let r1 = ext.event();
         let b3: Behavior | null = null;
         let runOrder = 1;
         let firstRunOrder = 0;
@@ -1412,7 +1412,7 @@ describe('dynamic graph changes', () => {
         let resortHappened = false;
 
         ext.behavior()
-            .demands(r1)
+            .dependsOn(r1)
             .runs(ext => {
                 firstRunOrder = runOrder;
                 runOrder++;
@@ -1420,7 +1420,7 @@ describe('dynamic graph changes', () => {
             });
 
         ext.behavior()
-            .demands(r1)
+            .dependsOn(r1)
             .runs(ext => {
                 secondRunOrder = runOrder;
                 runOrder++;
@@ -1458,7 +1458,7 @@ describe('Extents', () => {
             super(graph);
             this.r1 = this.state(0);
             this.r2 = this.state(0, 'custom_r2');
-            this.b1 = this.behavior().demands(this.r1).supplies(this.r2).runs((extent: TestExtent) => {
+            this.b1 = this.behavior().dependsOn(this.r1).supplies(this.r2).runs((extent: TestExtent) => {
                 this.r2.update(this.r1.value * 2);
             });
         }
@@ -1506,7 +1506,7 @@ describe('Extents', () => {
     test('added resource is updated on adding', () => {
         let e = new Extent(g);
         let runOnAdd = false;
-        e.behavior().demands(e.addedToGraph).runs(extent => {
+        e.behavior().dependsOn(e.addedToGraph).runs(extent => {
             runOnAdd = true;
         });
         e.addToGraphWithAction();
@@ -1573,7 +1573,7 @@ describe('Extents', () => {
         ext.addChildLifetime(ext2);
 
         ext.behavior()
-            .demands(sr1)
+            .dependsOn(sr1)
             .runs(extent => {
                 ext2.removeFromGraph();
             });
@@ -1689,11 +1689,11 @@ describe('Extent Lifetimes', () => {
             // |> Given two unified lifetime extents with a foreign supply and demand
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
-            let r1 = ext1.moment();
-            let r2 = ext1.moment();
+            let r1 = ext1.event();
+            let r2 = ext1.event();
             ext2.behavior()
                 .supplies(r2)
-                .demands(r1)
+                .dependsOn(r1)
                 .runs(e => {
                 });
             ext1.unifyLifetime(ext2);
@@ -1712,9 +1712,9 @@ describe('Extent Lifetimes', () => {
             // |> Given two independent with foreign demand
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
-            let r1 = ext1.moment();
+            let r1 = ext1.event();
             ext2.behavior()
-                .demands(r1)
+                .dependsOn(r1)
                 .runs(e => {
                 });
 
@@ -1732,7 +1732,7 @@ describe('Extent Lifetimes', () => {
             // |> Given two independent extents with a foreign supply
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
-            let r1 = ext1.moment();
+            let r1 = ext1.event();
             ext2.behavior()
                 .supplies(r1)
                 .runs(e => {
@@ -1817,9 +1817,9 @@ describe('Extent Lifetimes', () => {
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
             ext1.addChildLifetime(ext2);
-            let r1 = ext1.moment();
-            let r2 = ext1.moment();
-            ext2.behavior().supplies(r2).demands(r1).runs(() => {
+            let r1 = ext1.event();
+            let r2 = ext1.event();
+            ext2.behavior().supplies(r2).dependsOn(r1).runs(() => {
             });
             ext1.addToGraphWithAction();
 
@@ -1838,8 +1838,8 @@ describe('Extent Lifetimes', () => {
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
             ext1.addChildLifetime(ext2);
-            let r1 = ext2.moment();
-            ext1.behavior().demands(r1).runs(() => {
+            let r1 = ext2.event();
+            ext1.behavior().dependsOn(r1).runs(() => {
             });
 
             // |> When they are added
@@ -1857,7 +1857,7 @@ describe('Extent Lifetimes', () => {
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
             ext1.addChildLifetime(ext2);
-            let r1 = ext2.moment();
+            let r1 = ext2.event();
             ext1.behavior().supplies(r1).runs(() => {
             });
 
@@ -1964,11 +1964,11 @@ describe('Extent Lifetimes', () => {
             let ext3 = new Extent(g);
             ext1.addChildLifetime(ext2);
             ext2.addChildLifetime(ext3);
-            let r1 = ext1.moment();
-            let r2 = ext1.moment();
+            let r1 = ext1.event();
+            let r2 = ext1.event();
 
             // |> When we link up multiple generations
-            ext3.behavior().supplies(r2).demands(r1).runs(() => {
+            ext3.behavior().supplies(r2).dependsOn(r1).runs(() => {
             });
             ext1.addToGraphWithAction();
             ext2.addToGraphWithAction();
@@ -1986,11 +1986,11 @@ describe('Extent Lifetimes', () => {
             let ext3 = new Extent(g);
             ext1.unifyLifetime(ext2);
             ext2.addChildLifetime(ext3);
-            let r1 = ext1.moment();
-            let r2 = ext1.moment();
+            let r1 = ext1.event();
+            let r2 = ext1.event();
 
             // |> When we try to link up and across
-            ext3.behavior().supplies(r2).demands(r1).runs(() => {
+            ext3.behavior().supplies(r2).dependsOn(r1).runs(() => {
             });
             g.action(() => {
                 ext1.addToGraph();
@@ -2068,9 +2068,9 @@ describe('Extent Lifetimes', () => {
             // |> Given dynamic demands across foreign relationship
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
-            let r1 = ext2.moment();
+            let r1 = ext2.event();
             ext1.behavior()
-                .dynamicDemands([ext1.addedToGraph], ext => [r1])
+                .dynamicDependsOn([ext1.addedToGraph], ext => [r1])
                 .runs(ext => {
                 });
             g.action(() => {
@@ -2089,7 +2089,7 @@ describe('Extent Lifetimes', () => {
             // |> Given dynamic supply across foreign relationship
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
-            let r1 = ext2.moment();
+            let r1 = ext2.event();
             ext1.behavior()
                 .dynamicSupplies([ext1.addedToGraph], ext => [r1])
                 .runs(ext => {
@@ -2136,11 +2136,11 @@ describe('Extent Lifetimes', () => {
             g.validateLifetimes = false;
             let ext1 = new Extent(g);
             let ext2 = new Extent(g);
-            let r1 = ext1.moment();
-            let r2 = ext1.moment();
+            let r1 = ext1.event();
+            let r2 = ext1.event();
 
             // |> When we try to link staticly across incompatible lifetimes
-            ext2.behavior().demands(r1).supplies(r2).runs(() => {
+            ext2.behavior().dependsOn(r1).supplies(r2).runs(() => {
             });
 
             // |> Then don't throw
@@ -2173,9 +2173,9 @@ describe('Graph checks', () => {
         ext.behavior().supplies(r_z).runs(extent => {
             // non cycle behavior
         });
-        ext.behavior().demands(r_w, r_z, r_y).supplies(r_x).runs(extent => {
+        ext.behavior().dependsOn(r_w, r_z, r_y).supplies(r_x).runs(extent => {
         });
-        ext.behavior().demands(r_x).supplies(r_y).runs(extent => {
+        ext.behavior().dependsOn(r_x).supplies(r_y).runs(extent => {
         });
 
         let caught = false;
@@ -2186,7 +2186,7 @@ describe('Graph checks', () => {
             // it should not include resources from non-cycle behaviors
             // and it should not include resources updated in actions
             caught = true;
-            let cycle: Resource[] = err.cycle as Resource[];
+            let cycle: Signal[] = err.cycle as Signal[];
             expect(cycle).toHaveLength(2);
             expect(cycle[0]).toEqual(r_y);
             expect(cycle[1]).toEqual(r_x);
@@ -2197,9 +2197,9 @@ describe('Graph checks', () => {
 
     test('check resource can only be supplied by one behavior', () => {
         let r_x = ext.state(0, 'r_x');
-        ext.behavior().demands(r_a).supplies(r_x).runs(extent => {
+        ext.behavior().dependsOn(r_a).supplies(r_x).runs(extent => {
         });
-        ext.behavior().demands(r_a).supplies(r_x).runs(extent => {
+        ext.behavior().dependsOn(r_a).supplies(r_x).runs(extent => {
         });
         expect(() => {
             ext.addToGraphWithAction();
@@ -2246,15 +2246,15 @@ describe('Graph checks', () => {
         ext.addToGraphWithAction();
         expect(() => {
             g.action(() => {
-                ext.sideEffect((extent) => {
+                ext.effect((extent) => {
                     g.action(() => {
                         innerAction = true;
                     });
                 }, 'action')
-                ext.sideEffect((extent) => {
+                ext.effect((extent) => {
                     throw(new Error());
                 }, 'innerEffect');
-                ext.sideEffect((extent) => {
+                ext.effect((extent) => {
                     innerEffect = true;
                 }, 'effect');
             });
@@ -2273,21 +2273,21 @@ describe('Graph checks', () => {
     });
 
     test('handled throw in behavior should clear out queued up internals', () => {
-        let r1 = ext.moment('r1');
-        let r2 = ext.moment('r2');
-        let r3 = ext.moment('r3');
+        let r1 = ext.event('r1');
+        let r2 = ext.event('r2');
+        let r3 = ext.event('r3');
         let b3: Behavior;
 
-        ext.behavior().demands(r1).supplies(r2).runs(extent => {
+        ext.behavior().dependsOn(r1).supplies(r2).runs(extent => {
             r2.update();
         });
-        ext.behavior().demands(r2).supplies(r3).runs(extent => {
+        ext.behavior().dependsOn(r2).supplies(r3).runs(extent => {
             r3.update();
             b3.setDynamicDemands([]);
             b3.setDynamicSupplies([]);
             throw(new Error());
         });
-        b3 = ext.behavior().demands(r3).runs(extent => {
+        b3 = ext.behavior().dependsOn(r3).runs(extent => {
             // do nothing
         });
         ext.addToGraphWithAction();
@@ -2297,12 +2297,12 @@ describe('Graph checks', () => {
             });
         }).toThrow();
 
-        expect(g.currentEvent).toBeNull();
+        expect(g.currentMoment).toBeNull();
         expect(g.currentBehavior).toBeNull();
         expect(g.activatedBehaviors).toHaveLength(0);
         expect(r1.justUpdated).toBeFalsy();
         expect(g.modifiedSupplyBehaviors).toHaveLength(0);
-        expect(g.modifiedDemandBehaviors).toHaveLength(0);
+        expect(g.modifiedDependencyBehaviors).toHaveLength(0);
     });
 
     test('handled error when adding extent doesn\'t leave dangling behaviors', () => {
@@ -2325,8 +2325,8 @@ describe('Graph checks', () => {
 
     test('check cannot demand a resource from an extent that has not been added to graph', () => {
         let ext3 = new Extent(g);
-        let mr1 = ext3.moment('mr1');
-        ext.behavior().demands(mr1).runs((extent) => {
+        let mr1 = ext3.event('mr1');
+        ext.behavior().dependsOn(mr1).runs((extent) => {
             // do nothing
         });
         expect(() => {
@@ -2341,8 +2341,8 @@ describe('Effects, Actions, Events', () => {
 
         let happened: boolean = false;
         // behavior a has a side effect and
-        ext.behavior().demands(r_a).supplies(r_b).runs(extent => {
-            extent.sideEffect(extent => {
+        ext.behavior().dependsOn(r_a).supplies(r_b).runs(extent => {
+            extent.effect(extent => {
                 happened = true;
             }, 'happen');
             r_b.update(1);
@@ -2350,9 +2350,9 @@ describe('Effects, Actions, Events', () => {
 
         // b depends on a
         // check that side effect didn't happen during b's run
-        ext.behavior().demands(r_b).runs(extent => {
+        ext.behavior().dependsOn(r_b).runs(extent => {
             expect(happened).toBeFalsy();
-            extent.sideEffect((extent) => {
+            extent.effect((extent) => {
                 expect(happened).toBeTruthy();
             }, 'after effect');
         });
@@ -2368,15 +2368,15 @@ describe('Effects, Actions, Events', () => {
         let counter: number = 0;
         let whenX: number = 0;
         let whenY: number = 0;
-        ext.behavior().demands(r_a).supplies(r_b).runs(extent => {
-            ext.sideEffect((extent) => {
+        ext.behavior().dependsOn(r_a).supplies(r_b).runs(extent => {
+            ext.effect((extent) => {
                 whenX = counter;
                 counter += 1;
             }, 'first');
             r_b.update(1);
         });
-        ext.behavior().demands(r_b).runs(extent => {
-            ext.sideEffect((extent) => {
+        ext.behavior().dependsOn(r_b).runs(extent => {
+            ext.effect((extent) => {
                 whenY = counter;
                 counter += 1;
             }, 'second');
@@ -2389,10 +2389,10 @@ describe('Effects, Actions, Events', () => {
     });
 
     test('transient values are cleared after effects are run', () => {
-        let r1 = ext.moment('r1');
-        ext.behavior().demands(r_a).supplies(r1).runs(extent => {
+        let r1 = ext.event('r1');
+        ext.behavior().dependsOn(r_a).supplies(r1).runs(extent => {
             r1.update();
-            extent.sideEffect((extent) => {
+            extent.effect((extent) => {
                 expect(r_a.justUpdatedTo(1)).toBeTruthy();
                 expect(r1.justUpdated).toBeTruthy();
             }, 'after');
@@ -2407,15 +2407,15 @@ describe('Effects, Actions, Events', () => {
     test('effects from first event complete before next event', () => {
         // |> Given event with 2 effects
         let effectCounter = 0;
-        let m1 = ext.moment('m1');
+        let m1 = ext.event('m1');
         let eventLoopOrder, effect2Order: number | undefined;
-        ext.behavior().demands(m1).runs((extent) => {
-            extent.sideEffect((extent) => {
+        ext.behavior().dependsOn(m1).runs((extent) => {
+            extent.effect((extent) => {
                 extent.graph.action(() => {
                     eventLoopOrder = effectCounter++;
                 });
             }, 'effect 1');
-            extent.sideEffect((extent) => {
+            extent.effect((extent) => {
                 effect2Order = effectCounter++;
             }, 'effect 2');
         });
@@ -2453,7 +2453,7 @@ describe('Effects, Actions, Events', () => {
 
         // |> When a new action is added
         ext.action(() => {
-            ext.sideEffect((extent) => {
+            ext.effect((extent) => {
                 ext.action(() => {
                     actionIsRun = counter;
                     counter = counter + 1;
@@ -2477,7 +2477,7 @@ describe('Effects, Actions, Events', () => {
 
         // |> When a new action is added asynchronously
         ext.action(() => {
-            ext.sideEffect((extent) => {
+            ext.effect((extent) => {
                 ext.actionAsync(() => {
                     actionIsRun = counter;
                     counter = counter + 1;
@@ -2496,7 +2496,7 @@ describe('Effects, Actions, Events', () => {
         let effectIsRun = false;
         ext.addToGraphWithAction();
         ext.actionAsync(() => {
-            ext.sideEffect((extent) => {
+            ext.effect((extent) => {
                 effectIsRun = true;
             }, 'side effect');
         });
@@ -2514,7 +2514,7 @@ describe('Effects, Actions, Events', () => {
         let order: number[] = [];
         let p = g.actionAsync(() => {
             order.push(1);
-            g.sideEffect(() => {
+            g.effect(() => {
                 order.push(2);
             });
         }).then(() => {
@@ -2535,7 +2535,7 @@ describe('Effects, Actions, Events', () => {
         let order: number[] = [];
         let p = ext.actionAsync((ext1) => {
             order.push(1);
-            ext1.sideEffect((ex) => {
+            ext1.effect((ex) => {
                 order.push(2);
             });
         }).then(() => {
@@ -2553,7 +2553,7 @@ describe('Effects, Actions, Events', () => {
         let firstCalled = false;
         let secondCalled = false;
         g.action(() => {
-            g.sideEffect(() => {
+            g.effect(() => {
                 Promise.all([
                     g.actionAsync(() => {
                         firstCalled = true;
@@ -2572,7 +2572,7 @@ describe('Effects, Actions, Events', () => {
 
     test('errors from async action are available', () => {
         // |> Given a behavior that supplies a resource
-        let mr1 = ext.moment();
+        let mr1 = ext.event();
         ext.behavior().supplies(mr1).runs(ext => {
 
         });
@@ -2607,7 +2607,7 @@ describe('Effects, Actions, Events', () => {
     test('effects can only be run during an event', () => {
         ext.addToGraphWithAction();
         expect(() => {
-            ext.sideEffect((extent) => {
+            ext.effect((extent) => {
                 // do nothing
             }, 'should throw');
         }).toThrow();
@@ -2615,12 +2615,12 @@ describe('Effects, Actions, Events', () => {
 
     test('actions have knowledge of changes for debugging', () => {
         // |> Given a subsequent behavior
-        let m1 = ext.moment('m1')
-        let m2 = ext.moment('m2')
-        let m3 = ext.moment('m3')
+        let m1 = ext.event('m1')
+        let m2 = ext.event('m2')
+        let m3 = ext.event('m3')
 
         let actionUpdatesDuring;
-        ext.behavior().demands(m1).supplies(m3).runs(extent => {
+        ext.behavior().dependsOn(m1).supplies(m3).runs(extent => {
             m3.update()
             actionUpdatesDuring = extent.graph.actionLoopState?.actionUpdates;
         });
@@ -2638,10 +2638,10 @@ describe('Effects, Actions, Events', () => {
     });
 
     test('actions have debugName', () => {
-        let m1 = ext.moment();
+        let m1 = ext.event();
         let s1 = ext.state<number>(1);
         let lastActionName;
-        ext.behavior().demands(ext.addedToGraph, m1, s1).runs(extent => {
+        ext.behavior().dependsOn(ext.addedToGraph, m1, s1).runs(extent => {
             lastActionName = extent.graph.actionLoopState?.action.debugName;
         });
         ext.addToGraphWithAction('added');
@@ -2680,19 +2680,19 @@ describe('Effects, Actions, Events', () => {
         expect(lastActionName).toBe('6');
     });
 
-    test('sideEffects have debugName', () => {
-        let m1 = ext.moment();
-        let m2 = ext.moment();
+    test('effects have debugName', () => {
+        let m1 = ext.event();
+        let m2 = ext.event();
         let firstSideEffectName;
         let secondSideEffectName;
-        ext.behavior().demands(m1).supplies(m2).runs(extent => {
+        ext.behavior().dependsOn(m1).supplies(m2).runs(extent => {
             m2.update();
-            extent.sideEffect(extent1 => {
+            extent.effect(extent1 => {
                 firstSideEffectName = extent.graph.actionLoopState?.currentSideEffect?.debugName;
             }, '1');
         });
-        ext.behavior().demands(m2).runs(extent => {
-            extent.sideEffect(extent1 => {
+        ext.behavior().dependsOn(m2).runs(extent => {
+            extent.effect(extent1 => {
                 secondSideEffectName = extent.graph.actionLoopState?.currentSideEffect?.debugName;
             });
         });
@@ -2705,22 +2705,22 @@ describe('Effects, Actions, Events', () => {
 
     test('can create side effects with graph object', () => {
         let valueAfter = 0;
-        let sideEffectName;
+        let effectName;
         g.action(() => {
-            g.sideEffect(() => {
+            g.effect(() => {
                 valueAfter = 1;
-                sideEffectName = g.actionLoopState?.currentSideEffect?.debugName;
-            }, 'sideEffect1');
+                effectName = g.actionLoopState?.currentSideEffect?.debugName;
+            }, 'effect1');
         });
         expect(valueAfter).toBe(1);
-        expect(sideEffectName).toBe('sideEffect1');
+        expect(effectName).toBe('effect1');
     });
 
     test('defining behavior visible inside side effect', () => {
-        let m1 = ext.moment();
+        let m1 = ext.event();
         let definingBehavior;
-        let createdBehavior = ext.behavior().demands(m1).runs(ext => {
-            ext.sideEffect(extent => {
+        let createdBehavior = ext.behavior().dependsOn(m1).runs(ext => {
+            ext.effect(extent => {
                 definingBehavior = extent.graph.actionLoopState!.currentSideEffect!.behavior;
             });
         });
@@ -2731,11 +2731,11 @@ describe('Effects, Actions, Events', () => {
         expect(definingBehavior).toBe(createdBehavior);
     });
 
-    test('action inside sideEffect has extent', () => {
-        let m1 = ext.moment();
+    test('action inside effect has extent', () => {
+        let m1 = ext.event();
         let insideExtent;
-        ext.behavior().demands(m1).runs(ext => {
-            ext.sideEffect(extent => {
+        ext.behavior().dependsOn(m1).runs(ext => {
+            ext.effect(extent => {
                 extent.action(extent1 => {
                     insideExtent = extent1;
                 });
@@ -2758,7 +2758,7 @@ describe('Effects, Actions, Events', () => {
     });
 
     test('actions directly inside behaviors are disallowed', () => {
-        ext.behavior().demands(ext.addedToGraph).runs(extent => {
+        ext.behavior().dependsOn(ext.addedToGraph).runs(extent => {
             extent.action(extent => {
                 // throws
             });
@@ -2769,11 +2769,11 @@ describe('Effects, Actions, Events', () => {
         }).toThrow();
     });
 
-    test('sideEffect in sideEffect doesnt make sense', () => {
+    test('effect in effect doesnt make sense', () => {
         expect(() => {
             g.action(() => {
-                g.sideEffect(() => {
-                    g.sideEffect(() => {
+                g.effect(() => {
+                    g.effect(() => {
                         // throws
                     });
                 });

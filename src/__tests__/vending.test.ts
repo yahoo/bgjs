@@ -3,17 +3,17 @@
 //
 
 
-import {Behavior, Extent, Graph, ActionMoment, Moment, EventSignal, State} from '../index.js';
+import {Behavior, Extent, Graph, Moment, Event, State} from '../index.js';
 
 describe('Version 1: Simple Vending Machine', () => {
 
     class VendingMachine extends Extent {
         sodasVended: number = 0;
-        buttonAction: Moment = this.moment();
+        buttonAction: Event = this.event();
         vendEffect: Behavior = this.behavior()
-            .demands(this.buttonAction)
+            .dependsOn(this.buttonAction)
             .runs((extent: VendingMachine) => {
-                extent.sideEffect((extent) => {
+                extent.effect((extent) => {
                     extent.sodasVended += 1;
                 }, 'vend');
             });
@@ -37,13 +37,13 @@ describe('Version 2: No Free Soda', () => {
         SODA_PRICE: number = 100;
         sodasVended: number = 0;
 
-        buttonAction: Moment = this.moment();
-        insertCoinsAction: Moment<number> = this.moment();
+        buttonAction: Event = this.event();
+        insertCoinsAction: Event<number> = this.event();
         coinsTotal: State<number> = this.state(0);
 
         vendEffect: Behavior = this.behavior()
             .supplies(this.coinsTotal)
-            .demands(this.buttonAction, this.insertCoinsAction)
+            .dependsOn(this.buttonAction, this.insertCoinsAction)
             .runs(extent => {
 
                 let coins = extent.coinsTotal.value;
@@ -55,7 +55,7 @@ describe('Version 2: No Free Soda', () => {
                 if (extent.buttonAction.justUpdated) {
                     if (coins >= extent.SODA_PRICE) {
                         coins -= extent.SODA_PRICE;
-                        extent.sideEffect((extent) => {
+                        extent.effect((extent) => {
                             extent.sodasVended += 1;
                         }, 'vend');
                     }
@@ -115,16 +115,16 @@ describe('Version 3: Cans', () => {
         cansDisplay: number = 0;
         coinsDisplay: number = 0;
 
-        buttonAction: Moment = this.moment();
-        insertCoinsAction: Moment<number> = this.moment();
-        restockAction: Moment<number> = this.moment();
+        buttonAction: Event = this.event();
+        insertCoinsAction: Event<number> = this.event();
+        restockAction: Event<number> = this.event();
 
         coinsTotal: State<number> = this.state(0);
         cansTotal: State<number> = this.state(0);
 
         vendEffect: Behavior = this.behavior()
             .supplies(this.coinsTotal, this.cansTotal)
-            .demands(this.buttonAction, this.insertCoinsAction, this.restockAction)
+            .dependsOn(this.buttonAction, this.insertCoinsAction, this.restockAction)
             .runs(extent => {
 
                 let coins = extent.coinsTotal.value;
@@ -140,7 +140,7 @@ describe('Version 3: Cans', () => {
                     if (coins >= extent.SODA_PRICE && cans > 0) {
                         coins -= extent.SODA_PRICE;
                         cans -= 1;
-                        extent.sideEffect((extent) => {
+                        extent.effect((extent) => {
                             extent.sodasVended += 1;
                         }, 'vend')
                     }
@@ -153,17 +153,17 @@ describe('Version 3: Cans', () => {
             super(graph);
 
             this.behavior()
-                .demands(this.coinsTotal)
+                .dependsOn(this.coinsTotal)
                 .runs(extent => {
-                    extent.sideEffect((extent) => {
+                    extent.effect((extent) => {
                         extent.coinsDisplay = extent.coinsTotal.value;
                     }, 'coin display');
                 });
 
             this.behavior()
-                .demands(this.cansTotal)
+                .dependsOn(this.cansTotal)
                 .runs(extent => {
-                    extent.sideEffect((extent) => {
+                    extent.effect((extent) => {
                         extent.cansDisplay = extent.cansTotal.value;
                     }, 'can display');
                 });
@@ -208,11 +208,11 @@ describe('Version 4: Vending State', () => {
         cansDisplay: number = 0;
         coinsDisplay: number = 0;
 
-        buttonAction: Moment = this.moment();
-        insertCoinsAction: Moment<number> = this.moment();
-        restockAction: Moment<number> = this.moment();
+        buttonAction: Event = this.event();
+        insertCoinsAction: Event<number> = this.event();
+        restockAction: Event<number> = this.event();
         vending: State<boolean> = this.state(false);
-        completeVendAction: Moment = this.moment();
+        completeVendAction: Event = this.event();
 
         coinsTotal: State<number> = this.state(0);
         cansTotal: State<number> = this.state(0);
@@ -221,24 +221,24 @@ describe('Version 4: Vending State', () => {
             super(graph);
 
             this.behavior()
-                .demands(this.coinsTotal)
+                .dependsOn(this.coinsTotal)
                 .runs(extent => {
-                    extent.sideEffect((extent) => {
+                    extent.effect((extent) => {
                         extent.coinsDisplay = extent.coinsTotal.value;
                     }, 'coin display');
                 });
 
             this.behavior()
-                .demands(this.cansTotal)
+                .dependsOn(this.cansTotal)
                 .runs(extent => {
-                    extent.sideEffect((extent) => {
+                    extent.effect((extent) => {
                         extent.cansDisplay = extent.cansTotal.value;
                     }, 'can display');
                 });
 
             this.behavior()
                 .supplies(this.coinsTotal, this.cansTotal)
-                .demands(this.completeVendAction, this.insertCoinsAction, this.restockAction)
+                .dependsOn(this.completeVendAction, this.insertCoinsAction, this.restockAction)
                 .runs(extent => {
 
                     let coins = extent.coinsTotal.value;
@@ -259,7 +259,7 @@ describe('Version 4: Vending State', () => {
 
             this.behavior()
                 .supplies(this.vending)
-                .demands(this.coinsTotal, this.cansTotal, this.buttonAction, this.completeVendAction)
+                .dependsOn(this.coinsTotal, this.cansTotal, this.buttonAction, this.completeVendAction)
                 .runs((extent) => {
 
                     let coins = extent.coinsTotal.value;
@@ -273,7 +273,7 @@ describe('Version 4: Vending State', () => {
                     } else {
                         if (extent.buttonAction.justUpdated) {
                             if (coins >= extent.SODA_PRICE && cans > 0) {
-                                extent.sideEffect((extent) => {
+                                extent.effect((extent) => {
                                     extent.sodasVended += 1;
                                 }, 'vend');
                                 extent.vending.update(true);
@@ -347,12 +347,12 @@ describe('Version 5: Jammed', () => {
         coinsReturned: number = 0;
 
         // measures
-        buttonAction: Moment = this.moment();
-        insertCoinsAction: Moment<number> = this.moment();
-        restockAction: Moment<number> = this.moment();
-        completeVendAction: Moment = this.moment();
-        timeoutAction: Moment = this.moment();
-        fixJamAction: Moment = this.moment();
+        buttonAction: Event = this.event();
+        insertCoinsAction: Event<number> = this.event();
+        restockAction: Event<number> = this.event();
+        completeVendAction: Event = this.event();
+        timeoutAction: Event = this.event();
+        fixJamAction: Event = this.event();
 
         // resources
         vending: State<boolean> = this.state(false);
@@ -364,24 +364,24 @@ describe('Version 5: Jammed', () => {
             super(graph);
 
             this.behavior()
-                .demands(this.coinsTotal)
+                .dependsOn(this.coinsTotal)
                 .runs(extent => {
-                    extent.sideEffect((extent) => {
+                    extent.effect((extent) => {
                         extent.coinsDisplay = extent.coinsTotal.value;
                     }, 'coin display');
                 });
 
             this.behavior()
-                .demands(this.cansTotal)
+                .dependsOn(this.cansTotal)
                 .runs(extent => {
-                    extent.sideEffect(() => {
+                    extent.effect(() => {
                         extent.cansDisplay = extent.cansTotal.value
                     }, 'can display');
                 });
 
             this.behavior()
                 .supplies(this.coinsTotal, this.cansTotal)
-                .demands(this.completeVendAction, this.insertCoinsAction, this.restockAction)
+                .dependsOn(this.completeVendAction, this.insertCoinsAction, this.restockAction)
                 .runs(extent => {
 
                     let coins = extent.coinsTotal.value;
@@ -390,7 +390,7 @@ describe('Version 5: Jammed', () => {
                     if (extent.insertCoinsAction.justUpdated) {
                         let inserted = extent.insertCoinsAction.value!;
                         if (extent.jammed.traceValue) {
-                            extent.sideEffect((extent) => {
+                            extent.effect((extent) => {
                                 extent.coinsReturned = inserted;
                             }, 'return coins');
                         } else {
@@ -414,7 +414,7 @@ describe('Version 5: Jammed', () => {
 
             this.behavior()
                 .supplies(this.vending)
-                .demands(this.coinsTotal, this.cansTotal, this.buttonAction, this.completeVendAction, this.jammed)
+                .dependsOn(this.coinsTotal, this.cansTotal, this.buttonAction, this.completeVendAction, this.jammed)
                 .runs(extent => {
 
                     let coins = extent.coinsTotal.value;
@@ -438,15 +438,15 @@ describe('Version 5: Jammed', () => {
                 });
 
             this.behavior()
-                .demands(this.vending)
+                .dependsOn(this.vending)
                 .runs(extent => {
                     if (extent.vending.justUpdatedTo(true)) {
-                        extent.sideEffect((extent) => {
+                        extent.effect((extent) => {
                             extent.vendTimeoutTimerRunning = true;
                             extent.sodasVended += 1;
                         }, 'vend, start timeout timer');
                     } else if (extent.vending.justUpdatedTo(false)) {
-                        extent.sideEffect((extent) => {
+                        extent.effect((extent) => {
                             extent.vendTimeoutTimerRunning = false;
                         }, 'stop, timeout timer');
                     }
@@ -454,7 +454,7 @@ describe('Version 5: Jammed', () => {
 
             this.behavior()
                 .supplies(this.jammed)
-                .demands(this.timeoutAction, this.fixJamAction)
+                .dependsOn(this.timeoutAction, this.fixJamAction)
                 .runs(extent => {
                         // if we started vending
                         if (extent.vending.traceValue && extent.timeoutAction.justUpdated) {
@@ -505,7 +505,7 @@ describe('Version 5: Jammed', () => {
         v.completeVendAction.updateWithAction();
         v.timeoutAction.updateWithAction();
         expect(v.jammed.value).toBe(false);
-        expect(v.jammed.event).toBe(ActionMoment.initialEvent); // never jams
+        expect(v.jammed.event).toBe(Moment.initialEvent); // never jams
     });
 
     test('fix jam clears the jammed state', () => {

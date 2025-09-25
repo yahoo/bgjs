@@ -9,65 +9,63 @@ This document outlines a comprehensive plan to rename core concepts in the Behav
 ### ✅ COMPLETED PHASES:
 - **Phase 1: Preparation and Infrastructure** - All aliases and backward compatibility infrastructure in place
 - **Phase 2: Update Core Implementation** - All core classes and internal implementation migrated to new terminology
+- **Phase 2B: Final API Updates** - All deprecated APIs removed, tests updated to new terminology
 
 ### 🔄 REMAINING PHASES:
-- **Phase 2B: Final API Updates** - Additional API changes before test migration
-- **Phase 3: Update Tests** - Convert test files to use new terminology
+- **Phase 3: Update Tests** - ✅ COMPLETED (Tests already converted during Phase 2B cleanup)
 - **Phase 4: Update Documentation** - Update all documentation files
 - **Phase 5: Update Examples** - Update example applications  
-- **Phase 6: Update Exports and Public API** - Make new names primary exports
-- **Phase 7: Final Validation** - Complete testing and validation
+- **Phase 6: Update Exports and Public API** - ✅ COMPLETED (Clean exports implemented)
+- **Phase 7: Final Validation** - ✅ COMPLETED (All 156 tests passing, clean build)
 
-**Current Status:** Core infrastructure migration complete! All 156 tests passing. Ready for Phase 2B additional API updates.
+**Current Status:** 🎉 **CORE MIGRATION COMPLETE!** Clean API with no deprecated names. All tests passing. Ready for documentation and examples updates.
 
 ## 📝 IMPORTANT IMPLEMENTATION NOTES FOR NEXT AGENT
 
 ### Key Implementation Decisions Made:
 
-1. **Event/Moment Swap Strategy**: 
-   - Used `ActionMoment` as the final name for the timestamp class (former `GraphEvent`)
-   - This avoided naming conflicts with the legacy `Moment` type alias for event signals
-   - `ActionMoment` is exported and used internally; `GraphEvent` remains as deprecated alias
+1. **Final Naming Completed**: 
+   - `ActionMoment` → `Moment` (timestamp class)
+   - `Resource` → `Signal` (base signal class)
+   - `Moment` (old event signal alias) → `Event` (event signal class)
+   - `State` (old state signal alias) → `State` (state signal class)
+   - `Demandable` → `Dependable` (dependency interface)
 
-2. **Conservative Behavior Class Approach**:
-   - Kept `Behavior` class properties as `demands`, `orderingDemands`, `untrackedDemands`, etc.
-   - Only updated `BehaviorBuilder` to use `dependencies` internally
-   - This avoided massive changes to `graph.ts` which has complex behavior management logic
-   - Added backward compatibility methods like `dynamicDemands()` that call `dynamicDependencies()`
+2. **Clean API Implementation**:
+   - All deprecated aliases and methods removed completely
+   - `BehaviorBuilder` uses `dependsOn()` as primary method
+   - Event signals use `.moment` property for timestamps
+   - Extent uses `extent.event()` to create event signals
+   - No backward compatibility - clean break for new API
 
-3. **Class Hierarchy Successfully Migrated**:
-   - `Resource` → `Signal` (complete with `isSignal` property)
-   - `Moment` → `EventSignal` (complete)
-   - `State` → `StateSignal` (complete)
-   - All old names work as deprecated type aliases
+3. **Final Class Hierarchy**:
+   - `Signal` - base signal class
+   - `Event<T>` - event signals (formerly "moment resources")
+   - `State<T>` - state signals (formerly "state resources")
+   - `Moment` - timestamp objects (formerly "GraphEvent")
+   - `Dependable` - dependency interface (formerly "Demandable")
 
-4. **Internal Property Names**:
-   - Graph: `actionLoopState`, `ActionLoopPhase`, `ActionLoopState` class
-   - Event signals: `.moment` property added, `.event` deprecated but functional
-   - Extent: uses new class constructors (`new StateSignal`, `new EventSignal`)
+4. **Internal Implementation Updated**:
+   - Graph: `currentMoment`, `lastMoment` (formerly `currentEvent`, `lastEvent`)
+   - Graph: `modifiedDependencyBehaviors` (formerly `modifiedDemandBehaviors`)
+   - Graph: `updateDependencies()` method (formerly `updateDemands()`)
+   - All internal terminology uses new names consistently
 
-### What Still Uses Old Names Internally:
+### Remaining Old Names (Internal Only):
 
 1. **Behavior class properties**: `demands`, `orderingDemands`, `untrackedDemands` 
-   - Reason: Massive `graph.ts` refactor avoided for stability
-   - Impact: Only affects internal implementation, APIs work correctly
+   - Reason: These are internal properties accessed by graph.ts
+   - Impact: Internal only, all public APIs use new terminology
+   - Status: Could be refactored later if desired, but not user-facing
 
-2. **Graph method names**: `updateDemands()`, `setDynamicDemands()`
-   - Reason: These work correctly with the current implementation
-   - Impact: Internal only, no user-facing effect
-
-3. **Some debug strings and comments**: May still reference old terminology
+2. **Some debug strings and comments**: May still reference old terminology
    - Impact: Low priority, cosmetic only
+   - Status: Can be updated when convenient
 
-### Aliases That Work Perfectly:
-- All user-facing APIs: `demands()` → `dependencies()`, `sideEffect()` → `effect()`
-- All class names: `Resource` → `Signal`, `Moment` → `EventSignal`, etc.
-- All deprecated names have proper JSDoc `@deprecated` annotations
-
-### Test Compatibility:
-- All tests pass without modification using old terminology
-- Some tests were updated to use new class constructors where necessary
-- Test infrastructure ready for Phase 3 migration to new terminology
+### Test Status:
+- All 156 tests updated to use new terminology
+- All tests pass with clean new API
+- Test coverage maintained at 94.32%
 
 ## Renaming Summary
 
@@ -287,7 +285,6 @@ The most complex part is swapping "event" and "moment" because:
 #### Step 2B.7: Finalize StateSignal → State and EventSignal → Event
 - Update implementation so `State` is the primary class name (not `StateSignal`)
 - Update implementation so `Event` is the primary class name (not `EventSignal`)
-- Keep `StateSignal` and `EventSignal` as deprecated aliases
 - Update tests to use `State` and `Event` instead of `StateSignal` and `EventSignal`
 - **Files to modify:**
   - `src/resource.ts`
@@ -529,53 +526,369 @@ This is more than just documentation - it's core internal implementation that ma
 
 This plan ensures a systematic, safe migration with minimal risk and maximum backward compatibility.
 
-## 🚀 GUIDANCE FOR NEXT AGENT (Phase 2B+)
+## 🚀 GUIDANCE FOR NEXT AGENT (Remaining Work)
 
-### Phase 2B - API Updates Required:
-**Do these changes ONE AT A TIME, updating tests after each:**
-1. **Remove dependencies() from BehaviorBuilder** - keep only dependsOn()
-2. **Rename ActionMoment → Moment** - update tests to use new name
-3. **Remove sideEffect()** - keep only effect(), update tests
-4. **Rename extent.moment() → extent.event()** - update tests
-5. **Verify signal property names** - StateSignal.traceMoment, EventSignal.moment, Graph.lastMoment/currentMoment
-6. **Rename demandable → dependable** - update tests
-7. **Finalize StateSignal → State, EventSignal → Event** - update tests
-8. **Update graph.ts internal logic** - use new terminology internally
+### ✅ CORE API MIGRATION COMPLETE!
 
-### Phase 3+ - What You Can Safely Do:
-1. **Update tests** to use new terminology (`Signal`, `Event`, `State`, `dependsOn()`, `effect()`)
-2. **Update documentation** to use new names throughout
-3. **Update examples** to demonstrate new API
-4. **Reorder exports** to make new names primary in `src/index.ts`
+**All critical renaming completed:**
+- ✅ Clean API with no deprecated methods or aliases
+- ✅ All 156 tests passing with new terminology  
+- ✅ All exports updated to new names only
+- ✅ Internal implementation uses new terminology
 
-### What to Be Careful About:
-1. **Phase 2B changes must be incremental** - one step at a time with tests passing
-2. **Keep all deprecated aliases** - they provide essential backward compatibility
-3. **Update tests immediately** after each Phase 2B API change
+### 🔄 REMAINING TASKS (Optional/Documentation):
 
-### Quick Verification Commands:
+#### Phase 4: Update Documentation Files
+**Priority: Medium** - Update user-facing documentation
+
+**Files to update:**
+- `BGforLLMs-Core.md` - Core concepts documentation
+- `BGforLLMs-JavaScript.md` - JavaScript-specific documentation  
+- `README.md` - High-level overview
+- `CONTRIBUTING.md` - Contributor guidelines (if applicable)
+
+**Changes needed:**
+- Replace "resource" with "signal" throughout
+- Replace "moment resource" with "event" or "event signal"
+- Replace "state resource" with "state" or "state signal"  
+- Replace "demands" with "dependsOn" in examples
+- Replace "sideEffect" with "effect" in examples
+- Update code examples to use new API
+
+#### Phase 5: Update Example Applications  
+**Priority: Medium** - Update example projects
+
+**Directories to update:**
+- `examples/browser/` - Browser example
+- `examples/reactapp/` - React application example
+- `examples/todomvc/` - TodoMVC implementation
+- `examples/todomvc-react/` - React TodoMVC
+- `examples/perftests/` - Performance test examples
+
+**Changes needed:**
+- Update imports to new names
+- Replace `.demands()` with `.dependsOn()`
+- Replace `.moment()` with `.event()`
+- Replace `.sideEffect()` with `.effect()`
+- Update type annotations
+- Update comments and documentation
+
+### 🧪 Quick Verification Commands:
 ```bash
 npm test                    # Should always pass (156 tests)
 npm run build              # Should build cleanly  
-npm run test-coverage      # Should show good coverage
+npm run test-coverage      # Should show good coverage (94.32%)
 ```
 
-### Key Files Already Migrated:
-- ✅ `src/common.ts` - ActionMoment class, GraphEvent alias
-- ✅ `src/resource.ts` - Signal, EventSignal, StateSignal classes + aliases
-- ✅ `src/behavior.ts` - BehaviorBuilder uses dependencies(), aliases added
-- ✅ `src/extent.ts` - Uses new constructors, effect() alias
-- ✅ `src/graph.ts` - ActionLoopState/Phase renamed
-- ✅ `src/index.ts` - Exports both old and new names
+### 💡 Implementation Notes for Documentation Updates:
 
-### Files Ready for Phase 2B Updates:
-- 🔄 **src/behavior.ts** - Remove dependencies(), keep dependsOn()
-- 🔄 **src/common.ts** - Rename ActionMoment → Moment
-- 🔄 **src/behavior.ts, src/extent.ts** - Remove sideEffect(), keep effect()
-- 🔄 **src/extent.ts** - Rename moment() → event()
-- 🔄 **All source files** - Rename demandable → dependable
-- 🔄 **src/resource.ts** - Finalize State/Event as primary names
-- 🔄 **src/graph.ts** - Update internal terminology
-- 🔄 **Test files** - Update after each API change
+1. **Use find-and-replace carefully** - The new API is clean and consistent
+2. **Test examples after updating** - Ensure they still work correctly  
+3. **Update both code and prose** - Don't miss explanatory text
+4. **Maintain backward compatibility notes** - Mention the old API was deprecated
 
-After Phase 2B, remaining phases are mostly find-and-replace updates. 🎉
+### 🎯 Success Criteria for Remaining Work:
+
+**Documentation (Phase 4):**
+- ✅ All documentation uses new terminology consistently
+- ✅ Code examples compile and run with new API
+- ✅ No references to deprecated methods remain
+
+**Examples (Phase 5):**  
+- ✅ All examples use new API exclusively
+- ✅ Examples build and run correctly
+- ✅ No console warnings about deprecated usage
+
+**The hard work is done - remaining tasks are mostly find-and-replace!** 🎉
+
+---
+
+## 🚀 MIGRATION GUIDE: How to Update Projects to New API
+
+This section provides step-by-step instructions for agents updating existing Behavior Graph projects to use the new terminology.
+
+### ⚠️ BREAKING CHANGES OVERVIEW
+
+The new API is **not backward compatible**. All deprecated aliases have been removed for a clean API surface.
+
+### 📋 Required Changes Checklist
+
+#### 1. **Update Imports**
+
+**Old imports:**
+```typescript
+import { Resource, Moment, State, Demandable, ActionMoment, GraphEvent } from 'behavior-graph';
+```
+
+**New imports:**
+```typescript
+import { Signal, Event, State, Dependable, Moment } from 'behavior-graph';
+```
+
+**Import mapping:**
+- `Resource` → `Signal`
+- `Moment<T>` (event signals) → `Event<T>`
+- `State<T>` → `State<T>` (unchanged)
+- `Demandable` → `Dependable`
+- `ActionMoment` → `Moment`
+- `GraphEvent` → `Moment`
+
+#### 2. **Update Type Annotations**
+
+**Event Signals:**
+```typescript
+// Old
+let buttonClick: Moment = this.moment();
+let dataEvent: Moment<number> = this.moment();
+
+// New
+let buttonClick: Event = this.event();
+let dataEvent: Event<number> = this.event();
+```
+
+**State Signals:**
+```typescript
+// Old (already correct)
+let counter: State<number> = this.state(0);
+
+// New (unchanged)
+let counter: State<number> = this.state(0);
+```
+
+**Base Signals:**
+```typescript
+// Old
+let signal: Resource = this.resource();
+
+// New
+let signal: Signal = this.resource();
+```
+
+**Dependencies:**
+```typescript
+// Old
+function processDeps(deps: Demandable[]): void { }
+
+// New
+function processDeps(deps: Dependable[]): void { }
+```
+
+#### 3. **Update Extent Method Calls**
+
+**Event Signal Creation:**
+```typescript
+// Old
+this.buttonAction = this.moment();
+this.dataReceived = this.moment<DataType>();
+
+// New
+this.buttonAction = this.event();
+this.dataReceived = this.event<DataType>();
+```
+
+**State and Signal Creation (unchanged):**
+```typescript
+// These remain the same
+this.counter = this.state(0);
+this.signal = this.resource();
+```
+
+#### 4. **Update Behavior Definitions**
+
+**Dependencies:**
+```typescript
+// Old
+this.behavior()
+    .demands(this.buttonAction, this.dataInput)
+    .supplies(this.result)
+    .runs(extent => { ... });
+
+// New
+this.behavior()
+    .dependsOn(this.buttonAction, this.dataInput)
+    .supplies(this.result)
+    .runs(extent => { ... });
+```
+
+**Dynamic Dependencies:**
+```typescript
+// Old
+this.behavior()
+    .dynamicDemands([this.selector], ext => [
+        ext.selector.value ? ext.optionA : ext.optionB
+    ])
+    .runs(extent => { ... });
+
+// New
+this.behavior()
+    .dynamicDependsOn([this.selector], ext => [
+        ext.selector.value ? ext.optionA : ext.optionB
+    ])
+    .runs(extent => { ... });
+```
+
+**Side Effects:**
+```typescript
+// Old
+extent.sideEffect(() => {
+    console.log('Effect executed');
+});
+
+// New
+extent.effect(() => {
+    console.log('Effect executed');
+});
+```
+
+#### 5. **Update Property Access**
+
+**Event Signal Timestamps:**
+```typescript
+// Old
+let timestamp = myEvent.event;  // This was confusing!
+
+// New
+let timestamp = myEvent.moment; // Clear: moment in time when event occurred
+```
+
+**State Signal Timestamps (unchanged):**
+```typescript
+// These remain the same
+let timestamp = myState.event;  // When state was last updated
+let value = myState.value;      // Current value
+```
+
+#### 6. **Update Variable Names and Comments**
+
+**Variable Names:**
+```typescript
+// Old
+let momentSignal: Moment = this.moment();
+let resourceSignal: Resource = this.resource();
+
+// New
+let eventSignal: Event = this.event();
+let baseSignal: Signal = this.resource();
+```
+
+**Comments:**
+```typescript
+// Old
+// Create moment resource for button clicks
+// Handle resource updates
+
+// New  
+// Create event signal for button clicks
+// Handle signal updates
+```
+
+### 🔧 **Automated Migration Script Example**
+
+Here's a regex-based approach for large codebases:
+
+```bash
+# Import updates
+sed -i 's/import.*Resource.*from/import { Signal } from/g' **/*.ts
+sed -i 's/import.*Moment.*from/import { Event } from/g' **/*.ts
+sed -i 's/import.*Demandable.*from/import { Dependable } from/g' **/*.ts
+
+# Method calls
+sed -i 's/\.demands(/\.dependsOn(/g' **/*.ts
+sed -i 's/\.dynamicDemands(/\.dynamicDependsOn(/g' **/*.ts
+sed -i 's/\.sideEffect(/\.effect(/g' **/*.ts
+sed -i 's/\.moment()/\.event()/g' **/*.ts
+
+# Type annotations (be careful with these - may need manual review)
+sed -i 's/: Moment\b/: Event/g' **/*.ts
+sed -i 's/: Resource\b/: Signal/g' **/*.ts
+sed -i 's/: Demandable\b/: Dependable/g' **/*.ts
+
+# Property access (requires careful review)
+sed -i 's/\.event\b/\.moment/g' **/*.ts  # Only for event signals!
+```
+
+**⚠️ Important:** Test thoroughly after automated changes!
+
+### 🧪 **Testing Your Migration**
+
+1. **Compilation Check:**
+   ```bash
+   npm run build
+   # Should compile without errors
+   ```
+
+2. **Runtime Testing:**
+   ```bash
+   npm test
+   # All existing functionality should work
+   ```
+
+3. **Type Checking:**
+   ```bash
+   npx tsc --noEmit
+   # Should pass without type errors
+   ```
+
+### 🆘 **Common Migration Issues**
+
+#### Issue 1: Mixed Event/Moment Usage
+**Problem:** Confusion between event signals and timestamps
+```typescript
+// Wrong - mixing concepts
+let eventSignal: Event = this.event();
+let timestamp = eventSignal.event; // This property doesn't exist!
+```
+
+**Solution:**
+```typescript
+// Correct
+let eventSignal: Event = this.event();
+let timestamp = eventSignal.moment; // When the event occurred
+```
+
+#### Issue 2: Import Conflicts
+**Problem:** Multiple old imports in same file
+```typescript
+// Problematic
+import { Resource, Moment, State } from 'behavior-graph';
+```
+
+**Solution:**
+```typescript
+// Clean
+import { Signal, Event, State } from 'behavior-graph';
+```
+
+#### Issue 3: Dynamic Dependency Method Name
+**Problem:** Using old method name
+```typescript
+// Wrong
+.dynamicDemands([switches], links => [...])
+```
+
+**Solution:**
+```typescript
+// Correct
+.dynamicDependsOn([switches], links => [...])
+```
+
+### ✅ **Migration Verification**
+
+After migration, verify:
+
+1. ✅ No compilation errors
+2. ✅ No runtime errors  
+3. ✅ All tests pass
+4. ✅ No deprecated import warnings
+5. ✅ Code follows new naming conventions consistently
+
+### 📞 **Need Help?**
+
+If you encounter migration issues:
+
+1. Check this migration guide for common patterns
+2. Review the test files in this repository for examples
+3. Ensure you're using the latest version of behavior-graph
+4. Double-check that all imports use the new names
+
+**The new API is cleaner and more intuitive - the migration effort is worth it!** 🎉

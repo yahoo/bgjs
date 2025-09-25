@@ -5,7 +5,7 @@
 
 import {Graph} from "./graph.js";
 import {Behavior, BehaviorBuilder} from "./behavior.js";
-import {EventSignal, Signal, StateSignal, State} from "./resource.js";
+import {Event, Signal, State} from "./resource.js";
 import {RelinkingOrder} from "./common.js";
 
 export enum ExtentRemoveStrategy {
@@ -134,7 +134,7 @@ export class Extent {
         }
         this.debugConstructorName = this.constructor.name;
         this.graph = graph;
-        this.addedToGraph = new StateSignal<boolean>(this, false);
+        this.addedToGraph = new State<boolean>(this, false);
     }
 
     debugHere(): string {
@@ -180,7 +180,7 @@ export class Extent {
     }
 
     addToGraph() {
-        if (this.graph.currentEvent != null) {
+        if (this.graph.currentMoment != null) {
             this.nameSignals();
             this.graph.addExtent(this);
         } else {
@@ -198,7 +198,7 @@ export class Extent {
 
     removeFromGraph(strategy?: ExtentRemoveStrategy) {
         let graph = this.graph;
-        if (graph.currentEvent != null) {
+        if (graph.currentMoment != null) {
             if (this.addedToGraphWhen != null) {
                 if (strategy == ExtentRemoveStrategy.extentOnly || strategy === undefined || this.lifetime === null) {
                     graph.removeExtent(this);
@@ -250,15 +250,15 @@ export class Extent {
         return new Signal(this, name);
     }
 
-    moment<T>(name?: string): EventSignal<T> {
-        return new EventSignal<T>(this, name);
+    event<T>(name?: string): Event<T> {
+        return new Event<T>(this, name);
     }
 
-    state<T>(initialState: T, name?: string): StateSignal<T> {
-        return new StateSignal<T>(this, initialState, name);
+    state<T>(initialState: T, name?: string): State<T> {
+        return new State<T>(this, initialState, name);
     }
 
-    sideEffect(block: (ext: this) => void, debugName?: string) {
+    effect(block: (ext: this) => void, debugName?: string) {
         // This requires a cast because we know the extent won't be null at runtime because this side effect
         // was created with one
         this.graph.sideEffectHelper({
@@ -267,14 +267,6 @@ export class Extent {
             extent: this,
             behavior: this.graph.currentBehavior
         });
-    }
-
-    /**
-     * @deprecated Temporary alias during terminology migration. sideEffect will be renamed to effect.
-     * Use effect instead of sideEffect in new code.
-     */
-    effect(block: (ext: this) => void, debugName?: string) {
-        this.sideEffect(block, debugName);
     }
 
     async actionAsync(action: (ext: this) => void, debugName?: string) {

@@ -9,14 +9,9 @@ export {
 
 export {
     Signal,
-    Resource,
-    EventSignal,
-    StateSignal,
     Event,
-    TempEventInternal,
-    Moment,
     State,
-    TempEvent
+    Dependable
 } from "./resource.js"
 
 export {
@@ -29,8 +24,7 @@ export {
 } from "./behavior.js"
 
 export {
-    ActionMoment,
-    GraphEvent,
+    Moment,
     RelinkingOrder,
     RelinkingTarget,
     LinkType,

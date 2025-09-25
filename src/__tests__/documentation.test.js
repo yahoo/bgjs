@@ -2,18 +2,18 @@
 //  Copyright Yahoo 2021
 //
 
-import {Behavior, Extent, Graph, GraphEvent, Moment, State} from '../index.js';
+import {Behavior, Extent, Graph, Moment, State} from '../index.js';
 
 class Extent1 extends Extent {
     constructor(graph) {
         super(graph);
 
         // tag-start: Behavior-1
-        this.moment1 = this.moment();
-        this.moment2 = this.moment();
-        this.moment3 = this.moment();
+        this.moment1 = this.event();
+        this.moment2 = this.event();
+        this.moment3 = this.event();
         this.behavior()
-            .demands(this.moment1, this.moment2)
+            .dependsOn(this.moment1, this.moment2)
             .supplies(this.moment3)
             .runs(ext => {
                 if (ext.moment1.justUpdated || ext.moment2.justUpdatedTo(false)) {
@@ -27,7 +27,7 @@ class Extent1 extends Extent {
         // the currentChild extent whenever it changes.
         this.currentChild = this.state(null);
         this.behavior()
-            .dynamicDemands([this.currentChild], ext => {
+            .dynamicDependsOn([this.currentChild], ext => {
                 return [ext.currentChild.value?.deleteButton];
             })
             .runs(ext => {
@@ -38,12 +38,12 @@ class Extent1 extends Extent {
         // tag-end: Behavior-2
 
         // tag-begin: Intro-1
-        this.increment = this.moment();
-        this.reset = this.moment();
+        this.increment = this.event();
+        this.reset = this.event();
         this.counter = this.state(0);
 
         this.behavior()
-            .demands(this.increment, this.reset)
+            .dependsOn(this.increment, this.reset)
             .supplies(this.counter)
             .runs(ext => {
                 if (ext.increment.justUpdated) {
@@ -65,11 +65,11 @@ class MyExtent extends Extent {
     constructor(graph) {
         super(graph);
 
-        this.toggleSwitch = this.moment();
+        this.toggleSwitch = this.event();
         this.currentState = this.state(false);
 
         this.behavior()
-            .demands(this.toggleSwitch)
+            .dependsOn(this.toggleSwitch)
             .supplies(this.currentState)
             .runs(ext => {
                 this.currentState.update(!this.currentState.value);
@@ -90,13 +90,13 @@ class Thermostat extends Extent {
 
         this.heatingSystem = {turnOn: function() {}}
 
-        this.upButtonPressed = this.moment()
-        this.downButtonPressed = this.moment()
+        this.upButtonPressed = this.event()
+        this.downButtonPressed = this.event()
         this.desiredTemperature = this.state(65);
 
         this.behavior()
             .supplies(this.desiredTemperature)
-            .demands(this.upButtonPressed, this.downButtonPressed)
+            .dependsOn(this.upButtonPressed, this.downButtonPressed)
             .runs(ext => {
                 if (ext.upButtonPressed.justUpdated) {
                     ext.desiredTemperature.update(ext.desiredTemperature.value + 1);
@@ -110,13 +110,13 @@ class Thermostat extends Extent {
 
         this.behavior()
             .supplies(this.heatingEquipmentOn)
-            .demands(this.desiredTemperature, this.currentTemperature)
+            .dependsOn(this.desiredTemperature, this.currentTemperature)
             .runs(ext => {
                 let heatingState = ext.currentTemperature.value != null &&
                     ext.desiredTemperature.value > ext.currentTemperature.value;
                 ext.heatingEquipmentOn.update(heatingState);
                 if (ext.heatingEquipmentOn.justUpdated) {
-                    ext.sideEffect(ext => {
+                    ext.effect(ext => {
                         ext.heatingSystem.turnOn(ext.heatingEquipmentOn.value);
                     });
                 }

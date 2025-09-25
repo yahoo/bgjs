@@ -6,19 +6,20 @@
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
 import {Graph} from "./graph.js";
-import {ActionMoment, Subscription, Transient} from "./common";
+import {Moment, Subscription, Transient} from "./common";
 
 export enum LinkType {
     reactive,
     order,
 }
 
-export interface Demandable {
-    resource: Signal,
+export interface Dependable {
+    signal: Signal,
     type: LinkType
 }
 
-export class Signal implements Demandable {
+
+export class Signal implements Dependable {
     debugName: string | null;
     isSignal: boolean = true;
     extent: Extent;
@@ -39,11 +40,11 @@ export class Signal implements Demandable {
         }
     }
 
-    get order(): Demandable {
-        return {resource: this, type: LinkType.order }
+    get order(): Dependable {
+        return {signal: this, type: LinkType.order }
     }
 
-    get resource(): Signal {
+    get signal(): Signal {
         return this;
     }
 
@@ -62,8 +63,8 @@ export class Signal implements Demandable {
     assertValidUpdater() {
         let graph = this.graph;
         let currentBehavior = graph.currentBehavior;
-        let currentEvent = graph.currentEvent;
-        if (currentBehavior == null && currentEvent == null) {
+        let currentMoment = graph.currentMoment;
+        if (currentBehavior == null && currentMoment == null) {
             let err: any = new Error("Resource must be updated inside a behavior or action.");
             err.resource = this;
             throw err;
@@ -122,10 +123,10 @@ export class Signal implements Demandable {
     }
 }
 
-export class EventSignal<T = undefined> extends Signal implements Transient {
+export class Event<T = undefined> extends Signal implements Transient {
     private _happened: boolean = false;
     private _happenedValue: T | undefined = undefined;
-    private _happenedWhen: ActionMoment | null = null;
+    private _happenedWhen: Moment | null = null;
 
     get justUpdated(): boolean {
         this.assertValidAccessor();
@@ -137,18 +138,11 @@ export class EventSignal<T = undefined> extends Signal implements Transient {
         return this._happenedValue;
     }
 
-    get moment(): ActionMoment | null {
+    get moment(): Moment | null {
         this.assertValidAccessor();
         return this._happenedWhen;
     }
 
-    /**
-     * @deprecated Use moment instead. This will be removed in a future version.
-     */
-    get event(): ActionMoment | null {
-        this.assertValidAccessor();
-        return this._happenedWhen;
-    }
 
     toString() {
         let name = "EventSignal";
@@ -179,7 +173,7 @@ export class EventSignal<T = undefined> extends Signal implements Transient {
         this.assertValidUpdater();
         this._happened = true;
         this._happenedValue = value;
-        this._happenedWhen = this.graph.currentEvent;
+        this._happenedWhen = this.graph.currentMoment;
         this.notifyJustUpdatedSubscribers();
         this.graph.resourceTouched(this);
         this.graph.trackTransient(this);
@@ -192,44 +186,19 @@ export class EventSignal<T = undefined> extends Signal implements Transient {
 
 }
 
-/**
- * @deprecated Legacy name. Use EventSignal instead.
- * This alias will be removed in a future version.
- */
-export type Event<T = undefined> = EventSignal<T>;
 
-/**
- * @deprecated Legacy name for Event signals. Use EventSignal instead.
- * This alias will be removed in a future version.
- */
-export type TempEventInternal<T = undefined> = EventSignal<T>;
 
-/**
- * @deprecated Legacy alias for Event signals. Use EventSignal instead.
- * Note: This conflicts with the new ActionMoment class (timestamps), but kept for backwards compatibility.
- */
-export type Moment<T = undefined> = EventSignal<T>;
 
-/**
- * @deprecated Temporary alias during terminology migration. Use EventSignal instead.
- * This will be renamed to EventSignal in a future version.
- */
-export type TempEvent<T = undefined> = EventSignal<T>;
 
-/**
- * @deprecated Legacy name. Use Signal instead.
- * This alias will be removed in a future version.
- */
-export type Resource = Signal;
 
-export type StateHistory<T> = { value: T, event: ActionMoment };
-export class StateSignal<T> extends Signal implements Transient {
+export type StateHistory<T> = { value: T, moment: Moment };
+export class State<T> extends Signal implements Transient {
     private currentState: StateHistory<T>;
     private previousState: StateHistory<T> | null = null;
 
     constructor(extent: Extent, initialState: T, name?: string) {
         super(extent, name);
-        this.currentState = { value: initialState, event: ActionMoment.initialEvent };
+        this.currentState = { value: initialState, moment: Moment.initialEvent };
     }
 
     toString() {
@@ -238,7 +207,7 @@ export class StateSignal<T> extends Signal implements Transient {
             name = (this.debugName + "(ss)" );
         }
         name = name + "=" + this.currentState.value;
-        name = name + " : " + this.currentState.event.sequence;
+        name = name + " : " + this.currentState.moment.sequence;
         return name;
     }
 
@@ -262,12 +231,12 @@ export class StateSignal<T> extends Signal implements Transient {
     }
 
     private _updateForce(newValue: T) {
-        if (this.graph.currentEvent != null && this.currentState.event.sequence < this.graph.currentEvent?.sequence) {
+        if (this.graph.currentMoment != null && this.currentState.moment.sequence < this.graph.currentMoment?.sequence) {
             // captures trace as the value before any updates
             this.previousState = this.currentState;
         }
 
-        this.currentState = { value: newValue, event: this.graph.currentEvent! };
+        this.currentState = { value: newValue, moment: this.graph.currentMoment! };
 
         this.notifyJustUpdatedSubscribers();
 
@@ -284,13 +253,13 @@ export class StateSignal<T> extends Signal implements Transient {
         return this.currentState.value;
     }
 
-    get event(): ActionMoment {
+    get event(): Moment {
         this.assertValidAccessor();
-        return this.currentState.event;
+        return this.currentState.moment;
     }
 
     private get trace(): StateHistory<T> {
-        if (this.currentState.event === this.graph.currentEvent) {
+        if (this.currentState.moment === this.graph.currentMoment) {
             return this.previousState!;
         } else {
             return this.currentState;
@@ -301,13 +270,13 @@ export class StateSignal<T> extends Signal implements Transient {
         return this.trace.value;
     }
 
-    get traceEvent(): ActionMoment {
-        return this.trace.event;
+    get traceEvent(): Moment {
+        return this.trace.moment;
     }
 
     get justUpdated(): boolean {
         this.assertValidAccessor();
-        return this.currentState.event === this.graph.currentEvent
+        return this.currentState.moment === this.graph.currentMoment
     }
 
     justUpdatedTo(toState: T): boolean {
@@ -323,9 +292,4 @@ export class StateSignal<T> extends Signal implements Transient {
     }
 }
 
-/**
- * @deprecated Legacy name. Use StateSignal instead.
- * This alias will be removed in a future version.
- */
-export type State<T> = StateSignal<T>;
 

@@ -5,7 +5,7 @@
 
 import {Orderable} from "./bufferedqueue.js";
 import {Extent} from "./extent.js";
-import {Signal, Demandable} from "./resource.js";
+import {Signal, Dependable} from "./resource.js";
 import {OrderingState, RelinkingOrder} from "./common";
 
 
@@ -20,12 +20,12 @@ export class Behavior implements Orderable {
     orderingState: OrderingState = OrderingState.Untracked;
     order: number = 0;
 
-    untrackedDemands: Demandable[] | null;
-    untrackedDynamicDemands: Demandable[] | null;
+    untrackedDemands: Dependable[] | null;
+    untrackedDynamicDemands: Dependable[] | null;
     untrackedSupplies: Signal[] | null;
     untrackedDynamicSupplies: Signal[] | null;
 
-    constructor(extent: Extent, demands: Demandable[] | null, supplies: Signal[] | null, block: (extent: Extent) => void) {
+    constructor(extent: Extent, demands: Dependable[] | null, supplies: Signal[] | null, block: (extent: Extent) => void) {
         this.extent = extent;
         extent.addBehavior(this);
         this.demands = null;
@@ -58,8 +58,8 @@ export class Behavior implements Orderable {
         return name;
     }
 
-    setDynamicDemands(newDemands: (Demandable | undefined)[] | null) {
-        this.extent.graph.updateDemands(this, newDemands?.filter(item => item != undefined) as (Demandable[] | null));
+    setDynamicDemands(newDemands: (Dependable | undefined)[] | null) {
+        this.extent.graph.updateDependencies(this, newDemands?.filter(item => item != undefined) as (Dependable[] | null));
     }
 
     setDynamicSupplies(newSupplies: (Signal | undefined)[] | null) {
@@ -71,12 +71,12 @@ export class Behavior implements Orderable {
 
 export class BehaviorBuilder<T extends Extent> {
     extent: T;
-    untrackedDependencies: Demandable[] | null = null;
+    untrackedDependencies: Dependable[] | null = null;
     untrackedSupplies: Signal[] | null = null;
-    dynamicDependencySwitches: Demandable[] | null = null;
-    dynamicDependencyLinks: ((ext: T) => (Demandable | undefined)[] | null) | null = null;
+    dynamicDependencySwitches: Dependable[] | null = null;
+    dynamicDependencyLinks: ((ext: T) => (Dependable | undefined)[] | null) | null = null;
     dynamicDependencyRelinkingOrder : RelinkingOrder = RelinkingOrder.relinkingOrderPrior;
-    dynamicSupplySwitches: Demandable[] | null = null;
+    dynamicSupplySwitches: Dependable[] | null = null;
     dynamicSupplyLinks: ((ext: T) => (Signal | undefined)[] | null) | null = null;
     dynamicSupplyRelinkingOrder : RelinkingOrder = RelinkingOrder.relinkingOrderPrior;
 
@@ -84,31 +84,18 @@ export class BehaviorBuilder<T extends Extent> {
         this.extent = extent;
     }
 
-    dependencies(...dependencies: Demandable[]): this {
+    dependsOn(...dependencies: Dependable[]): this {
         this.untrackedDependencies = dependencies;
         return this;
     }
 
-    /**
-     * @deprecated Use dependencies instead. This will be removed in a future version.
-     */
-    demands(...demands: Demandable[]): this {
-        return this.dependencies(...demands);
-    }
-
-    /**
-     * @deprecated Use dependencies instead. This will be removed in a future version.
-     */
-    dependsOn(...dependencies: Demandable[]): this {
-        return this.dependencies(...dependencies);
-    }
 
     supplies(...supplies: Signal[]): this {
         this.untrackedSupplies = supplies;
         return this;
     }
 
-    dynamicDependencies(switches: Demandable[], links: ((ext: T) => (Demandable | undefined)[] | null), relinkingOrder?: RelinkingOrder): this {
+    dynamicDependsOn(switches: Dependable[], links: ((ext: T) => (Dependable | undefined)[] | null), relinkingOrder?: RelinkingOrder): this {
         this.dynamicDependencySwitches = switches;
         this.dynamicDependencyLinks = links;
         if (relinkingOrder != undefined) {
@@ -117,14 +104,8 @@ export class BehaviorBuilder<T extends Extent> {
         return this;
     }
 
-    /**
-     * @deprecated Use dynamicDependencies instead. This will be removed in a future version.
-     */
-    dynamicDemands(switches: Demandable[], links: ((ext: T) => (Demandable | undefined)[] | null), relinkingOrder?: RelinkingOrder): this {
-        return this.dynamicDependencies(switches, links, relinkingOrder);
-    }
 
-    dynamicSupplies(switches: Demandable[], links: ((ext: T) => (Signal | undefined)[] | null), relinkingOrder?: RelinkingOrder): this {
+    dynamicSupplies(switches: Dependable[], links: ((ext: T) => (Signal | undefined)[] | null), relinkingOrder?: RelinkingOrder): this {
         this.dynamicSupplySwitches = switches;
         this.dynamicSupplyLinks = links;
         if (relinkingOrder != undefined) {
@@ -162,7 +143,7 @@ export class BehaviorBuilder<T extends Extent> {
 
         if (hasDynamicDependencies) {
             let supplies: Signal[] = [];
-            let dependencies: Demandable[] | null = this.dynamicDependencySwitches;
+            let dependencies: Dependable[] | null = this.dynamicDependencySwitches;
             if (this.dynamicDependencyRelinkingOrder == RelinkingOrder.relinkingOrderPrior) {
                 supplies.push(dynamicDependencySignal!);
             } else {
@@ -177,7 +158,7 @@ export class BehaviorBuilder<T extends Extent> {
 
         if (hasDynamicSupplies) {
             let supplies: Signal[] = [];
-            let dependencies: Demandable[] | null = this.dynamicSupplySwitches;
+            let dependencies: Dependable[] | null = this.dynamicSupplySwitches;
             if (this.dynamicSupplyRelinkingOrder == RelinkingOrder.relinkingOrderPrior) {
                 supplies.push(dynamicSupplySignal!);
             } else {
