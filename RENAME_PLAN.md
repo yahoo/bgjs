@@ -12,11 +12,12 @@ This document outlines a comprehensive plan to rename core concepts in the Behav
 - **Phase 2B: Final API Updates** - All deprecated APIs removed, tests updated to new terminology
 
 ### 🔄 REMAINING PHASES:
-- **Phase 3: Update Tests** - ✅ COMPLETED (Tests already converted during Phase 2B cleanup)
-- **Phase 4: Update Documentation** - Update all documentation files
-- **Phase 5: Update Examples** - Update example applications  
-- **Phase 6: Update Exports and Public API** - ✅ COMPLETED (Clean exports implemented)
-- **Phase 7: Final Validation** - ✅ COMPLETED (All 156 tests passing, clean build)
+- **Phase 3: Signal/Event Consolidation Migration** - 🔄 NEW - Merge Signal into Event, rename Event to Signal
+- **Phase 4: Update Tests** - ✅ COMPLETED (Tests already converted during Phase 2B cleanup)
+- **Phase 5: Update Documentation** - Update all documentation files
+- **Phase 6: Update Examples** - Update example applications  
+- **Phase 7: Update Exports and Public API** - ✅ COMPLETED (Clean exports implemented)
+- **Phase 8: Final Validation** - ✅ COMPLETED (All 156 tests passing, clean build)
 
 **Current Status:** 🎉 **CORE MIGRATION COMPLETE!** Clean API with no deprecated names. All tests passing. Ready for documentation and examples updates.
 
@@ -305,10 +306,10 @@ The most complex part is swapping "event" and "moment" because:
   - `src/graph.ts` (internal implementation only)
 - **Test:** Run `npm test` after each group of changes to ensure functionality preserved
 
-### Phase 3: Update Tests 🔄 TODO  
+### Phase 4: Update Tests 🔄 TODO  
 **Goal:** Migrate all tests to use new terminology
 
-#### Step 3.1: Update Unit Tests - Core
+#### Step 4.1: Update Unit Tests - Core
 - Update `src/__tests__/behavior-graph.test.ts`
   - Replace Resource → Signal
   - Replace EventSignal → Event (after Phase 2B.7)
@@ -321,7 +322,7 @@ The most complex part is swapping "event" and "moment" because:
   - Verify usage of extent.event() instead of extent.moment() (after Phase 2B.4)
 - **Test:** Run `npm test` to ensure all tests pass
 
-#### Step 3.2: Update Unit Tests - Signal Tests
+#### Step 4.2: Update Unit Tests - Signal Tests
 - Update any signal-specific tests (formerly resource tests)
 - Update event/state specific tests (formerly moment/state tests)
 - Update to use new terminology from Phase 2B changes
@@ -330,15 +331,15 @@ The most complex part is swapping "event" and "moment" because:
   - Any other test files with signal usage
 - **Test:** Run `npm test` to ensure all tests pass
 
-#### Step 3.3: Update Documentation Tests
+#### Step 4.3: Update Documentation Tests
 - Update `src/__tests__/documentation.test.js`
 - Update `src/__tests__/docs-code-example.test.js`
 - **Test:** Run `npm test` to ensure all tests pass
 
-### Phase 4: Update Documentation 🔄 TODO
+### Phase 5: Update Documentation 🔄 TODO
 **Goal:** Migrate all documentation to new terminology
 
-#### Step 4.1: Update Core Documentation
+#### Step 5.1: Update Core Documentation
 - Update `BGforLLMs-Core.md`
   - Replace "resource" with "signal" throughout
   - Replace "moment resource" with "event" (after Phase 2B.7)
@@ -351,7 +352,7 @@ The most complex part is swapping "event" and "moment" because:
   - Update extent.moment() → extent.event() (after Phase 2B.4)
 - **Test:** Review for consistency and clarity
 
-#### Step 4.2: Update JavaScript Documentation
+#### Step 5.2: Update JavaScript Documentation
 - Update `BGforLLMs-JavaScript.md`
   - Apply same terminology changes as core docs
   - Update all code examples
@@ -361,21 +362,21 @@ The most complex part is swapping "event" and "moment" because:
   - Update StateSignal → State and EventSignal → Event (after Phase 2B.7)
 - **Test:** Review for consistency and clarity
 
-#### Step 4.3: Update README
+#### Step 5.3: Update README
 - Update `README.md`
   - Update high-level concept descriptions
   - Ensure terminology consistency
 - **Test:** Review for consistency and clarity
 
-#### Step 4.4: Update Contributing Documentation
+#### Step 5.4: Update Contributing Documentation
 - Update `CONTRIBUTING.md` if it contains relevant terminology
 - Update any other documentation files
 - **Test:** Review for consistency
 
-### Phase 5: Update Examples 🔄 TODO
+### Phase 6: Update Examples 🔄 TODO
 **Goal:** Migrate all examples to use new terminology
 
-#### Step 5.1: Update Browser Example
+#### Step 6.1: Update Browser Example
 - Update `examples/browser/main.js`
 - Update `examples/browser/app.js` 
 - Update any HTML files with terminology
@@ -392,19 +393,19 @@ The most complex part is swapping "event" and "moment" because:
   - `examples/browser/public/hello.html`
 - **Test:** Run browser example to ensure it works
 
-#### Step 5.2: Update React App Example
+#### Step 6.2: Update React App Example
 - Update all files in `examples/reactapp/src/`
-- Apply all Phase 2B terminology changes (same as Step 5.1)
+- Apply all Phase 2B terminology changes (same as Step 6.1)
 - **Files to modify:**
   - `examples/reactapp/src/CounterExtent.js`
   - `examples/reactapp/src/AllCountersExtent.js`
   - Other React component files
 - **Test:** Run react app example to ensure it works
 
-#### Step 5.3: Update TodoMVC Examples
+#### Step 6.3: Update TodoMVC Examples
 - Update `examples/todomvc/js/` files
 - Update `examples/todomvc-react/js/` files
-- Apply all Phase 2B terminology changes (same as Step 5.1)
+- Apply all Phase 2B terminology changes (same as Step 6.1)
 - **Files to modify:**
   - `examples/todomvc/js/ListExtent.js`
   - `examples/todomvc/js/ItemExtent.js`
@@ -413,15 +414,15 @@ The most complex part is swapping "event" and "moment" because:
   - Similar files in todomvc-react
 - **Test:** Run TodoMVC examples to ensure they work
 
-#### Step 5.4: Update Performance Tests
+#### Step 6.4: Update Performance Tests
 - Update `examples/perftests/src/index.ts`
-- Apply all Phase 2B terminology changes (same as Step 5.1)
+- Apply all Phase 2B terminology changes (same as Step 6.1)
 - **Test:** Run performance tests to ensure they work
 
-### Phase 6: Update Exports and Public API 🔄 TODO
+### Phase 7: Update Exports and Public API 🔄 TODO
 **Goal:** Update primary exports to use new names
 
-#### Step 6.1: Update Primary Exports
+#### Step 7.1: Update Primary Exports
 - Update `src/index.ts` to export new names as primary
 - Keep old names as deprecated aliases
 - Document any aliases slated for removal by creating follow-up issues or TODOs so they do not linger indefinitely
@@ -429,32 +430,32 @@ The most complex part is swapping "event" and "moment" because:
   - `src/index.ts`
 - **Test:** Run `npm test` to ensure backward compatibility
 
-#### Step 6.2: Update Build Configuration
+#### Step 7.2: Update Build Configuration
 - Verify build process works with new names
 - Update any build scripts that reference old names
 - **Test:** Run `npm run build` to ensure clean build
 
-### Phase 7: Final Validation 🔄 TODO
+### Phase 8: Final Validation 🔄 TODO
 **Goal:** Ensure everything works and is consistent
 
-#### Step 7.1: Full Test Suite
+#### Step 8.1: Full Test Suite
 - Run complete test suite: `npm test`
 - Run test coverage: `npm run test-coverage`
 - Verify all tests pass with new terminology
 - Capture changelog notes and draft a release summary communicating renamed APIs and deprecation timelines
 
-#### Step 7.2: Build Verification
+#### Step 8.2: Build Verification
 - Run full build: `npm run build`
 - Verify generated files use new terminology
 - Test generated bundles
 
-#### Step 7.3: Example Verification
+#### Step 8.3: Example Verification
 - Test all examples manually
 - Verify they work with renamed concepts
 - Check for any remaining old terminology
 - Remove the temporary README note added in Phase 1 once verification passes
 
-#### Step 7.4: Documentation Review
+#### Step 8.4: Documentation Review
 - Final review of all documentation
 - Ensure terminology is consistent throughout
 - Verify code examples match current API
@@ -538,7 +539,17 @@ This plan ensures a systematic, safe migration with minimal risk and maximum bac
 
 ### 🔄 REMAINING TASKS (Optional/Documentation):
 
-#### Phase 4: Update Documentation Files
+#### Phase 3: Signal/Event Consolidation Migration
+**Priority: HIGH** - Structural improvement to class hierarchy
+**Status:** 🔄 NEW - Ready to implement
+
+**Goal:** Consolidate Signal and Event classes for cleaner architecture
+- Merge Signal functionality into Event class
+- Rename Event to Signal (making it the base class)
+- Update State to extend new Signal
+- Remove extent.resource() method
+
+#### Phase 5: Update Documentation Files
 **Priority: Medium** - Update user-facing documentation
 
 **Files to update:**
@@ -555,7 +566,7 @@ This plan ensures a systematic, safe migration with minimal risk and maximum bac
 - Replace "sideEffect" with "effect" in examples
 - Update code examples to use new API
 
-#### Phase 5: Update Example Applications  
+#### Phase 6: Update Example Applications  
 **Priority: Medium** - Update example projects
 
 **Directories to update:**
@@ -600,6 +611,194 @@ npm run test-coverage      # Should show good coverage (94.32%)
 - ✅ No console warnings about deprecated usage
 
 **The hard work is done - remaining tasks are mostly find-and-replace!** 🎉
+
+---
+
+## 🚀 PHASE 3: Signal/Event Consolidation Migration
+
+### Overview
+
+After completing the core API migration, we have identified one more structural improvement: consolidating the Signal and Event classes. Currently:
+
+- `Signal` is the base class with core functionality
+- `Event<T>` extends Signal and adds event-specific behavior
+- `State<T>` extends Signal and adds state-specific behavior
+
+The new plan is to:
+1. **Merge Signal functionality into Event** - Move all non-overridden Signal methods into Event
+2. **Rename Event → Signal** - Event becomes the new base class called Signal  
+3. **Update State inheritance** - State extends the new Signal (formerly Event)
+4. **Remove extent.resource()** - No longer needed since Signal is now concrete like Event was
+
+### Current Class Hierarchy
+```
+Signal (base class)
+├── Event<T> extends Signal (event signals)
+└── State<T> extends Signal (state signals)
+```
+
+### Target Class Hierarchy  
+```
+Signal (formerly Event - now base class)
+└── State<T> extends Signal (state signals)
+```
+
+### Key Changes Required
+
+#### 1. **Move Signal functionality to Event class**
+Signal methods that are NOT overridden by Event need to be moved:
+- `toString()` - Signal has generic version, Event overrides 
+- `get justUpdated()` - Signal returns false, Event overrides with real implementation
+- `assertValidUpdater()` and `assertValidAccessor()` - Core validation logic
+- Subscription methods: `subscribeToJustUpdated()`, `_subscribeToJustUpdated()`, `notifyJustUpdatedSubscribers()`
+- Properties: `debugName`, `isSignal`, `extent`, `graph`, `subsequents`, `suppliedBy`, `skipChecks`, `didUpdateSubscribers`
+- Constructor logic and Dependable interface implementation
+
+#### 2. **Update Event class**
+- Inherit all Signal functionality that isn't already overridden
+- Maintain existing Event-specific behavior (value, moment, update methods)
+- Keep existing Event-specific properties and methods
+
+#### 3. **Rename Event → Signal**  
+- Update class name from `Event<T>` to `Signal<T>`
+- Update all references and imports
+- Update toString() to show "Signal" instead of "EventSignal"
+
+#### 4. **Update State class**
+- Change inheritance from `extends Signal` to `extends Signal<T>` (the new Signal)
+- Ensure all State-specific behavior remains intact
+- Update toString() to show "StateSignal" or just "State"
+
+#### 5. **Remove extent.resource() method**
+- Remove the `resource()` factory method from Extent
+- Keep `event()` → renamed to create new Signal instances  
+- Keep `state()` for creating State instances
+- Update any code that uses `extent.resource()` to use `extent.event()` instead
+
+#### 6. **Update exports and imports**
+- Update index.ts exports
+- The old Signal class disappears
+- Event class becomes Signal class  
+- State remains State but now extends the new Signal
+
+### Migration Steps
+
+#### Step 3.1: Move Signal functionality into Event class
+- Copy all Signal methods that Event doesn't override into Event class
+- Copy all Signal properties into Event class  
+- Update Event constructor to include Signal constructor logic
+- **Files to modify:**
+  - `src/resource.ts`
+- **Test:** Run `npm test` to ensure functionality preserved
+
+#### Step 3.2: Update Event class to be self-contained
+- Remove `extends Signal` from Event class declaration
+- Ensure Event implements Dependable interface directly
+- Implement any missing interface methods
+- **Files to modify:**
+  - `src/resource.ts`
+- **Test:** Run `npm test` to ensure functionality preserved
+
+#### Step 3.3: Update State to extend new Event class
+- Change State inheritance from `extends Signal` to `extends Event<T>`
+- Test that State functionality works correctly
+- **Files to modify:**
+  - `src/resource.ts`  
+- **Test:** Run `npm test` to ensure functionality preserved
+
+#### Step 3.4: Rename Event → Signal
+- Rename `Event<T>` class to `Signal<T>`
+- Update toString() method to return "Signal" instead of "EventSignal"
+- **Files to modify:**
+  - `src/resource.ts`
+- **Test:** Run `npm test` to ensure functionality preserved
+
+#### Step 3.5: Remove old Signal class
+- Delete the old Signal class definition completely
+- **Files to modify:**
+  - `src/resource.ts`
+- **Test:** Run `npm test` to ensure functionality preserved
+
+#### Step 3.6: Remove extent.resource() method
+- Remove `resource()` method from Extent class
+- Update any usages of `extent.resource()` to use `extent.event()` 
+- **Specific usages to update:**
+  - `behavior.ts` line 123: `this.extent.resource('(BG Dynamic Dependency Signal)')` → `this.extent.event()`
+  - `behavior.ts` line 134: `this.extent.resource('(BG Dynamic Supply Signal)')` → `this.extent.event()`
+- **Files to modify:**
+  - `src/extent.ts` (remove method)
+  - `src/behavior.ts` (update usages)
+  - Any test files using `extent.resource()`
+- **Test:** Run `npm test` to ensure functionality preserved
+
+#### Step 3.7: Update exports and imports
+- Update `src/index.ts` exports to reflect new class names
+- Remove Signal export (since Event is now Signal)
+- Keep Signal export but now points to the new Signal class (formerly Event)
+- **Files to modify:**
+  - `src/index.ts`
+- **Test:** Run `npm test` to ensure functionality preserved
+
+#### Step 3.8: Update all references throughout codebase
+- Update any remaining references to the old class names
+- Update comments and documentation strings
+- Update debug names and error messages  
+- **Files to modify:**
+  - `src/graph.ts` (if any references)
+  - `src/behavior.ts` (if any references)
+  - `src/extent.ts` (if any references)
+- **Test:** Run `npm test` to ensure functionality preserved
+
+#### Step 3.9: Update tests
+- Update test files to use new class hierarchy
+- Change `new Event()` to `new Signal()` where appropriate
+- Update any assertions about class names or toString() output
+- **Specific changes needed:**
+  - `behavior-graph.test.ts`: Update lines 499, 532 (`new Event()` → `new Signal()`)
+  - `vending.test.ts`: Update `Event` type annotations to `Signal`
+  - `documentation.test.js`: Update `Event` imports to `Signal`
+  - Update any toString() assertions from "EventSignal" to "Signal"
+- **Files to modify:**
+  - `src/__tests__/behavior-graph.test.ts`
+  - `src/__tests__/vending.test.ts` 
+  - `src/__tests__/documentation.test.js`
+- **Test:** Run `npm test` to ensure all tests pass
+
+### Implementation Considerations
+
+#### Complex Areas
+1. **Constructor chain** - Need to ensure State constructor properly calls new Signal constructor
+2. **Interface implementation** - Event needs to implement Dependable directly after removing Signal base class
+3. **Method overrides** - Ensure all Event method overrides are preserved during the merge
+4. **Extent factory methods** - Remove resource() but keep event() working with new Signal class
+
+#### Testing Strategy  
+- Run tests after each step to catch issues early
+- Pay special attention to constructor behavior and inheritance
+- Verify that State instances still work correctly with new inheritance
+- Check that subscription and notification methods work correctly
+
+#### Rollback Plan
+- Each step is atomic and can be reversed
+- Git commits at each step for easy rollback
+- Old functionality preserved until tests pass
+
+### Expected Benefits
+
+1. **Simpler hierarchy** - One base Signal class instead of separate Signal/Event  
+2. **More intuitive naming** - "Signal" is the core concept, events are just signals
+3. **Cleaner API** - No need for extent.resource() since Signal is concrete
+4. **Better conceptual model** - Signals can have values and events, State specializes this
+
+### Success Criteria
+
+1. **All tests pass** - 156 tests continue to pass after migration
+2. **Clean class hierarchy** - Signal as base, State as specialization
+3. **Removed extent.resource()** - Method no longer exists or needed
+4. **Preserved functionality** - All existing behavior works identically
+5. **Updated exports** - Clean exports with new class names
+
+This migration will complete the conceptual cleanup of the library's core abstractions.
 
 ---
 
