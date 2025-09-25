@@ -6,7 +6,7 @@
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
 import {Graph} from "./graph.js";
-import {GraphEvent, Subscription, Transient} from "./common";
+import {ActionMoment, Subscription, Transient} from "./common";
 
 export enum LinkType {
     reactive,
@@ -14,13 +14,13 @@ export enum LinkType {
 }
 
 export interface Demandable {
-    resource: Resource,
+    resource: Signal,
     type: LinkType
 }
 
-export class Resource implements Demandable {
+export class Signal implements Demandable {
     debugName: string | null;
-    isResource: boolean = true;
+    isSignal: boolean = true;
     extent: Extent;
     graph: Graph;
     subsequents: Set<Behavior> = new Set();
@@ -31,7 +31,7 @@ export class Resource implements Demandable {
     constructor(extent: Extent, name?: string) {
         this.extent = extent;
         this.graph = extent.graph;
-        extent.addResource(this);
+        extent.addSignal(this);
         if (name !== undefined) {
             this.debugName = name;
         } else {
@@ -43,7 +43,7 @@ export class Resource implements Demandable {
         return {resource: this, type: LinkType.order }
     }
 
-    get resource(): Resource {
+    get resource(): Signal {
         return this;
     }
 
@@ -52,9 +52,9 @@ export class Resource implements Demandable {
     }
 
     toString() {
-        let name = "Resource";
+        let name = "Signal";
         if (this.debugName != null) {
-            name = this.debugName + "(r)";
+            name = this.debugName + "(s)";
         }
         return name;
     }
@@ -122,10 +122,10 @@ export class Resource implements Demandable {
     }
 }
 
-export class Moment<T = undefined> extends Resource implements Transient {
+export class EventSignal<T = undefined> extends Signal implements Transient {
     private _happened: boolean = false;
     private _happenedValue: T | undefined = undefined;
-    private _happenedWhen: GraphEvent | null = null;
+    private _happenedWhen: ActionMoment | null = null;
 
     get justUpdated(): boolean {
         this.assertValidAccessor();
@@ -137,15 +137,23 @@ export class Moment<T = undefined> extends Resource implements Transient {
         return this._happenedValue;
     }
 
-    get event(): GraphEvent | null {
+    get moment(): ActionMoment | null {
+        this.assertValidAccessor();
+        return this._happenedWhen;
+    }
+
+    /**
+     * @deprecated Use moment instead. This will be removed in a future version.
+     */
+    get event(): ActionMoment | null {
         this.assertValidAccessor();
         return this._happenedWhen;
     }
 
     toString() {
-        let name = "Moment";
+        let name = "EventSignal";
         if (this.debugName != null) {
-            name = (this.debugName + "(m)" )
+            name = (this.debugName + "(es)" )
         }
         if (this._happenedValue !== undefined) {
             name = name + "=" + this._happenedValue;
@@ -184,20 +192,50 @@ export class Moment<T = undefined> extends Resource implements Transient {
 
 }
 
-export type StateHistory<T> = { value: T, event: GraphEvent };
-export class State<T> extends Resource implements Transient {
+/**
+ * @deprecated Legacy name. Use EventSignal instead.
+ * This alias will be removed in a future version.
+ */
+export type Event<T = undefined> = EventSignal<T>;
+
+/**
+ * @deprecated Legacy name for Event signals. Use EventSignal instead.
+ * This alias will be removed in a future version.
+ */
+export type TempEventInternal<T = undefined> = EventSignal<T>;
+
+/**
+ * @deprecated Legacy alias for Event signals. Use EventSignal instead.
+ * Note: This conflicts with the new ActionMoment class (timestamps), but kept for backwards compatibility.
+ */
+export type Moment<T = undefined> = EventSignal<T>;
+
+/**
+ * @deprecated Temporary alias during terminology migration. Use EventSignal instead.
+ * This will be renamed to EventSignal in a future version.
+ */
+export type TempEvent<T = undefined> = EventSignal<T>;
+
+/**
+ * @deprecated Legacy name. Use Signal instead.
+ * This alias will be removed in a future version.
+ */
+export type Resource = Signal;
+
+export type StateHistory<T> = { value: T, event: ActionMoment };
+export class StateSignal<T> extends Signal implements Transient {
     private currentState: StateHistory<T>;
     private previousState: StateHistory<T> | null = null;
 
     constructor(extent: Extent, initialState: T, name?: string) {
         super(extent, name);
-        this.currentState = { value: initialState, event: GraphEvent.initialEvent };
+        this.currentState = { value: initialState, event: ActionMoment.initialEvent };
     }
 
     toString() {
-        let name = "State";
+        let name = "StateSignal";
         if (this.debugName != null) {
-            name = (this.debugName + "(s)" );
+            name = (this.debugName + "(ss)" );
         }
         name = name + "=" + this.currentState.value;
         name = name + " : " + this.currentState.event.sequence;
@@ -246,7 +284,7 @@ export class State<T> extends Resource implements Transient {
         return this.currentState.value;
     }
 
-    get event(): GraphEvent {
+    get event(): ActionMoment {
         this.assertValidAccessor();
         return this.currentState.event;
     }
@@ -263,7 +301,7 @@ export class State<T> extends Resource implements Transient {
         return this.trace.value;
     }
 
-    get traceEvent(): GraphEvent {
+    get traceEvent(): ActionMoment {
         return this.trace.event;
     }
 
@@ -284,4 +322,10 @@ export class State<T> extends Resource implements Transient {
         return this.justUpdatedTo(toState) && this.justUpdatedFrom(fromState);
     }
 }
+
+/**
+ * @deprecated Legacy name. Use StateSignal instead.
+ * This alias will be removed in a future version.
+ */
+export type State<T> = StateSignal<T>;
 

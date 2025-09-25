@@ -3,7 +3,7 @@
 //
 
 
-import {Behavior, Extent, Graph, GraphEvent, Moment, Resource, State} from '../index.js';
+import {Behavior, Extent, Graph, ActionMoment, Moment, EventSignal, Resource, State} from '../index.js';
 
 let g: Graph;
 let setupExt: Extent;
@@ -185,7 +185,7 @@ describe('State Resource', () => {
         let mr1 = ext.moment('mr1');
         let before: number | null = null;
         let after: number | null = null;
-        let afterEntered: GraphEvent | null = null;
+        let afterEntered: ActionMoment | null = null;
         ext.behavior().demands(mr1).supplies(sr1).runs((extent) => {
             before = sr1.traceValue;
             sr1.update(1);
@@ -224,7 +224,7 @@ describe('State Resource', () => {
 
         // |> Then trace is still the value from beginning of
         expect(traceValue).toBe(0);
-        expect(traceEvent).toBe(GraphEvent.initialEvent);
+        expect(traceEvent).toBe(ActionMoment.initialEvent);
     });
 
     test('start state is transient after updates', () => {
@@ -348,7 +348,7 @@ describe('State Resource', () => {
         test('check supplied state is updated by supplier', () => {
             // |> Given a supplied state resource
             let sr1 = ext.state<number>(0, 'sr1');
-            let mr1 = new Moment(ext, 'mr1');
+            let mr1 = new EventSignal(ext, 'mr1');
             ext.behavior().demands(mr1).supplies(sr1).runs(extent => {
             });
             ext.behavior().demands(mr1).runs(extent => {
@@ -366,7 +366,7 @@ describe('State Resource', () => {
         test('check non supplied state is updated by action', () => {
             // |> Given a state resource that is not supplied
             let sr1 = ext.state<number>(0, 'sr1');
-            let mr1 = new Moment(ext, 'mr1');
+            let mr1 = new EventSignal(ext, 'mr1');
             ext.behavior().demands(mr1).runs(extent => {
                 sr1.update(1);
             });
@@ -389,7 +389,7 @@ describe('State Resource', () => {
 
         test('update when supplied by another behavior is an error', () => {
             let sr1 = ext.state<number>(0, 'sr1');
-            let mr1 = new Moment(ext, 'mr1');
+            let mr1 = new EventSignal(ext, 'mr1');
             ext.behavior().demands(mr1).runs(extent => {
                 sr1.update(2)
             });
@@ -405,7 +405,7 @@ describe('State Resource', () => {
 
         test('unsupplied resource throws if not from action', () => {
             let sr1 = ext.state<number>(0, 'sr1');
-            let mr1 = new Moment(ext, 'mr1');
+            let mr1 = new EventSignal(ext, 'mr1');
             ext.behavior().demands(mr1).runs(extent => {
                 sr1.update(2)
             });
@@ -496,7 +496,7 @@ describe('Moment Resource', () => {
 
     test('moment happens', () => {
         // |> Given a moment in the graph
-        let mr1 = new Moment(ext, 'mr1');
+        let mr1 = new EventSignal(ext, 'mr1');
         let afterUpdate = false;
         ext.behavior().demands(mr1).runs((extent) => {
             afterUpdate = true;
@@ -529,7 +529,7 @@ describe('Moment Resource', () => {
 
     test('can have data', () => {
         // Given a moment with data
-        let mr1 = new Moment<number>(ext, 'mr1');
+        let mr1 = new EventSignal<number>(ext, 'mr1');
         let afterUpdate: unknown;
         let updatedToOne = false;
         ext.behavior().demands(mr1).runs((extent) => {
@@ -1101,7 +1101,7 @@ describe('dynamic graph changes', () => {
 
     test('changing supplies will unsupply old resources', () => {
         // |> Given we have a resource supplied by a behavior
-        let m1 = new Moment(ext);
+        let m1 = new EventSignal(ext);
         let b1 = ext.behavior().runs((extent) => {
             // do nothing
         });
@@ -2622,7 +2622,7 @@ describe('Effects, Actions, Events', () => {
         let actionUpdatesDuring;
         ext.behavior().demands(m1).supplies(m3).runs(extent => {
             m3.update()
-            actionUpdatesDuring = extent.graph.eventLoopState?.actionUpdates;
+            actionUpdatesDuring = extent.graph.actionLoopState?.actionUpdates;
         });
         ext.addToGraphWithAction();
 
@@ -2634,7 +2634,7 @@ describe('Effects, Actions, Events', () => {
 
         // |> Then that information is available during the current event
         expect(actionUpdatesDuring).toStrictEqual([m1, m2]);
-        expect(g.eventLoopState?.actionUpdates).toBeUndefined();
+        expect(g.actionLoopState?.actionUpdates).toBeUndefined();
     });
 
     test('actions have debugName', () => {
@@ -2642,7 +2642,7 @@ describe('Effects, Actions, Events', () => {
         let s1 = ext.state<number>(1);
         let lastActionName;
         ext.behavior().demands(ext.addedToGraph, m1, s1).runs(extent => {
-            lastActionName = extent.graph.eventLoopState?.action.debugName;
+            lastActionName = extent.graph.actionLoopState?.action.debugName;
         });
         ext.addToGraphWithAction('added');
         expect(lastActionName).toBe('added');
@@ -2688,12 +2688,12 @@ describe('Effects, Actions, Events', () => {
         ext.behavior().demands(m1).supplies(m2).runs(extent => {
             m2.update();
             extent.sideEffect(extent1 => {
-                firstSideEffectName = extent.graph.eventLoopState?.currentSideEffect?.debugName;
+                firstSideEffectName = extent.graph.actionLoopState?.currentSideEffect?.debugName;
             }, '1');
         });
         ext.behavior().demands(m2).runs(extent => {
             extent.sideEffect(extent1 => {
-                secondSideEffectName = extent.graph.eventLoopState?.currentSideEffect?.debugName;
+                secondSideEffectName = extent.graph.actionLoopState?.currentSideEffect?.debugName;
             });
         });
         ext.addToGraphWithAction();
@@ -2709,7 +2709,7 @@ describe('Effects, Actions, Events', () => {
         g.action(() => {
             g.sideEffect(() => {
                 valueAfter = 1;
-                sideEffectName = g.eventLoopState?.currentSideEffect?.debugName;
+                sideEffectName = g.actionLoopState?.currentSideEffect?.debugName;
             }, 'sideEffect1');
         });
         expect(valueAfter).toBe(1);
@@ -2721,7 +2721,7 @@ describe('Effects, Actions, Events', () => {
         let definingBehavior;
         let createdBehavior = ext.behavior().demands(m1).runs(ext => {
             ext.sideEffect(extent => {
-                definingBehavior = extent.graph.eventLoopState!.currentSideEffect!.behavior;
+                definingBehavior = extent.graph.actionLoopState!.currentSideEffect!.behavior;
             });
         });
 

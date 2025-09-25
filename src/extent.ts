@@ -5,7 +5,7 @@
 
 import {Graph} from "./graph.js";
 import {Behavior, BehaviorBuilder} from "./behavior.js";
-import {Moment, Resource, State} from "./resource.js";
+import {EventSignal, Signal, StateSignal, State} from "./resource.js";
 import {RelinkingOrder} from "./common.js";
 
 export enum ExtentRemoveStrategy {
@@ -117,7 +117,7 @@ export class Extent {
     debugConstructorName: string | undefined;
     debugName: string | undefined;
     behaviors: Behavior[] = [];
-    resources: Resource[] = [];
+    resources: Signal[] = [];
     graph: Graph;
     addedToGraphWhen: number | null = null;
     addedToGraph: State<boolean>;
@@ -134,7 +134,7 @@ export class Extent {
         }
         this.debugConstructorName = this.constructor.name;
         this.graph = graph;
-        this.addedToGraph = new State<boolean>(this, false);
+        this.addedToGraph = new StateSignal<boolean>(this, false);
     }
 
     debugHere(): string {
@@ -169,7 +169,7 @@ export class Extent {
         this.behaviors.push(behavior);
     }
 
-    addResource(resource: Resource) {
+    addSignal(resource: Signal) {
         this.resources.push(resource);
     }
 
@@ -181,7 +181,7 @@ export class Extent {
 
     addToGraph() {
         if (this.graph.currentEvent != null) {
-            this.nameResources();
+            this.nameSignals();
             this.graph.addExtent(this);
         } else {
             let err: any = new Error("addToGraph must be called within an event.");
@@ -215,7 +215,7 @@ export class Extent {
         }
     }
 
-    subscribeToJustUpdated(resources: Resource[], callback: (ext: this) => void): () => void {
+    subscribeToJustUpdated(resources: Signal[], callback: (ext: this) => void): () => void {
         let unsubscribe = this.graph._subscribeToJustUpdated(resources, {extent: this, callback:callback as ((arg0: Extent | null) => void)});
         this.unsubscribes.add(unsubscribe);
         return unsubscribe;
@@ -228,14 +228,14 @@ export class Extent {
         this.unsubscribes.clear();
     }
 
-    nameResources() {
+    nameSignals() {
         // automatically add any behaviors and resources that are contained
         // by this Extent object and name them with corresponding keys
         for (let key in this) {
             let object = this[key];
-            if (object && (object as any)['isResource'] !== undefined) {
-                if ((object as any as Resource).debugName == null) {
-                    (object as any as Resource).debugName = key;
+            if (object && (object as any)['isSignal'] !== undefined) {
+                if ((object as any as Signal).debugName == null) {
+                    (object as any as Signal).debugName = key;
                 }
             }
         }
@@ -246,16 +246,16 @@ export class Extent {
         return b;
     }
 
-    resource(name?: string): Resource {
-        return new Resource(this, name);
+    resource(name?: string): Signal {
+        return new Signal(this, name);
     }
 
-    moment<T>(name?: string): Moment<T> {
-        return new Moment<T>(this, name);
+    moment<T>(name?: string): EventSignal<T> {
+        return new EventSignal<T>(this, name);
     }
 
-    state<T>(initialState: T, name?: string): State<T> {
-        return new State<T>(this, initialState, name);
+    state<T>(initialState: T, name?: string): StateSignal<T> {
+        return new StateSignal<T>(this, initialState, name);
     }
 
     sideEffect(block: (ext: this) => void, debugName?: string) {
@@ -267,6 +267,14 @@ export class Extent {
             extent: this,
             behavior: this.graph.currentBehavior
         });
+    }
+
+    /**
+     * @deprecated Temporary alias during terminology migration. sideEffect will be renamed to effect.
+     * Use effect instead of sideEffect in new code.
+     */
+    effect(block: (ext: this) => void, debugName?: string) {
+        this.sideEffect(block, debugName);
     }
 
     async actionAsync(action: (ext: this) => void, debugName?: string) {

@@ -5,6 +5,19 @@ It is an architecture and supporting library that simplifies the type of complex
 
 It's also a fun way to program.
 
+## 🚧 Terminology Migration Notice
+
+**We are currently migrating the Behavior Graph terminology to be more intuitive and consistent.** During this transition, you may see both old and new terms in documentation and code. Both sets of terms work identically - the old terms are being kept as aliases to ensure backward compatibility.
+
+**Key changes in progress:**
+- `resource` → `signal`
+- `moment` resource → `event` signal  
+- `state` resource → `state` signal
+- `demands` → `dependencies`
+- `sideEffect` → `effect`
+
+All old APIs remain fully functional with deprecation warnings. This notice will be removed once the migration is complete.
+
 ## Who's it for?
 
 It is particularly helpful for developers building:

@@ -8,9 +8,15 @@ export {
 } from "./graph.js";
 
 export {
+    Signal,
     Resource,
+    EventSignal,
+    StateSignal,
+    Event,
+    TempEventInternal,
     Moment,
-    State
+    State,
+    TempEvent
 } from "./resource.js"
 
 export {
@@ -23,6 +29,7 @@ export {
 } from "./behavior.js"
 
 export {
+    ActionMoment,
     GraphEvent,
     RelinkingOrder,
     RelinkingTarget,
