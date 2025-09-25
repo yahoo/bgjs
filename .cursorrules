@@ -1,0 +1,38 @@
+# Behavior Graph Project Rules
+
+## Summary
+
+Behavior Graph (`behavior-graph` on npm) is a TypeScript library that models reactive control flow using `Graph`, `Extent`, `Behavior`, and reactive resources (`State`, `Moment`, `Resource`). Source lives in `src/` and builds emit to `lib/` via TypeScript and Rollup.
+
+For details and examples on how to use Behavior Graph library see the files BGforLLMs-Core.md and BGforLLMs-Javascript.md
+
+## Expectations
+
+- Language: TypeScript targeting ES2015, strict mode enabled.
+- Modules: emit dual CJS/ESM bundles (`tsconfig-mjs.json`, `tsconfig-cjs.json`) plus rollup bundling.
+- Tests: run `npm test` (Jest, ts-jest). Coverage via `npm run test-coverage`.
+- Build: run `npm run build`; script cleans `lib/`, emits types/maps, runs `./fixup`, then Rollup.
+- Formatting/Style: follow existing idioms; prefer existing spacing and naming conventions. No auto-format sweeps.
+- Licensing: retain header comments.
+
+## Development Notes
+
+- Use `Extent` instances to scope lifetimes; call `addToGraphWithAction()` after wiring behaviors.
+- Behaviors must declare demands/supplies before `runs()`. Resources updated inside behaviors must be declared supplies.
+- `Graph.action`/`actionAsync` start events; avoid nesting actions inside behaviors unless wrapped as side effects.
+- `Resource.assertValidUpdater()` prevents unsupplied updates during behaviors—use `updateWithAction` or supply the resource.
+- Prefer `state.update` over `updateForce`; only call `updateForce` when intentional duplicate notifications are needed.
+- `Moment` resources represent transient events; access `value`/`event` only when demanded or supplied.
+- Tests rely on deterministic sequencing of `GraphEvent`; use provided helpers instead of mocking internals.
+
+## Tooling
+
+- `./fixup` writes package.json shims for `lib/cjs` and `lib/mjs` after builds.
+- IDE: Cursor + Git. No automated refactors that reorder exports unless necessary.
+- Keep docs in sync with https://yahoo.github.io/bgdocs/. Update README/examples when public API changes.
+
+## Communication
+
+- Significant changes: open issues first (see `CONTRIBUTING.md`).
+- Maintain existing public API signatures; flag breaking changes explicitly.
+- Add/adjust unit tests in `src/__tests__` for new behaviors or resource semantics.
