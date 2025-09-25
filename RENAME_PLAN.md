@@ -11,13 +11,14 @@ This document outlines a comprehensive plan to rename core concepts in the Behav
 - **Phase 2: Update Core Implementation** - All core classes and internal implementation migrated to new terminology
 
 ### 🔄 REMAINING PHASES:
+- **Phase 2B: Final API Updates** - Additional API changes before test migration
 - **Phase 3: Update Tests** - Convert test files to use new terminology
 - **Phase 4: Update Documentation** - Update all documentation files
 - **Phase 5: Update Examples** - Update example applications  
 - **Phase 6: Update Exports and Public API** - Make new names primary exports
 - **Phase 7: Final Validation** - Complete testing and validation
 
-**Current Status:** Core infrastructure migration complete! All 156 tests passing. Ready for Phase 3.
+**Current Status:** Core infrastructure migration complete! All 156 tests passing. Ready for Phase 2B additional API updates.
 
 ## 📝 IMPORTANT IMPLEMENTATION NOTES FOR NEXT AGENT
 
@@ -215,30 +216,121 @@ The most complex part is swapping "event" and "moment" because:
   - `src/__tests__/behavior-graph.test.ts` (test references)
 - **Test:** Run `npm test` to ensure functionality preserved
 
+### Phase 2B: Final API Updates 🔄 TODO
+**Goal:** Complete remaining API changes before test migration
+
+**Important:** These changes should be done one at a time, with tests updated after each change to ensure they pass before proceeding to the next change.
+
+#### Step 2B.1: Remove dependencies() method from BehaviorBuilder
+- Remove `dependencies()` method from BehaviorBuilder, keeping only `dependsOn()`
+- Update any internal usage to use `dependsOn()` instead
+- Update tests to use `dependsOn()` instead of `dependencies()` where needed
+- **Files to modify:**
+  - `src/behavior.ts`
+  - Any test files that use `dependencies()` on BehaviorBuilder
+- **Test:** Run `npm test` to ensure functionality preserved
+
+#### Step 2B.2: Rename ActionMoment → Moment
+- Rename `ActionMoment` class to `Moment` (this was the final timestamp class)
+- Update all internal usage from `ActionMoment` to `Moment`
+- Keep `ActionMoment` as deprecated alias pointing to `Moment`
+- Remove any conflicting aliases that prevent this change
+- Update tests to use `Moment` instead of `ActionMoment`
+- **Files to modify:**
+  - `src/common.ts`
+  - `src/graph.ts`
+  - `src/resource.ts`
+  - Test files using `ActionMoment`
+- **Test:** Run `npm test` to ensure functionality preserved
+
+#### Step 2B.3: Remove sideEffect, keep only effect
+- Remove `sideEffect()` method, keeping only `effect()`
+- Update any remaining internal usage to use `effect()` instead
+- Update tests to use `effect()` instead of `sideEffect()`
+- **Files to modify:**
+  - `src/behavior.ts`
+  - `src/extent.ts`
+  - Test files using `sideEffect()`
+- **Test:** Run `npm test` to ensure functionality preserved
+
+#### Step 2B.4: Rename extent.moment → extent.event
+- Update Extent class to have `.event()` method instead of `.moment()`
+- Keep `.moment()` as deprecated alias pointing to `.event()`
+- Update internal usage to prefer `.event()`
+- Update tests to use `.event()` instead of `.moment()`
+- **Files to modify:**
+  - `src/extent.ts`
+  - Test files using extent `.moment()` method
+- **Test:** Run `npm test` to ensure functionality preserved
+
+#### Step 2B.5: Update signal property names for moment/event consistency
+- StateSignal: `traceMoment` → keep as is (StateSignal keeps traceMoment)
+- EventSignal: `moment` → keep as is (EventSignal keeps moment)  
+- Graph: `lastMoment` and `currentMoment` → keep as is
+- This step verifies the naming is already consistent with the new API
+- **Files to verify:**
+  - `src/resource.ts`
+  - `src/graph.ts`
+- **Test:** Run `npm test` to ensure functionality preserved
+
+#### Step 2B.6: Rename demandable → dependable
+- Update any usage of "demandable" to "dependable" in APIs and internal logic
+- Update related method names, properties, and type names
+- Update tests to use "dependable" terminology
+- **Files to modify:**
+  - `src/behavior.ts`
+  - `src/graph.ts`
+  - `src/resource.ts`
+  - Test files using "demandable" terminology
+- **Test:** Run `npm test` to ensure functionality preserved
+
+#### Step 2B.7: Finalize StateSignal → State and EventSignal → Event
+- Update implementation so `State` is the primary class name (not `StateSignal`)
+- Update implementation so `Event` is the primary class name (not `EventSignal`)
+- Keep `StateSignal` and `EventSignal` as deprecated aliases
+- Update tests to use `State` and `Event` instead of `StateSignal` and `EventSignal`
+- **Files to modify:**
+  - `src/resource.ts`
+  - `src/extent.ts`
+  - Test files using `StateSignal` and `EventSignal`
+- **Test:** Run `npm test` to ensure functionality preserved
+
+#### Step 2B.8: Update graph.ts internal logic with new terminology
+- Update internal logic in `graph.ts` to use new terminology consistently
+- Replace internal variable names, method names, and comments to use:
+  - "signal" instead of "resource" 
+  - "dependencies" instead of "demands" in internal logic
+  - "moment" instead of "event" for timestamps
+  - "action" instead of "event" for loop terminology
+- This is separate from user-facing APIs - focuses on internal consistency
+- Be careful and incremental - run tests frequently during this change
+- **Files to modify:**
+  - `src/graph.ts` (internal implementation only)
+- **Test:** Run `npm test` after each group of changes to ensure functionality preserved
+
 ### Phase 3: Update Tests 🔄 TODO  
 **Goal:** Migrate all tests to use new terminology
 
 #### Step 3.1: Update Unit Tests - Core
 - Update `src/__tests__/behavior-graph.test.ts`
   - Replace Resource → Signal
-  - Replace Moment → EventSignal  
-  - Replace State → StateSignal
-  - Replace demands → dependencies
-  - Replace sideEffect → effect
-  - Replace .event → .moment
-  - Replace GraphEvent → Moment
-  - Replace eventLoop → actionLoop
-  - Replace EventLoopState → ActionLoopState
+  - Replace EventSignal → Event (after Phase 2B.7)
+  - Replace StateSignal → State (after Phase 2B.7)
+  - Replace any remaining dependencies() → dependsOn() (after Phase 2B.1)
+  - Replace demandable → dependable (after Phase 2B.6)
+  - Replace ActionLoopState → ActionLoopState (already done)
+  - Replace ActionLoopPhase → ActionLoopPhase (already done)
   - Replace helper usages (`lastEvent`, `currentEvent`, `traceEvent`, etc.) with their new moment terminology
-  - Replace EventLoopPhase → ActionLoopPhase
+  - Verify usage of extent.event() instead of extent.moment() (after Phase 2B.4)
 - **Test:** Run `npm test` to ensure all tests pass
 
-#### Step 3.2: Update Unit Tests - Resource Tests
-- Update any resource-specific tests
-- Update moment/state specific tests
+#### Step 3.2: Update Unit Tests - Signal Tests
+- Update any signal-specific tests (formerly resource tests)
+- Update event/state specific tests (formerly moment/state tests)
+- Update to use new terminology from Phase 2B changes
 - **Files to modify:**
   - `src/__tests__/vending.test.ts`
-  - Any other test files with resource usage
+  - Any other test files with signal usage
 - **Test:** Run `npm test` to ensure all tests pass
 
 #### Step 3.3: Update Documentation Tests
@@ -252,12 +344,14 @@ The most complex part is swapping "event" and "moment" because:
 #### Step 4.1: Update Core Documentation
 - Update `BGforLLMs-Core.md`
   - Replace "resource" with "signal" throughout
-  - Replace "moment resource" with "event signal"
-  - Replace "state resource" with "state signal"
-  - Replace "demands" with "dependencies"
+  - Replace "moment resource" with "event" (after Phase 2B.7)
+  - Replace "state resource" with "state" (after Phase 2B.7)
+  - Replace "demands" with "dependsOn" (after Phase 2B.1)
+  - Replace "demandable" with "dependable" (after Phase 2B.6)
   - Replace "event loop" with "action loop"
-  - Replace "side effect" with "effect"
+  - Replace "side effect" with "effect" (after Phase 2B.3)
   - Update the event/moment terminology carefully
+  - Update extent.moment() → extent.event() (after Phase 2B.4)
 - **Test:** Review for consistency and clarity
 
 #### Step 4.2: Update JavaScript Documentation
@@ -265,8 +359,9 @@ The most complex part is swapping "event" and "moment" because:
   - Apply same terminology changes as core docs
   - Update all code examples
   - Update API references
-  - Replace GraphEvent → Moment
+  - Replace ActionMoment → Moment (after Phase 2B.2)
   - Replace "event loop" → "action loop" in explanations
+  - Update StateSignal → State and EventSignal → Event (after Phase 2B.7)
 - **Test:** Review for consistency and clarity
 
 #### Step 4.3: Update README
@@ -285,8 +380,15 @@ The most complex part is swapping "event" and "moment" because:
 
 #### Step 5.1: Update Browser Example
 - Update `examples/browser/main.js`
-- Update `examples/browser/app.js`
+- Update `examples/browser/app.js` 
 - Update any HTML files with terminology
+- Apply all Phase 2B terminology changes:
+  - Resource → Signal
+  - StateSignal → State, EventSignal → Event
+  - dependencies() → dependsOn()
+  - sideEffect() → effect()
+  - extent.moment() → extent.event()
+  - demandable → dependable
 - **Files to modify:**
   - `examples/browser/main.js`
   - `examples/browser/app.js`
@@ -295,6 +397,7 @@ The most complex part is swapping "event" and "moment" because:
 
 #### Step 5.2: Update React App Example
 - Update all files in `examples/reactapp/src/`
+- Apply all Phase 2B terminology changes (same as Step 5.1)
 - **Files to modify:**
   - `examples/reactapp/src/CounterExtent.js`
   - `examples/reactapp/src/AllCountersExtent.js`
@@ -304,6 +407,7 @@ The most complex part is swapping "event" and "moment" because:
 #### Step 5.3: Update TodoMVC Examples
 - Update `examples/todomvc/js/` files
 - Update `examples/todomvc-react/js/` files
+- Apply all Phase 2B terminology changes (same as Step 5.1)
 - **Files to modify:**
   - `examples/todomvc/js/ListExtent.js`
   - `examples/todomvc/js/ItemExtent.js`
@@ -314,6 +418,7 @@ The most complex part is swapping "event" and "moment" because:
 
 #### Step 5.4: Update Performance Tests
 - Update `examples/perftests/src/index.ts`
+- Apply all Phase 2B terminology changes (same as Step 5.1)
 - **Test:** Run performance tests to ensure they work
 
 ### Phase 6: Update Exports and Public API 🔄 TODO
@@ -424,18 +529,29 @@ This is more than just documentation - it's core internal implementation that ma
 
 This plan ensures a systematic, safe migration with minimal risk and maximum backward compatibility.
 
-## 🚀 GUIDANCE FOR NEXT AGENT (Phase 3+)
+## 🚀 GUIDANCE FOR NEXT AGENT (Phase 2B+)
 
-### What You Can Safely Do:
-1. **Update tests** to use new terminology (`Signal`, `EventSignal`, `StateSignal`, `dependencies()`, `effect()`)
+### Phase 2B - API Updates Required:
+**Do these changes ONE AT A TIME, updating tests after each:**
+1. **Remove dependencies() from BehaviorBuilder** - keep only dependsOn()
+2. **Rename ActionMoment → Moment** - update tests to use new name
+3. **Remove sideEffect()** - keep only effect(), update tests
+4. **Rename extent.moment() → extent.event()** - update tests
+5. **Verify signal property names** - StateSignal.traceMoment, EventSignal.moment, Graph.lastMoment/currentMoment
+6. **Rename demandable → dependable** - update tests
+7. **Finalize StateSignal → State, EventSignal → Event** - update tests
+8. **Update graph.ts internal logic** - use new terminology internally
+
+### Phase 3+ - What You Can Safely Do:
+1. **Update tests** to use new terminology (`Signal`, `Event`, `State`, `dependsOn()`, `effect()`)
 2. **Update documentation** to use new names throughout
 3. **Update examples** to demonstrate new API
 4. **Reorder exports** to make new names primary in `src/index.ts`
 
 ### What to Be Careful About:
-1. **Don't change Behavior class internals** - the `demands`/`dependencies` split was intentionally conservative
-2. **Don't rename graph.ts methods** - `updateDemands()` etc. work fine as-is
-3. **Keep all deprecated aliases** - they provide essential backward compatibility
+1. **Phase 2B changes must be incremental** - one step at a time with tests passing
+2. **Keep all deprecated aliases** - they provide essential backward compatibility
+3. **Update tests immediately** after each Phase 2B API change
 
 ### Quick Verification Commands:
 ```bash
@@ -452,10 +568,14 @@ npm run test-coverage      # Should show good coverage
 - ✅ `src/graph.ts` - ActionLoopState/Phase renamed
 - ✅ `src/index.ts` - Exports both old and new names
 
-### Files Ready for Updates (Phase 3+):
-- 🔄 Test files: Can update to use new terminology
-- 🔄 Documentation: Can update to new terms
-- 🔄 Examples: Can update to demonstrate new API
-- 🔄 Export order: Can make new names primary
+### Files Ready for Phase 2B Updates:
+- 🔄 **src/behavior.ts** - Remove dependencies(), keep dependsOn()
+- 🔄 **src/common.ts** - Rename ActionMoment → Moment
+- 🔄 **src/behavior.ts, src/extent.ts** - Remove sideEffect(), keep effect()
+- 🔄 **src/extent.ts** - Rename moment() → event()
+- 🔄 **All source files** - Rename demandable → dependable
+- 🔄 **src/resource.ts** - Finalize State/Event as primary names
+- 🔄 **src/graph.ts** - Update internal terminology
+- 🔄 **Test files** - Update after each API change
 
-The hard work is done! Remaining phases are mostly find-and-replace updates. 🎉
+After Phase 2B, remaining phases are mostly find-and-replace updates. 🎉
