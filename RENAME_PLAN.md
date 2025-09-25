@@ -33,7 +33,7 @@ The most complex part is swapping "event" and "moment" because:
 - Add type aliases and alternative names in `src/common.ts`:
   - `TempMoment` as alias for `GraphEvent`
   - `TempEvent` as alias for current `Moment` class
-- Add deprecation warnings but maintain full compatibility
+- Annotate every alias with JSDoc `@deprecated` tags and a shared warning helper so usages surface during tooling
 - **Files to modify:**
   - `src/common.ts`
   - `src/resource.ts` (add TempEvent alias)
@@ -45,11 +45,13 @@ The most complex part is swapping "event" and "moment" because:
 - Add `EventSignal` as alias for `Moment`
 - Add `StateSignal` as alias for `State`
 - Update exports in `src/index.ts`
+- Mark all aliases with `@deprecated` and ensure TypeScript declaration files emit the tags
 - **Test:** Run `npm test` to ensure no regressions
 
 #### Step 1.3: Add Dependencies Aliases
 - Add `dependencies()` method as alias for `demands()` in `src/behavior.ts`
 - Add `dependsOn()` method with same functionality
+- Decorate each alias with `@deprecated` annotations or runtime warnings (behind a dev flag) to guide migration
 - **Test:** Run `npm test` to ensure no regressions
 
 #### Step 1.4: Add Effect Alias
@@ -57,13 +59,21 @@ The most complex part is swapping "event" and "moment" because:
 - Update relevant files where `sideEffect` is implemented
 - **Test:** Run `npm test` to ensure no regressions
 
+#### Step 1.5: Communicate In-Progress Terminology Changes
+- Add a short note to `README.md` explaining that terminology is being migrated and both names appear temporarily
+- Link to this plan or the tracking issue so users understand the transition
+- Remove the note during Phase 7 once new terminology is fully rolled out
+- Document that all legacy APIs are explicitly marked deprecated and scheduled for removal after the migration window
+
 ### Phase 2: Update Core Implementation
 **Goal:** Migrate implementation to use new names internally
+
+**Testing cadence:** Use quick checks (TypeScript build or targeted Jest paths) after each step, then run the full `npm test` suite after Step 2.3 and again after Step 2.8 to catch regressions without excessive repetition.
 
 #### Step 2.1: Migrate Event → Moment (GraphEvent → TempMoment)
 - Rename `GraphEvent` → `TempMoment` in `src/common.ts`
 - Update all internal usage of GraphEvent to TempMoment
-- Keep GraphEvent as deprecated alias
+- Keep `GraphEvent` exported as a deprecated alias with explicit deprecation annotations and references to the replacement
 - **Files to modify:**
   - `src/common.ts`
   - `src/graph.ts`
@@ -75,7 +85,7 @@ The most complex part is swapping "event" and "moment" because:
 #### Step 2.2: Migrate Moment → Event (Moment class → Event class)
 - Rename `Moment` class → `TempEventInternal` (temporary name)
 - Update all internal references
-- Keep `Moment` as deprecated alias pointing to TempEventInternal
+- Keep `Moment` as deprecated alias pointing to `TempEventInternal`, marked with `@deprecated`
 - **Files to modify:**
   - `src/resource.ts`
   - `src/extent.ts`
@@ -85,7 +95,8 @@ The most complex part is swapping "event" and "moment" because:
 #### Step 2.3: Final Event/Moment Swap
 - Rename `TempEventInternal` → `Event`
 - Rename `TempMoment` → `Moment`
-- Update `.event` property → `.moment` property
+- Update internal usage to prefer `.moment` while keeping a deprecated `.event` accessor that forwards to `.moment`
+- Rename helper fields and methods such as `lastEvent`, `currentEvent`, and `traceEvent` to their `Moment` equivalents while keeping deprecated shims
 - Keep old names as deprecated aliases
 - **Files to modify:**
   - `src/resource.ts`
@@ -96,7 +107,7 @@ The most complex part is swapping "event" and "moment" because:
 #### Step 2.4: Migrate Resource → Signal
 - Rename `Resource` class → `Signal` in `src/resource.ts`
 - Update all internal usage
-- Keep `Resource` as deprecated alias
+- Keep `Resource` as deprecated alias clearly annotated and routed through a shared deprecation helper to log guidance in development builds
 - **Files to modify:**
   - `src/resource.ts`
   - `src/behavior.ts`
@@ -107,7 +118,7 @@ The most complex part is swapping "event" and "moment" because:
 #### Step 2.5: Migrate Type-Specific Names
 - Rename `State` → `StateSignal` in implementation
 - Rename `Event` (former Moment) → `EventSignal` in implementation
-- Keep old names as deprecated aliases
+- Keep old names as deprecated aliases annotated and routed through the same deprecation helper
 - **Files to modify:**
   - `src/resource.ts`
   - Update extent factory methods
@@ -154,6 +165,7 @@ The most complex part is swapping "event" and "moment" because:
   - Replace GraphEvent → Moment
   - Replace eventLoop → actionLoop
   - Replace EventLoopState → ActionLoopState
+  - Replace helper usages (`lastEvent`, `currentEvent`, `traceEvent`, etc.) with their new moment terminology
   - Replace EventLoopPhase → ActionLoopPhase
 - **Test:** Run `npm test` to ensure all tests pass
 
@@ -246,6 +258,7 @@ The most complex part is swapping "event" and "moment" because:
 #### Step 6.1: Update Primary Exports
 - Update `src/index.ts` to export new names as primary
 - Keep old names as deprecated aliases
+- Document any aliases slated for removal by creating follow-up issues or TODOs so they do not linger indefinitely
 - **Files to modify:**
   - `src/index.ts`
 - **Test:** Run `npm test` to ensure backward compatibility
@@ -262,6 +275,7 @@ The most complex part is swapping "event" and "moment" because:
 - Run complete test suite: `npm test`
 - Run test coverage: `npm run test-coverage`
 - Verify all tests pass with new terminology
+- Capture changelog notes and draft a release summary communicating renamed APIs and deprecation timelines
 
 #### Step 7.2: Build Verification
 - Run full build: `npm run build`
@@ -272,11 +286,13 @@ The most complex part is swapping "event" and "moment" because:
 - Test all examples manually
 - Verify they work with renamed concepts
 - Check for any remaining old terminology
+- Remove the temporary README note added in Phase 1 once verification passes
 
 #### Step 7.4: Documentation Review
 - Final review of all documentation
 - Ensure terminology is consistent throughout
 - Verify code examples match current API
+- Remove or update any references to deprecated helper names such as `lastEvent`, `currentEvent`, and `traceEvent`
 
 ## Risk Mitigation
 
@@ -284,6 +300,7 @@ The most complex part is swapping "event" and "moment" because:
 - All old names maintained as deprecated aliases
 - Gradual migration allows catching issues early
 - Extensive testing at each step
+- Track planned alias removals with TODO comments or GitHub issues created in Phase 6 so their lifecycle is explicit
 
 ### Testing Strategy
 - Run tests after each step
