@@ -5,7 +5,7 @@
 
 import {Graph} from "./graph.js";
 import {Behavior, BehaviorBuilder} from "./behavior.js";
-import {Event, Signal, State} from "./resource.js";
+import {Signal, State} from "./resource.js";
 import {RelinkingOrder} from "./common.js";
 
 export enum ExtentRemoveStrategy {
@@ -117,7 +117,7 @@ export class Extent {
     debugConstructorName: string | undefined;
     debugName: string | undefined;
     behaviors: Behavior[] = [];
-    resources: Signal[] = [];
+    signals: Signal<unknown>[] = [];
     graph: Graph;
     addedToGraphWhen: number | null = null;
     addedToGraph: State<boolean>;
@@ -169,8 +169,8 @@ export class Extent {
         this.behaviors.push(behavior);
     }
 
-    addSignal(resource: Signal) {
-        this.resources.push(resource);
+    addSignal(signal: Signal<unknown>) {
+        this.signals.push(signal);
     }
 
     addToGraphWithAction(debugName?: string) {
@@ -215,7 +215,7 @@ export class Extent {
         }
     }
 
-    subscribeToJustUpdated(resources: Signal[], callback: (ext: this) => void): () => void {
+    subscribeToJustUpdated(resources: Signal<unknown>[], callback: (ext: this) => void): () => void {
         let unsubscribe = this.graph._subscribeToJustUpdated(resources, {extent: this, callback:callback as ((arg0: Extent | null) => void)});
         this.unsubscribes.add(unsubscribe);
         return unsubscribe;
@@ -229,7 +229,7 @@ export class Extent {
     }
 
     nameSignals() {
-        // automatically add any behaviors and resources that are contained
+        // automatically add any behaviors and signals that are contained
         // by this Extent object and name them with corresponding keys
         for (let key in this) {
             let object = this[key];
@@ -246,12 +246,8 @@ export class Extent {
         return b;
     }
 
-    resource(name?: string): Signal {
-        return new Signal(this, name);
-    }
-
-    event<T>(name?: string): Event<T> {
-        return new Event<T>(this, name);
+    signal<T>(name?: string): Signal<T> {
+        return new Signal<T>(this, name);
     }
 
     state<T>(initialState: T, name?: string): State<T> {

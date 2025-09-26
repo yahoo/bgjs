@@ -222,7 +222,7 @@ export class Graph {
 
         // validate removed resources are not still linked to remaining behaviors
         for (let removed of this.extentsRemoved) {
-            for (let resource of removed.resources) {
+            for (let resource of removed.signals) {
                 for (let demandedBy of resource.subsequents) {
                     if (demandedBy.extent.addedToGraphWhen != null) {
                         let err: any = new Error("Remaining behaviors must remove dynamicDemands to removed resources.");
@@ -254,7 +254,7 @@ export class Graph {
         this.updatedTransients.push(resource);
     }
 
-    resourceTouched(resource: Signal) {
+    resourceTouched(resource: Signal<unknown>) {
         if (this.currentMoment != null) {
             if (this.actionLoopState != null && this.actionLoopState.phase == ActionLoopPhase.action) {
                 this.actionLoopState.actionUpdates.push(resource);
@@ -300,11 +300,11 @@ export class Graph {
         }
     }
 
-    subscribeToJustUpdated(resources: Signal[], callback: () => void): () => void {
+    subscribeToJustUpdated(resources: Signal<unknown>[], callback: () => void): () => void {
         return this._subscribeToJustUpdated(resources, {extent: null, callback: callback});
     }
 
-    _subscribeToJustUpdated(resources: Signal[], subscription: Subscription): () => void {
+    _subscribeToJustUpdated(resources: Signal<unknown>[], subscription: Subscription): () => void {
         let allUnsubscribes: (()=>void)[] = [];
         for (let resource of resources) {
             let unsubscribe = resource._subscribeToJustUpdated(subscription);
@@ -451,7 +451,7 @@ export class Graph {
                     }
                 }
 
-                let addedDemands: Signal[] | undefined;
+                let addedDemands: Signal<unknown>[] | undefined;
                 for (let linkableDemand of allUntrackedDemands) {
                     let untrackedDemand = linkableDemand.signal;
                     if (untrackedDemand.extent.addedToGraphWhen == null) {
@@ -493,8 +493,8 @@ export class Graph {
                     }
                 }
 
-                let newDemands: Set<Signal> | null = null;
-                let orderingDemands: Set<Signal> | null = null;
+                let newDemands: Set<Signal<unknown>> | null = null;
+                let orderingDemands: Set<Signal<unknown>> | null = null;
                 for (let linkable of allUntrackedDemands) {
                     if (newDemands == null) {
                         newDemands = new Set();
@@ -764,7 +764,7 @@ enum ActionLoopPhase {
 
 export class ActionLoopState {
     action: Action;
-    actionUpdates: Signal[];
+    actionUpdates: Signal<unknown>[];
     currentSideEffect: SideEffect | null = null;
     phase: ActionLoopPhase;
 

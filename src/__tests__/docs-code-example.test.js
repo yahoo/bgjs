@@ -67,9 +67,9 @@ class LoginExtent extends Extent {
         // end::login_complete_enable[]
 
         // tag::login_complete_login[]
-        this.loginClick = this.event();
-        this.returnKey = this.event();
-        this.loginComplete = this.event();
+        this.loginClick = this.signal();
+        this.returnKey = this.signal();
+        this.loginComplete = this.signal();
         this.behavior()
             .supplies(this.loggingIn)
             .dependsOn(this.loginClick, this.returnKey, this.loginComplete)
@@ -214,8 +214,8 @@ class LoginExtent extends Extent {
                 });
             });
 
-        this.loginClick = this.event();
-        this.loginComplete = this.event();
+        this.loginClick = this.signal();
+        this.loginComplete = this.signal();
         this.behavior()
             .supplies(this.loggingIn)
             .dependsOn(this.loginClick, this.loginComplete)

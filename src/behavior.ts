@@ -10,9 +10,9 @@ import {OrderingState, RelinkingOrder} from "./common";
 
 
 export class Behavior implements Orderable {
-    demands: Set<Signal> | null;
-    orderingDemands: Set<Signal> | null;
-    supplies: Set<Signal> | null;
+    demands: Set<Signal<any>> | null;
+    orderingDemands: Set<Signal<any>> | null;
+    supplies: Set<Signal<any>> | null;
     block: (extent: Extent) => void;
     enqueuedWhen: number | null = null;
     removedWhen: number | null = null;
@@ -22,10 +22,10 @@ export class Behavior implements Orderable {
 
     untrackedDemands: Dependable[] | null;
     untrackedDynamicDemands: Dependable[] | null;
-    untrackedSupplies: Signal[] | null;
-    untrackedDynamicSupplies: Signal[] | null;
+    untrackedSupplies: Signal<any>[] | null;
+    untrackedDynamicSupplies: Signal<any>[] | null;
 
-    constructor(extent: Extent, demands: Dependable[] | null, supplies: Signal[] | null, block: (extent: Extent) => void) {
+    constructor(extent: Extent, demands: Dependable[] | null, supplies: Signal<any>[] | null, block: (extent: Extent) => void) {
         this.extent = extent;
         extent.addBehavior(this);
         this.demands = null;
@@ -62,8 +62,8 @@ export class Behavior implements Orderable {
         this.extent.graph.updateDependencies(this, newDemands?.filter(item => item != undefined) as (Dependable[] | null));
     }
 
-    setDynamicSupplies(newSupplies: (Signal | undefined)[] | null) {
-        this.extent.graph.updateSupplies(this, newSupplies?.filter(item => item !== undefined) as (Signal[] | null));
+    setDynamicSupplies(newSupplies: (Signal<any> | undefined)[] | null) {
+        this.extent.graph.updateSupplies(this, newSupplies?.filter(item => item !== undefined) as (Signal<any>[] | null));
     }
 
 
@@ -72,12 +72,12 @@ export class Behavior implements Orderable {
 export class BehaviorBuilder<T extends Extent> {
     extent: T;
     untrackedDependencies: Dependable[] | null = null;
-    untrackedSupplies: Signal[] | null = null;
+    untrackedSupplies: Signal<any>[] | null = null;
     dynamicDependencySwitches: Dependable[] | null = null;
     dynamicDependencyLinks: ((ext: T) => (Dependable | undefined)[] | null) | null = null;
     dynamicDependencyRelinkingOrder : RelinkingOrder = RelinkingOrder.relinkingOrderPrior;
     dynamicSupplySwitches: Dependable[] | null = null;
-    dynamicSupplyLinks: ((ext: T) => (Signal | undefined)[] | null) | null = null;
+    dynamicSupplyLinks: ((ext: T) => (Signal<any> | undefined)[] | null) | null = null;
     dynamicSupplyRelinkingOrder : RelinkingOrder = RelinkingOrder.relinkingOrderPrior;
 
     constructor(extent: T) {
@@ -90,7 +90,7 @@ export class BehaviorBuilder<T extends Extent> {
     }
 
 
-    supplies(...supplies: Signal[]): this {
+    supplies(...supplies: Signal<unknown>[]): this {
         this.untrackedSupplies = supplies;
         return this;
     }
@@ -105,7 +105,7 @@ export class BehaviorBuilder<T extends Extent> {
     }
 
 
-    dynamicSupplies(switches: Dependable[], links: ((ext: T) => (Signal | undefined)[] | null), relinkingOrder?: RelinkingOrder): this {
+    dynamicSupplies(switches: Dependable[], links: ((ext: T) => (Signal<any> | undefined)[] | null), relinkingOrder?: RelinkingOrder): this {
         this.dynamicSupplySwitches = switches;
         this.dynamicSupplyLinks = links;
         if (relinkingOrder != undefined) {
@@ -118,9 +118,9 @@ export class BehaviorBuilder<T extends Extent> {
         let hasDynamicDependencies = this.dynamicDependencySwitches != null;
         if (this.untrackedDependencies == null) { this.untrackedDependencies = []; }
         if (this.untrackedSupplies == null) { this.untrackedSupplies = []; }
-        let dynamicDependencySignal: Signal;
+        let dynamicDependencySignal: Signal<any>;
         if (hasDynamicDependencies) {
-            dynamicDependencySignal = this.extent.resource('(BG Dynamic Dependency Signal)')
+            dynamicDependencySignal = this.extent.signal('(BG Dynamic Dependency Signal)')
             if (this.dynamicDependencyRelinkingOrder == RelinkingOrder.relinkingOrderPrior) {
                 this.untrackedDependencies!.push(dynamicDependencySignal);
             } else {
@@ -129,9 +129,9 @@ export class BehaviorBuilder<T extends Extent> {
         }
 
         let hasDynamicSupplies = this.dynamicSupplySwitches != null;
-        let dynamicSupplySignal: Signal;
+        let dynamicSupplySignal: Signal<any>;
         if (hasDynamicSupplies) {
-            dynamicSupplySignal = this.extent.resource('(BG Dynamic Supply Signal)');
+            dynamicSupplySignal = this.extent.signal('(BG Dynamic Supply Signal)');
             if (this.dynamicSupplyRelinkingOrder == RelinkingOrder.relinkingOrderPrior) {
                 this.untrackedDependencies!.push(dynamicSupplySignal);
             } else {
@@ -142,7 +142,7 @@ export class BehaviorBuilder<T extends Extent> {
         let mainBehavior = new Behavior(this.extent, this.untrackedDependencies, this.untrackedSupplies, block as (arg0: Extent) => void);
 
         if (hasDynamicDependencies) {
-            let supplies: Signal[] = [];
+            let supplies: Signal<any>[] = [];
             let dependencies: Dependable[] | null = this.dynamicDependencySwitches;
             if (this.dynamicDependencyRelinkingOrder == RelinkingOrder.relinkingOrderPrior) {
                 supplies.push(dynamicDependencySignal!);
@@ -157,7 +157,7 @@ export class BehaviorBuilder<T extends Extent> {
         }
 
         if (hasDynamicSupplies) {
-            let supplies: Signal[] = [];
+            let supplies: Signal<any>[] = [];
             let dependencies: Dependable[] | null = this.dynamicSupplySwitches;
             if (this.dynamicSupplyRelinkingOrder == RelinkingOrder.relinkingOrderPrior) {
                 supplies.push(dynamicSupplySignal!);

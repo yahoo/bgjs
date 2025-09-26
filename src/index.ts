@@ -9,7 +9,6 @@ export {
 
 export {
     Signal,
-    Event,
     State,
     Dependable
 } from "./resource.js"

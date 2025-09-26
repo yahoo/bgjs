@@ -12,7 +12,7 @@ This document outlines a comprehensive plan to rename core concepts in the Behav
 - **Phase 2B: Final API Updates** - All deprecated APIs removed, tests updated to new terminology
 
 ### 🔄 REMAINING PHASES:
-- **Phase 3: Signal/Event Consolidation Migration** - 🔄 NEW - Merge Signal into Event, rename Event to Signal
+- **Phase 3: Signal/Event Consolidation Migration** - ✅ COMPLETED - Merged Signal into Event, renamed Event to Signal, updated extent.event() to extent.signal()
 - **Phase 4: Update Tests** - ✅ COMPLETED (Tests already converted during Phase 2B cleanup)
 - **Phase 5: Update Documentation** - Update all documentation files
 - **Phase 6: Update Examples** - Update example applications  
@@ -27,22 +27,21 @@ This document outlines a comprehensive plan to rename core concepts in the Behav
 
 1. **Final Naming Completed**: 
    - `ActionMoment` → `Moment` (timestamp class)
-   - `Resource` → `Signal` (base signal class)
-   - `Moment` (old event signal alias) → `Event` (event signal class)
-   - `State` (old state signal alias) → `State` (state signal class)
+   - `Resource` → Removed (consolidated into Signal)
+   - `Event` → `Signal<T>` (base signal class for event-like signals)
+   - `State` → `State<T>` (state signals extending Signal<T>)
    - `Demandable` → `Dependable` (dependency interface)
 
 2. **Clean API Implementation**:
    - All deprecated aliases and methods removed completely
    - `BehaviorBuilder` uses `dependsOn()` as primary method
-   - Event signals use `.moment` property for timestamps
-   - Extent uses `extent.event()` to create event signals
+   - Signal instances use `.moment` property for timestamps
+   - Extent uses `extent.signal()` to create signal instances
    - No backward compatibility - clean break for new API
 
 3. **Final Class Hierarchy**:
-   - `Signal` - base signal class
-   - `Event<T>` - event signals (formerly "moment resources")
-   - `State<T>` - state signals (formerly "state resources")
+   - `Signal<T>` - base signal class (formerly "Event", which was formerly "moment resources")
+   - `State<T>` - state signals extending Signal<T> (formerly "state resources")
    - `Moment` - timestamp objects (formerly "GraphEvent")
    - `Dependable` - dependency interface (formerly "Demandable")
 
@@ -691,17 +690,80 @@ Signal methods that are NOT overridden by Event need to be moved:
   - `src/resource.ts`
 - **Test:** Run `npm test` to ensure functionality preserved
 
-#### Step 3.2: Update Event class to be self-contained
+#### Step 3.2: Update Event class to be self-contained and enable State inheritance
 - Remove `extends Signal` from Event class declaration
 - Ensure Event implements Dependable interface directly
-- Implement any missing interface methods
+- **Key API improvement:** Remove `| undefined` from Event's value types to enable clean State inheritance
+- Update Event's `value` property from `T | undefined` to `T`
+- Update Event's `update()` and `updateWithAction()` methods to use conditional types for parameter handling
+- Use method overloading to allow `Event<undefined>.update()` to be called with no parameters
+- **Implementation approach:**
+  ```typescript
+  export class Event<T = undefined> implements Dependable, Transient {
+      private _happenedValue: T;  // Remove | undefined
+      
+      get value(): T {  // Remove | undefined
+          this.assertValidAccessor();
+          return this._happenedValue;
+      }
+      
+      // Method overloading for update()
+      update(value: T): void;
+      update(value?: T extends undefined ? undefined : never): void;
+      update(value?: T): void {
+          this.assertValidUpdater();
+          this._happened = true;
+          this._happenedValue = value as T;
+          this._happenedWhen = this.graph.currentMoment;
+          this.notifyJustUpdatedSubscribers();
+          this.graph.resourceTouched(this);
+          this.graph.trackTransient(this);
+      }
+      
+      // Similar overloading for updateWithAction()
+      updateWithAction(value: T, debugName?: string): void;
+      updateWithAction(value?: T extends undefined ? undefined : never, debugName?: string): void;
+      updateWithAction(value?: T, debugName?: string): void {
+          this.graph.action(() => {
+              this.update(value as T);
+          }, debugName);
+      }
+  }
+  ```
+- **Benefits:** This enables `State<T>` to cleanly extend `Event<T>` without type conflicts
 - **Files to modify:**
   - `src/resource.ts`
 - **Test:** Run `npm test` to ensure functionality preserved
 
 #### Step 3.3: Update State to extend new Event class
 - Change State inheritance from `extends Signal` to `extends Event<T>`
-- Test that State functionality works correctly
+- **Now clean inheritance:** With Event<T> having `value: T` (not `T | undefined`), State can cleanly override this
+- State's `value: T` property will naturally override Event's `value: T` property
+- Remove State's `get value()` method since it now inherits a compatible one from Event
+- Ensure State's constructor properly calls `super(extent, name)` and then sets initial value
+- **Updated State class approach:**
+  ```typescript
+  export class State<T> extends Event<T> implements Transient {
+      private currentState: StateHistory<T>;
+      private previousState: StateHistory<T> | null = null;
+
+      constructor(extent: Extent, initialState: T, name?: string) {
+          super(extent, name);
+          this.currentState = { value: initialState, moment: Moment.initialEvent };
+          // Set the initial value in the parent Event
+          this._happenedValue = initialState;
+      }
+
+      // Override get value() to return current state value
+      get value(): T {
+          this.assertValidAccessor();
+          return this.currentState.value;
+      }
+      
+      // State-specific methods remain the same...
+  }
+  ```
+- **Benefits:** Cleaner inheritance hierarchy, State naturally has all Event functionality
 - **Files to modify:**
   - `src/resource.ts`  
 - **Test:** Run `npm test` to ensure functionality preserved
@@ -789,6 +851,8 @@ Signal methods that are NOT overridden by Event need to be moved:
 2. **More intuitive naming** - "Signal" is the core concept, events are just signals
 3. **Cleaner API** - No need for extent.resource() since Signal is concrete
 4. **Better conceptual model** - Signals can have values and events, State specializes this
+5. **Clean inheritance** - State<T> naturally extends Signal<T> with compatible value types
+6. **Type safety** - Method overloading enables `Signal<undefined>.update()` with no parameters while maintaining type safety for other types
 
 ### Success Criteria
 
@@ -821,28 +885,29 @@ import { Resource, Moment, State, Demandable, ActionMoment, GraphEvent } from 'b
 
 **New imports:**
 ```typescript
-import { Signal, Event, State, Dependable, Moment } from 'behavior-graph';
+import { Signal, State, Dependable, Moment } from 'behavior-graph';
 ```
 
 **Import mapping:**
-- `Resource` → `Signal`
-- `Moment<T>` (event signals) → `Event<T>`
-- `State<T>` → `State<T>` (unchanged)
+- `Resource` → Removed (use `Signal` instead)
+- `Event` → Removed (consolidated into `Signal`)
+- `Moment<T>` (event signals) → `Signal<T>`
+- `State<T>` → `State<T>` (unchanged, but now extends Signal<T>)
 - `Demandable` → `Dependable`
 - `ActionMoment` → `Moment`
 - `GraphEvent` → `Moment`
 
 #### 2. **Update Type Annotations**
 
-**Event Signals:**
+**Event-like Signals:**
 ```typescript
 // Old
 let buttonClick: Moment = this.moment();
 let dataEvent: Moment<number> = this.moment();
 
 // New
-let buttonClick: Event = this.event();
-let dataEvent: Event<number> = this.event();
+let buttonClick: Signal = this.signal();
+let dataEvent: Signal<number> = this.signal();
 ```
 
 **State Signals:**
@@ -859,8 +924,8 @@ let counter: State<number> = this.state(0);
 // Old
 let signal: Resource = this.resource();
 
-// New
-let signal: Signal = this.resource();
+// New  
+let signal: Signal = this.signal();  // or this.resource() for basic signals
 ```
 
 **Dependencies:**
@@ -874,22 +939,24 @@ function processDeps(deps: Dependable[]): void { }
 
 #### 3. **Update Extent Method Calls**
 
-**Event Signal Creation:**
+**Signal Creation:**
 ```typescript
 // Old
 this.buttonAction = this.moment();
 this.dataReceived = this.moment<DataType>();
 
 // New
-this.buttonAction = this.event();
-this.dataReceived = this.event<DataType>();
+this.buttonAction = this.signal();
+this.dataReceived = this.signal<DataType>();
 ```
 
-**State and Signal Creation (unchanged):**
+**State Creation (unchanged):**
 ```typescript
 // These remain the same
 this.counter = this.state(0);
-this.signal = this.resource();
+
+// Basic signals can also use:
+this.basicSignal = this.resource();  // Creates Signal<undefined>
 ```
 
 #### 4. **Update Behavior Definitions**
@@ -941,19 +1008,19 @@ extent.effect(() => {
 
 #### 5. **Update Property Access**
 
-**Event Signal Timestamps:**
+**Signal Timestamps:**
 ```typescript
 // Old
 let timestamp = myEvent.event;  // This was confusing!
 
 // New
-let timestamp = myEvent.moment; // Clear: moment in time when event occurred
+let timestamp = mySignal.moment; // Clear: moment in time when signal was updated
 ```
 
-**State Signal Timestamps (unchanged):**
+**State Signal Properties (unchanged):**
 ```typescript
 // These remain the same
-let timestamp = myState.event;  // When state was last updated
+let timestamp = myState.event;  // When state was last updated (note: still .event for states)
 let value = myState.value;      // Current value
 ```
 
@@ -966,7 +1033,7 @@ let momentSignal: Moment = this.moment();
 let resourceSignal: Resource = this.resource();
 
 // New
-let eventSignal: Event = this.event();
+let eventSignal: Signal = this.signal();
 let baseSignal: Signal = this.resource();
 ```
 
@@ -977,7 +1044,7 @@ let baseSignal: Signal = this.resource();
 // Handle resource updates
 
 // New  
-// Create event signal for button clicks
+// Create signal for button clicks
 // Handle signal updates
 ```
 
@@ -988,22 +1055,27 @@ Here's a regex-based approach for large codebases:
 ```bash
 # Import updates
 sed -i 's/import.*Resource.*from/import { Signal } from/g' **/*.ts
-sed -i 's/import.*Moment.*from/import { Event } from/g' **/*.ts
+sed -i 's/import.*Event.*from/import { Signal } from/g' **/*.ts
+sed -i 's/import.*Moment.*from/import { Signal } from/g' **/*.ts
 sed -i 's/import.*Demandable.*from/import { Dependable } from/g' **/*.ts
 
 # Method calls
 sed -i 's/\.demands(/\.dependsOn(/g' **/*.ts
 sed -i 's/\.dynamicDemands(/\.dynamicDependsOn(/g' **/*.ts
 sed -i 's/\.sideEffect(/\.effect(/g' **/*.ts
-sed -i 's/\.moment()/\.event()/g' **/*.ts
+sed -i 's/\.moment()/\.signal()/g' **/*.ts
 
 # Type annotations (be careful with these - may need manual review)
-sed -i 's/: Moment\b/: Event/g' **/*.ts
+sed -i 's/: Moment\b/: Signal/g' **/*.ts
 sed -i 's/: Resource\b/: Signal/g' **/*.ts
 sed -i 's/: Demandable\b/: Dependable/g' **/*.ts
 
 # Property access (requires careful review)
-sed -i 's/\.event\b/\.moment/g' **/*.ts  # Only for event signals!
+sed -i 's/\.event\b/\.moment/g' **/*.ts 
+sed -i 's/\.lastEvent\b/\.lastMoment/g' **/*.ts 
+sed -i 's/\.currentEvent\b/\.currentMoment/g' **/*.ts 
+sed -i 's/\.traceEvent\b/\.traceMoment/g' **/*.ts 
+ # Only for signal timestamp access!
 ```
 
 **⚠️ Important:** Test thoroughly after automated changes!
@@ -1030,32 +1102,32 @@ sed -i 's/\.event\b/\.moment/g' **/*.ts  # Only for event signals!
 
 ### 🆘 **Common Migration Issues**
 
-#### Issue 1: Mixed Event/Moment Usage
-**Problem:** Confusion between event signals and timestamps
+#### Issue 1: Mixed Signal/Moment Usage
+**Problem:** Confusion between signals and timestamps
 ```typescript
 // Wrong - mixing concepts
-let eventSignal: Event = this.event();
-let timestamp = eventSignal.event; // This property doesn't exist!
+let signal: Signal = this.signal();
+let timestamp = signal.event; // This property doesn't exist!
 ```
 
 **Solution:**
 ```typescript
 // Correct
-let eventSignal: Event = this.event();
-let timestamp = eventSignal.moment; // When the event occurred
+let signal: Signal = this.signal();
+let timestamp = signal.moment; // When the signal was updated
 ```
 
 #### Issue 2: Import Conflicts
 **Problem:** Multiple old imports in same file
 ```typescript
 // Problematic
-import { Resource, Moment, State } from 'behavior-graph';
+import { Resource, Event, Moment, State } from 'behavior-graph';
 ```
 
 **Solution:**
 ```typescript
 // Clean
-import { Signal, Event, State } from 'behavior-graph';
+import { Signal, State, Dependable, Moment } from 'behavior-graph';
 ```
 
 #### Issue 3: Dynamic Dependency Method Name

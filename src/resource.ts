@@ -14,12 +14,13 @@ export enum LinkType {
 }
 
 export interface Dependable {
-    signal: Signal,
+    signal: Signal<unknown>,
     type: LinkType
 }
 
 
-export class Signal implements Dependable {
+
+export class Signal<T = undefined> implements Dependable, Transient {
     debugName: string | null;
     isSignal: boolean = true;
     extent: Extent;
@@ -28,6 +29,11 @@ export class Signal implements Dependable {
     suppliedBy: Behavior | null = null;
     skipChecks: boolean = false;
     didUpdateSubscribers?: Set<Subscription>;
+    
+    // Signal value and timestamp properties
+    protected _happened: boolean = false;
+    protected _happenedValue!: T;
+    protected _happenedWhen: Moment | null = null;
 
     constructor(extent: Extent, name?: string) {
         this.extent = extent;
@@ -40,11 +46,12 @@ export class Signal implements Dependable {
         }
     }
 
+    // Dependable interface implementation
     get order(): Dependable {
         return {signal: this, type: LinkType.order }
     }
 
-    get signal(): Signal {
+    get signal(): Signal<unknown> {
         return this;
     }
 
@@ -52,14 +59,7 @@ export class Signal implements Dependable {
         return LinkType.reactive;
     }
 
-    toString() {
-        let name = "Signal";
-        if (this.debugName != null) {
-            name = this.debugName + "(s)";
-        }
-        return name;
-    }
-
+    // Validation methods
     assertValidUpdater() {
         let graph = this.graph;
         let currentBehavior = graph.currentBehavior;
@@ -96,11 +96,7 @@ export class Signal implements Dependable {
         }
     }
 
-    get justUpdated(): boolean {
-        this.assertValidAccessor();
-        return false;
-    }
-
+    // Subscription methods
     subscribeToJustUpdated(callback: () => void): (() => void) {
         return this._subscribeToJustUpdated({extent: null, callback: callback})
     }
@@ -121,19 +117,13 @@ export class Signal implements Dependable {
             this.graph._notifyJustUpdatedSubscribers(this.didUpdateSubscribers!);
         }
     }
-}
-
-export class Event<T = undefined> extends Signal implements Transient {
-    private _happened: boolean = false;
-    private _happenedValue: T | undefined = undefined;
-    private _happenedWhen: Moment | null = null;
 
     get justUpdated(): boolean {
         this.assertValidAccessor();
         return this._happened;
     }
 
-    get value(): T | undefined {
+    get value(): T {
         this.assertValidAccessor();
         return this._happenedValue;
     }
@@ -143,11 +133,10 @@ export class Event<T = undefined> extends Signal implements Transient {
         return this._happenedWhen;
     }
 
-
     toString() {
-        let name = "EventSignal";
+        let name = "Signal";
         if (this.debugName != null) {
-            name = (this.debugName + "(es)" )
+            name = (this.debugName + "(s)" )
         }
         if (this._happenedValue !== undefined) {
             name = name + "=" + this._happenedValue;
@@ -162,17 +151,22 @@ export class Event<T = undefined> extends Signal implements Transient {
         return this.justUpdated && this._happenedValue == value;
     }
 
-    updateWithAction(value: T | undefined = undefined, debugName?: string) {
+    // Method overloading for updateWithAction
+    updateWithAction(value: T, debugName?: string): void;
+    updateWithAction(value?: T extends undefined ? undefined : never, debugName?: string): void;
+    updateWithAction(value?: T, debugName?: string): void {
         this.graph.action(() => {
-            this.update(value);
+            this.update(value as T);
         }, debugName);
-        return;
     }
 
-    update(value: T | undefined = undefined) {
+    // Method overloading for update
+    update(value: T): void;
+    update(value?: T extends undefined ? undefined : never): void;
+    update(value?: T): void {
         this.assertValidUpdater();
         this._happened = true;
-        this._happenedValue = value;
+        this._happenedValue = value as T;
         this._happenedWhen = this.graph.currentMoment;
         this.notifyJustUpdatedSubscribers();
         this.graph.resourceTouched(this);
@@ -181,7 +175,9 @@ export class Event<T = undefined> extends Signal implements Transient {
 
     clear(): void {
         this._happened = false;
-        this._happenedValue = undefined;
+        // Note: _happenedValue is not meaningful when _happened is false
+        // but we need to set it to something for type safety
+        this._happenedValue = undefined as any;
     }
 
 }
@@ -192,13 +188,16 @@ export class Event<T = undefined> extends Signal implements Transient {
 
 
 export type StateHistory<T> = { value: T, moment: Moment };
-export class State<T> extends Signal implements Transient {
+export class State<T> extends Signal<T> implements Transient {
     private currentState: StateHistory<T>;
     private previousState: StateHistory<T> | null = null;
 
     constructor(extent: Extent, initialState: T, name?: string) {
         super(extent, name);
         this.currentState = { value: initialState, moment: Moment.initialEvent };
+        // Initialize the Event's value with the initial state
+        this._happenedValue = initialState;
+        this._happened = false;
     }
 
     toString() {
@@ -211,18 +210,23 @@ export class State<T> extends Signal implements Transient {
         return name;
     }
 
-    updateWithAction(newValue: T, debugName?: string) {
+    // Override with compatible method signature
+    updateWithAction(newValue: T, debugName?: string): void;
+    updateWithAction(newValue?: T extends undefined ? undefined : never, debugName?: string): void;
+    updateWithAction(newValue?: T, debugName?: string): void {
         this.graph.action(() => {
-            this.update(newValue);
+            this.update(newValue as T);
         }, debugName);
-        return;
     }
 
-    update(newValue: T) {
+    // Override with compatible method signature
+    update(newValue: T): void;
+    update(newValue?: T extends undefined ? undefined : never): void;
+    update(newValue?: T): void {
         if (this.currentState.value === newValue) {
             return;
         }
-        this.updateForce(newValue);
+        this.updateForce(newValue as T);
     }
 
     updateForce(newValue: T) {

@@ -9,9 +9,9 @@ class Extent1 extends Extent {
         super(graph);
 
         // tag-start: Behavior-1
-        this.moment1 = this.event();
-        this.moment2 = this.event();
-        this.moment3 = this.event();
+        this.moment1 = this.signal();
+        this.moment2 = this.signal();
+        this.moment3 = this.signal();
         this.behavior()
             .dependsOn(this.moment1, this.moment2)
             .supplies(this.moment3)
@@ -38,8 +38,8 @@ class Extent1 extends Extent {
         // tag-end: Behavior-2
 
         // tag-begin: Intro-1
-        this.increment = this.event();
-        this.reset = this.event();
+        this.increment = this.signal();
+        this.reset = this.signal();
         this.counter = this.state(0);
 
         this.behavior()
@@ -65,7 +65,7 @@ class MyExtent extends Extent {
     constructor(graph) {
         super(graph);
 
-        this.toggleSwitch = this.event();
+        this.toggleSwitch = this.signal();
         this.currentState = this.state(false);
 
         this.behavior()
@@ -90,8 +90,8 @@ class Thermostat extends Extent {
 
         this.heatingSystem = {turnOn: function() {}}
 
-        this.upButtonPressed = this.event()
-        this.downButtonPressed = this.event()
+        this.upButtonPressed = this.signal()
+        this.downButtonPressed = this.signal()
         this.desiredTemperature = this.state(65);
 
         this.behavior()

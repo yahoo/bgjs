@@ -3,13 +3,13 @@
 //
 
 
-import {Behavior, Extent, Graph, Moment, Event, State} from '../index.js';
+import {Behavior, Extent, Graph, Moment, Signal, State} from '../index.js';
 
 describe('Version 1: Simple Vending Machine', () => {
 
     class VendingMachine extends Extent {
         sodasVended: number = 0;
-        buttonAction: Event = this.event();
+        buttonAction: Signal = this.signal();
         vendEffect: Behavior = this.behavior()
             .dependsOn(this.buttonAction)
             .runs((extent: VendingMachine) => {
@@ -37,8 +37,8 @@ describe('Version 2: No Free Soda', () => {
         SODA_PRICE: number = 100;
         sodasVended: number = 0;
 
-        buttonAction: Event = this.event();
-        insertCoinsAction: Event<number> = this.event();
+        buttonAction: Signal = this.signal();
+        insertCoinsAction: Signal<number> = this.signal();
         coinsTotal: State<number> = this.state(0);
 
         vendEffect: Behavior = this.behavior()
@@ -115,9 +115,9 @@ describe('Version 3: Cans', () => {
         cansDisplay: number = 0;
         coinsDisplay: number = 0;
 
-        buttonAction: Event = this.event();
-        insertCoinsAction: Event<number> = this.event();
-        restockAction: Event<number> = this.event();
+        buttonAction: Signal = this.signal();
+        insertCoinsAction: Signal<number> = this.signal();
+        restockAction: Signal<number> = this.signal();
 
         coinsTotal: State<number> = this.state(0);
         cansTotal: State<number> = this.state(0);
@@ -208,11 +208,11 @@ describe('Version 4: Vending State', () => {
         cansDisplay: number = 0;
         coinsDisplay: number = 0;
 
-        buttonAction: Event = this.event();
-        insertCoinsAction: Event<number> = this.event();
-        restockAction: Event<number> = this.event();
+        buttonAction: Signal = this.signal();
+        insertCoinsAction: Signal<number> = this.signal();
+        restockAction: Signal<number> = this.signal();
         vending: State<boolean> = this.state(false);
-        completeVendAction: Event = this.event();
+        completeVendAction: Signal = this.signal();
 
         coinsTotal: State<number> = this.state(0);
         cansTotal: State<number> = this.state(0);
@@ -347,12 +347,12 @@ describe('Version 5: Jammed', () => {
         coinsReturned: number = 0;
 
         // measures
-        buttonAction: Event = this.event();
-        insertCoinsAction: Event<number> = this.event();
-        restockAction: Event<number> = this.event();
-        completeVendAction: Event = this.event();
-        timeoutAction: Event = this.event();
-        fixJamAction: Event = this.event();
+        buttonAction: Signal = this.signal();
+        insertCoinsAction: Signal<number> = this.signal();
+        restockAction: Signal<number> = this.signal();
+        completeVendAction: Signal = this.signal();
+        timeoutAction: Signal = this.signal();
+        fixJamAction: Signal = this.signal();
 
         // resources
         vending: State<boolean> = this.state(false);
