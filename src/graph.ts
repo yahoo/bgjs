@@ -250,11 +250,7 @@ export class Graph {
         }
     }
 
-    trackTransient(resource: Transient) {
-        this.updatedTransients.push(resource);
-    }
-
-    resourceTouched(resource: Signal<unknown>) {
+    resourceUpdated(resource: Signal<unknown>) {
         if (this.currentMoment != null) {
             if (this.actionLoopState != null && this.actionLoopState.phase == ActionLoopPhase.action) {
                 this.actionLoopState.actionUpdates.push(resource);
@@ -266,6 +262,7 @@ export class Graph {
                 }
             }
         }
+        this.updatedTransients.push(resource);
     }
 
     private activateBehavior(behavior: Behavior, sequence: number) {

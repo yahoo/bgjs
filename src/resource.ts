@@ -169,8 +169,7 @@ export class Signal<T = undefined> implements Dependable, Transient {
         this._happenedValue = value;
         this._happenedWhen = this.graph.currentMoment;
         this.notifyJustUpdatedSubscribers();
-        this.graph.resourceTouched(this);
-        this.graph.trackTransient(this);
+        this.graph.resourceUpdated(this);
     }
 
     clear(): void {
@@ -244,8 +243,7 @@ export class State<T> extends Signal<T> implements Transient {
 
         this.notifyJustUpdatedSubscribers();
 
-        this.graph.resourceTouched(this);
-        this.graph.trackTransient(this);
+        this.graph.resourceUpdated(this);
     }
 
     clear(): void {
