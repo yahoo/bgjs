@@ -32,7 +32,7 @@ export class Signal<T = undefined> implements Dependable, Transient {
     
     // Signal value and timestamp properties
     protected _happened: boolean = false;
-    protected _happenedValue!: T;
+    protected _happenedValue: T | undefined = undefined;
     protected _happenedWhen: Moment | null = null;
 
     constructor(extent: Extent, name?: string) {
@@ -125,7 +125,7 @@ export class Signal<T = undefined> implements Dependable, Transient {
 
     get value(): T {
         this.assertValidAccessor();
-        return this._happenedValue;
+        return this._happenedValue as T;
     }
 
     get moment(): Moment | null {
@@ -148,7 +148,7 @@ export class Signal<T = undefined> implements Dependable, Transient {
     }
 
     justUpdatedTo(value: T): boolean {
-        return this.justUpdated && this._happenedValue == value;
+        return this.justUpdated && this._happenedValue === value;
     }
 
     // Method overloading for updateWithAction
@@ -166,7 +166,7 @@ export class Signal<T = undefined> implements Dependable, Transient {
     update(value?: T): void {
         this.assertValidUpdater();
         this._happened = true;
-        this._happenedValue = value as T;
+        this._happenedValue = value;
         this._happenedWhen = this.graph.currentMoment;
         this.notifyJustUpdatedSubscribers();
         this.graph.resourceTouched(this);
@@ -177,7 +177,7 @@ export class Signal<T = undefined> implements Dependable, Transient {
         this._happened = false;
         // Note: _happenedValue is not meaningful when _happened is false
         // but we need to set it to something for type safety
-        this._happenedValue = undefined as any;
+        this._happenedValue = undefined;
     }
 
 }
