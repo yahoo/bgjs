@@ -19,7 +19,7 @@ This document outlines a comprehensive plan to rename core concepts in the Behav
 - **Phase 7: Update Exports and Public API** - ✅ COMPLETED (Clean exports implemented)
 - **Phase 8: Final Validation** - ✅ COMPLETED (All 156 tests passing, clean build)
 
-**Current Status:** 🎉 **CORE MIGRATION COMPLETE!** Clean API with no deprecated names. All tests passing. Ready for documentation and examples updates.
+**Current Status:** 🎉 **ARCHITECTURE COMPLETE!** Signal/Event consolidation finished. Clean API with no deprecated names. All tests passing. Ready for documentation and examples updates.
 
 ## 📝 IMPORTANT IMPLEMENTATION NOTES FOR NEXT AGENT
 
@@ -540,13 +540,13 @@ This plan ensures a systematic, safe migration with minimal risk and maximum bac
 
 #### Phase 3: Signal/Event Consolidation Migration
 **Priority: HIGH** - Structural improvement to class hierarchy
-**Status:** 🔄 NEW - Ready to implement
+**Status:** ✅ COMPLETED
 
 **Goal:** Consolidate Signal and Event classes for cleaner architecture
-- Merge Signal functionality into Event class
-- Rename Event to Signal (making it the base class)
-- Update State to extend new Signal
-- Remove extent.resource() method
+- ✅ Merge Signal functionality into Event class
+- ✅ Rename Event to Signal (making it the base class)
+- ✅ Update State to extend new Signal
+- ✅ Remove extent.resource() method
 
 #### Phase 5: Update Documentation Files
 **Priority: Medium** - Update user-facing documentation

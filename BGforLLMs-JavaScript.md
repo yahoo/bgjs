@@ -45,14 +45,14 @@ class MyExtent extends bg.Extent {
     constructor(graph: bg.Graph) {
         super(graph);
         
-        // State resources are typed from initial value
+        // State signals are typed from initial value
         this.counter = this.state<number>(0);     // number
         this.name = this.state<string>("John");   // string
         this.items = this.state<Item[]>([]);      // Item[]
         
-        // Moment resources can specify payload type
-        this.buttonClick = this.moment<MouseEvent>();
-        this.apiResponse = this.moment<ApiData>();
+        // Event signals can specify payload type
+        this.buttonClick = this.signal<MouseEvent>();
+        this.apiResponse = this.signal<ApiData>();
     }
 }
 ```
@@ -72,14 +72,14 @@ class AppExtent extends bg.Extent {
     constructor(graph) {
         super(graph);
         
-        // Resources
+        // Signals
         this.counter = this.state(0);
-        this.increment = this.moment();
-        this.decrement = this.moment();
+        this.increment = this.signal();
+        this.decrement = this.signal();
         
         // Behaviors
         this.behavior()
-            .demands(this.increment, this.decrement)
+            .dependsOn(this.increment, this.decrement)
             .supplies(this.counter)
             .runs(() => {
                 if (this.increment.justUpdated) {
@@ -97,27 +97,27 @@ const app = new AppExtent(graph);
 app.addToGraphWithAction();
 ```
 
-### Resource Creation Patterns
+### Signal Creation Patterns
 
 ```javascript
 class MyExtent extends bg.Extent {
     constructor(graph) {
         super(graph);
         
-        // State resources (persistent data)
+        // State signals (persistent data)
         this.username = this.state("");
         this.isLoggedIn = this.state(false);
         this.userProfile = this.state(null);
         this.items = this.state([]);
         this.settings = this.state({theme: "light", notifications: true});
         
-        // Moment resources (events)
-        this.loginClick = this.moment();
-        this.logoutClick = this.moment();
-        this.apiResponse = this.moment();  // Can carry data
-        this.errorOccurred = this.moment();
+        // Event signals (events)
+        this.loginClick = this.signal();
+        this.logoutClick = this.signal();
+        this.apiResponse = this.signal();  // Can carry data
+        this.errorOccurred = this.signal();
         
-        // Resources can have debug names
+        // Signals can have debug names
         this.counter = this.state(0, "counterValue");
     }
 }
@@ -139,7 +139,7 @@ class ValidationExtent extends bg.Extent {
         
         // Simple validation behavior
         this.behavior()
-            .demands(this.email)
+            .dependsOn(this.email)
             .supplies(this.emailValid)
             .runs(() => {
                 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -148,7 +148,7 @@ class ValidationExtent extends bg.Extent {
             
         // Multiple inputs, multiple outputs
         this.behavior()
-            .demands(this.emailValid, this.passwordValid)
+            .dependsOn(this.emailValid, this.passwordValid)
             .supplies(this.formValid)
             .runs(() => {
                 this.formValid.update(
@@ -158,10 +158,10 @@ class ValidationExtent extends bg.Extent {
             
         // Event-driven behavior with conditions
         this.behavior()
-            .demands(this.submitClick, this.formValid)
+            .dependsOn(this.submitClick, this.formValid)
             .runs(() => {
                 if (this.submitClick.justUpdated && this.formValid.value) {
-                    this.sideEffect(() => {
+                    this.effect(() => {
                         console.log("Submitting form...");
                         // API call here
                     });
@@ -182,18 +182,18 @@ class DynamicExtent extends bg.Extent {
         this.users = this.state([]);
         this.userDeleted = this.moment();
         
-        // Dynamically demand resources based on current selection
+        // Dynamically depend on signals based on current selection
         this.behavior()
-            .demands(this.selectedUser, this.userDeleted)
-            .dynamicDemands([this.selectedUser], () => {
-                // Return array of resources to demand
+            .dependsOn(this.selectedUser, this.userDeleted)
+            .dynamicDependsOn([this.selectedUser], () => {
+                // Return array of signals to depend on
                 const user = this.selectedUser.value;
                 return user ? [user.nameChanged, user.statusChanged] : [];
             })
             .runs(() => {
                 const user = this.selectedUser.value;
                 if (user?.nameChanged.justUpdated) {
-                    this.sideEffect(() => {
+                    this.effect(() => {
                         updateUserDisplay(user.name.value);
                     });
                 }
@@ -204,7 +204,7 @@ class DynamicExtent extends bg.Extent {
             
         // Dynamic supplies pattern
         this.behavior()
-            .demands(this.users)
+            .dependsOn(this.users)
             .dynamicSupplies([this.users], () => {
                 return this.users.value.map(user => user.computed);
             })
@@ -242,7 +242,7 @@ await graph.actionAsync(() => {
 });
 ```
 
-### Side Effects Patterns
+### Effects Patterns
 
 ```javascript
 class UIExtent extends bg.Extent {
@@ -255,19 +255,19 @@ class UIExtent extends bg.Extent {
         
         // DOM updates
         this.behavior()
-            .demands(this.message)
+            .dependsOn(this.message)
             .runs(() => {
-                this.sideEffect(() => {
+                this.effect(() => {
                     document.getElementById("message").textContent = this.message.value;
                 }, "update message display");
             });
             
         // API calls
         this.behavior()
-            .demands(this.isLoading)
+            .dependsOn(this.isLoading)
             .runs(() => {
                 if (this.isLoading.justUpdatedTo(true)) {
-                    this.sideEffect(async () => {
+                    this.effect(async () => {
                         try {
                             const response = await fetch("/api/data");
                             const data = await response.json();
@@ -280,15 +280,15 @@ class UIExtent extends bg.Extent {
                 }
             });
             
-        // Multiple side effects in one behavior
+        // Multiple effects in one behavior
         this.behavior()
-            .demands(this.theme)
+            .dependsOn(this.theme)
             .runs(() => {
-                this.sideEffect(() => {
+                this.effect(() => {
                     document.body.className = `theme-${this.theme.value}`;
                 }, "update body class");
                 
-                this.sideEffect(() => {
+                this.effect(() => {
                     localStorage.setItem("theme", this.theme.value);
                 }, "save theme preference");
             });
@@ -310,7 +310,7 @@ class CollectionExtent extends bg.Extent {
         
         // Array manipulation
         this.behavior()
-            .demands(this.items, this.filter)
+            .dependsOn(this.items, this.filter)
             .supplies(this.filteredItems)
             .runs(() => {
                 const filtered = this.items.value.filter(item =>
@@ -321,7 +321,7 @@ class CollectionExtent extends bg.Extent {
             
         // Object updates - use updateForce for object mutations
         this.behavior()
-            .demands(this.selectedItem)
+            .dependsOn(this.selectedItem)
             .runs(() => {
                 if (this.selectedItem.justUpdated) {
                     // When working with object mutations
@@ -362,7 +362,7 @@ class FormExtent extends bg.Extent {
         
         this.email = this.state("");
         this.password = this.state("");
-        this.submitClick = this.moment();
+        this.submitClick = this.signal();
         
         // Set up DOM event listeners
         this.setupDOMListeners();
@@ -400,14 +400,14 @@ class RealtimeExtent extends bg.Extent {
         
         this.connectionStatus = this.state("disconnected");
         this.messages = this.state([]);
-        this.newMessage = this.moment();
+        this.newMessage = this.signal();
         
         // WebSocket setup
         this.setupWebSocket();
         
         // Handle incoming messages
         this.behavior()
-            .demands(this.newMessage)
+            .dependsOn(this.newMessage)
             .supplies(this.messages)
             .runs(() => {
                 if (this.newMessage.justUpdated) {
@@ -546,11 +546,11 @@ class LoginExtent extends bg.Extent {
         
         // Email validation
         this.behavior()
-            .demands(this.email)
+            .dependsOn(this.email)
             .supplies(this.emailValid)
             .runs(() => {
                 this.emailValid.update(validateEmail(this.email.value));
-                this.sideEffect(() => {
+                this.effect(() => {
                     const feedback = document.getElementById("emailFeedback");
                     feedback.textContent = this.emailValid.value ? "✓" : "✗";
                     feedback.className = this.emailValid.value ? "valid" : "invalid";
@@ -559,12 +559,12 @@ class LoginExtent extends bg.Extent {
         
         // Password validation
         this.behavior()
-            .demands(this.password)
+            .dependsOn(this.password)
             .supplies(this.passwordValid)
             .runs(() => {
                 const valid = this.password.value.length >= 6;
                 this.passwordValid.update(valid);
-                this.sideEffect(() => {
+                this.effect(() => {
                     const feedback = document.getElementById("passwordFeedback");
                     feedback.textContent = valid ? "✓" : "✗";
                     feedback.className = valid ? "valid" : "invalid";
@@ -573,26 +573,26 @@ class LoginExtent extends bg.Extent {
         
         // Form validation
         this.behavior()
-            .demands(this.emailValid, this.passwordValid, this.isLoggingIn)
+            .dependsOn(this.emailValid, this.passwordValid, this.isLoggingIn)
             .supplies(this.loginEnabled)
             .runs(() => {
                 const enabled = this.emailValid.value && 
                               this.passwordValid.value && 
                               !this.isLoggingIn.value;
                 this.loginEnabled.update(enabled);
-                this.sideEffect(() => {
+                this.effect(() => {
                     document.getElementById("loginButton").disabled = !enabled;
                 });
             });
         
         // Login process
         this.behavior()
-            .demands(this.loginClick, this.loginComplete)
+            .dependsOn(this.loginClick, this.loginComplete)
             .supplies(this.isLoggingIn)
             .runs(() => {
                 if (this.loginClick.justUpdated && this.loginEnabled.value) {
                     this.isLoggingIn.update(true);
-                    this.sideEffect(async () => {
+                    this.effect(async () => {
                         try {
                             const response = await fetch("/api/login", {
                                 method: "POST",
@@ -646,13 +646,13 @@ class TodoItemExtent extends bg.Extent {
         this.text = this.state(text);
         this.completed = this.state(completed);
         this.editing = this.state(false);
-        this.remove = this.moment();
+        this.remove = this.signal();
         
         // Auto-save when text changes
         this.behavior()
-            .demands(this.text, this.completed)
+            .dependsOn(this.text, this.completed)
             .runs(() => {
-                this.sideEffect(() => {
+                this.effect(() => {
                     this.saveToLocalStorage();
                 });
             });
@@ -673,12 +673,12 @@ class TodoListExtent extends bg.Extent {
         this.visibleItems = this.state([]);
         
         // Events
-        this.addItem = this.moment();
-        this.clearCompleted = this.moment();
+        this.addItem = this.signal();
+        this.clearCompleted = this.signal();
         
         // Add new items
         this.behavior()
-            .demands(this.addItem)
+            .dependsOn(this.addItem)
             .supplies(this.items)
             .runs(() => {
                 if (this.addItem.justUpdated && this.newItemText.value.trim()) {
@@ -696,8 +696,8 @@ class TodoListExtent extends bg.Extent {
         
         // Handle item removal
         this.behavior()
-            .demands(this.items)
-            .dynamicDemands([this.items], () => {
+            .dependsOn(this.items)
+            .dynamicDependsOn([this.items], () => {
                 return this.items.value.map(item => item.remove);
             })
             .supplies(this.items)
@@ -720,8 +720,8 @@ class TodoListExtent extends bg.Extent {
         
         // Filter items
         this.behavior()
-            .demands(this.items, this.filter)
-            .dynamicDemands([this.items], () => {
+            .dependsOn(this.items, this.filter)
+            .dynamicDependsOn([this.items], () => {
                 return this.items.value.map(item => item.completed);
             })
             .supplies(this.visibleItems)
@@ -739,7 +739,7 @@ class TodoListExtent extends bg.Extent {
         
         // Clear completed
         this.behavior()
-            .demands(this.clearCompleted)
+            .dependsOn(this.clearCompleted)
             .supplies(this.items)
             .runs(() => {
                 if (this.clearCompleted.justUpdated) {
@@ -778,7 +778,7 @@ class GenericListExtent<T extends {id: string}> extends bg.Extent {
         super(graph);
         
         this.behavior()
-            .demands(this.items, this.filter)
+            .dependsOn(this.items, this.filter)
             .supplies(this.filteredItems)
             .runs(() => {
                 // Type-safe filtering
@@ -816,9 +816,9 @@ class TypedExtent extends bg.Extent {
     readonly user: bg.State<User | null>;
     readonly items: bg.State<Item[]>;
     
-    // Typed moment resources  
-    readonly userLogin: bg.Moment<{email: string, timestamp: Date}>;
-    readonly apiError: bg.Moment<Error>;
+    // Typed event signals  
+    readonly userLogin: bg.Signal<{email: string, timestamp: Date}>;
+    readonly apiError: bg.Signal<Error>;
     
     constructor(graph: bg.Graph) {
         super(graph);
@@ -828,17 +828,17 @@ class TypedExtent extends bg.Extent {
         this.user = this.state<User | null>(null);
         this.items = this.state<Item[]>([]);
         
-        this.userLogin = this.moment<{email: string, timestamp: Date}>();
-        this.apiError = this.moment<Error>();
+        this.userLogin = this.signal<{email: string, timestamp: Date}>();
+        this.apiError = this.signal<Error>();
         
         // Type-safe behavior
         this.behavior()
-            .demands(this.userLogin)
+            .dependsOn(this.userLogin)
             .supplies(this.user)
             .runs(() => {
                 if (this.userLogin.justUpdated) {
                     const loginData = this.userLogin.value; // Typed!
-                    this.sideEffect(async () => {
+                    this.effect(async () => {
                         try {
                             const user = await fetchUser(loginData.email);
                             this.user.updateWithAction(user);
@@ -863,12 +863,12 @@ graph.action(() => { /* sync code */ });
 await graph.actionAsync(() => { /* async code */ });
 
 // Properties
-graph.currentEvent          // Current GraphEvent or null
+graph.currentMoment         // Current Moment or null
 graph.currentBehavior       // Currently running Behavior or null  
-graph.lastEvent            // Last completed GraphEvent
+graph.lastMoment           // Last completed Moment
 
-// Side effects
-graph.sideEffect(() => { /* deferred code */ });
+// Effects
+graph.effect(() => { /* deferred code */ });
 ```
 
 ### Extent Methods
@@ -877,10 +877,9 @@ class MyExtent extends bg.Extent {
     constructor(graph) {
         super(graph);
         
-        // Resource factories
+        // Signal factories
         this.state(initialValue, debugName?)
-        this.moment(debugName?)
-        this.resource(debugName?)
+        this.signal(debugName?)
         
         // Behavior factory
         this.behavior()
@@ -895,15 +894,15 @@ class MyExtent extends bg.Extent {
         this.addChildLifetime(childExtent)
         this.unifyLifetime(otherExtent)
         
-        // Actions and side effects
+        // Actions and effects
         this.action(block, debugName?)
         this.actionAsync(block, debugName?)
-        this.sideEffect(block, debugName?)
+        this.effect(block, debugName?)
     }
 }
 ```
 
-### Resource Methods
+### Signal Methods
 ```javascript
 // State<T>
 state.value                    // T - current value
@@ -913,30 +912,30 @@ state.updateWithAction(newValue, debugName?)
 state.justUpdated             // boolean
 state.justUpdatedTo(value)    // boolean 
 state.justUpdatedFrom(value)  // boolean
-state.traceValue              // T - value at event start
-state.event                   // GraphEvent of last update
+state.traceValue              // T - value at moment start
+state.moment                  // Moment of last update
 
-// Moment<T>  
-moment.value                  // T | undefined - current payload
-moment.update(payload?)       // Mark as updated
-moment.updateWithAction(payload?, debugName?)
-moment.justUpdated            // boolean
-moment.justUpdatedTo(value)   // boolean
-moment.event                  // GraphEvent | null
+// Signal<T>  
+signal.value                  // T | undefined - current payload
+signal.update(payload?)       // Mark as updated
+signal.updateWithAction(payload?, debugName?)
+signal.justUpdated            // boolean
+signal.justUpdatedTo(value)   // boolean
+signal.moment                 // Moment | null
 
 // Common properties
-resource.order                // Demandable for ordering
-resource.suppliedBy          // Behavior | null
-resource.extent              // Extent
-resource.graph               // Graph
+signal.order                  // Dependable for ordering
+signal.suppliedBy            // Behavior | null
+signal.extent                // Extent
+signal.graph                 // Graph
 ```
 
 ### Behavior Builder
 ```javascript
 this.behavior()
-    .demands(...resources)              // Static demands
-    .supplies(...resources)             // Static supplies  
-    .dynamicDemands(switches, linker, relinkingOrder?)
+    .dependsOn(...signals)              // Static dependencies
+    .supplies(...signals)               // Static supplies  
+    .dynamicDependsOn(switches, linker, relinkingOrder?)
     .dynamicSupplies(switches, linker)
     .runs(extent => { /* behavior code */ });
 ```
@@ -947,14 +946,14 @@ this.behavior()
 ```javascript
 // Chain validation behaviors
 this.behavior()
-    .demands(this.rawInput)
+    .dependsOn(this.rawInput)
     .supplies(this.cleanedInput)
     .runs(() => {
         this.cleanedInput.update(this.rawInput.value.trim());
     });
 
 this.behavior()  
-    .demands(this.cleanedInput)
+    .dependsOn(this.cleanedInput)
     .supplies(this.isValid, this.validationErrors)
     .runs(() => {
         const errors = validateInput(this.cleanedInput.value);
@@ -966,7 +965,7 @@ this.behavior()
 ### 2. Async Operation Management
 ```javascript
 this.behavior()
-    .demands(this.startOperation)
+    .dependsOn(this.startOperation)
     .supplies(this.isLoading, this.operationId)
     .runs(() => {
         if (this.startOperation.justUpdated) {
@@ -974,7 +973,7 @@ this.behavior()
             this.operationId.update(id);
             this.isLoading.update(true);
             
-            this.sideEffect(async () => {
+            this.effect(async () => {
                 try {
                     const result = await performOperation(id);
                     this.operationComplete.updateWithAction({id, result});
@@ -989,7 +988,7 @@ this.behavior()
 ### 3. State Machine Pattern
 ```javascript
 this.behavior()
-    .demands(this.currentState, this.transitionEvent)
+    .dependsOn(this.currentState, this.transitionEvent)
     .supplies(this.currentState)
     .runs(() => {
         if (this.transitionEvent.justUpdated) {
@@ -1007,10 +1006,10 @@ this.behavior()
 ### 4. Debouncing Input
 ```javascript
 this.behavior()
-    .demands(this.userInput)
+    .dependsOn(this.userInput)
     .supplies(this.debouncedInput)
     .runs(() => {
-        this.sideEffect(() => {
+        this.effect(() => {
             clearTimeout(this.debounceTimer);
             this.debounceTimer = setTimeout(() => {
                 this.debouncedInput.updateWithAction(this.userInput.value);

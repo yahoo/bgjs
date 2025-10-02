@@ -2,23 +2,23 @@
 
 ## ⚠️ CRITICAL RULES - READ FIRST ⚠️
 
-### Resource Ownership Rule (MOST IMPORTANT)
-**Each resource can only be supplied by ONE behavior (or none, for action-only resources).**
+### Signal Ownership Rule (MOST IMPORTANT)
+**Each signal can only be supplied by ONE behavior (or none, for action-only signals).**
 
 This is the most fundamental constraint in Behavior Graph. Violating this will cause runtime errors.
 
-❌ **WRONG - Multiple behaviors supplying same resource:**
+❌ **WRONG - Multiple behaviors supplying same signal:**
 ```javascript
 // This will ERROR at runtime
 this.behavior().supplies(this.counter).runs(() => { /* updates counter */ });
 this.behavior().supplies(this.counter).runs(() => { /* also tries to update counter */ });
 ```
 
-✅ **CORRECT - Single behavior owns each resource:**
+✅ **CORRECT - Single behavior owns each signal:**
 ```javascript
 // One behavior handles ALL counter updates
 this.behavior()
-  .demands(this.increment, this.decrement, this.reset)
+  .dependsOn(this.increment, this.decrement, this.reset)
   .supplies(this.counter)
   .runs(() => {
     if (this.increment.justUpdated) this.counter.update(this.counter.value + 1);
@@ -27,28 +27,28 @@ this.behavior()
   });
 ```
 
-### Reading Supplied Resources
-**If a behavior supplies a resource, it can read that resource's current value without demanding it.**
+### Reading Supplied Signals
+**If a behavior supplies a signal, it can read that signal's current value without depending on it.**
 
-When a behavior supplies a resource, it has read access to the current value using `.value` within the same run block:
+When a behavior supplies a signal, it has read access to the current value using `.value` within the same run block:
 
-✅ **CORRECT - Read supplied resource without demanding:**
+✅ **CORRECT - Read supplied signal without depending on it:**
 ```javascript
 this.behavior()
-  .demands(this.addItem)
-  .supplies(this.items)  // We supply this resource
+  .dependsOn(this.addItem)
+  .supplies(this.items)  // We supply this signal
   .runs(() => {
     if (this.addItem.justUpdated) {
-      const currentItems = this.items.value;  // ✅ Can read without demanding
+      const currentItems = this.items.value;  // ✅ Can read without depending on it
       this.items.update([...currentItems, this.addItem.value]);
     }
   });
 ```
 
-❌ **UNNECESSARY - Don't demand resources you supply:**
+❌ **UNNECESSARY - Don't depend on signals you supply:**
 ```javascript
 this.behavior()
-  .demands(this.addItem, this.items)  // ❌ Unnecessary to demand items
+  .dependsOn(this.addItem, this.items)  // ❌ Unnecessary to depend on items
   .supplies(this.items)
   .runs(() => {
     // Same logic as above
@@ -62,7 +62,7 @@ this.behavior()
 - Common pattern for accumulator operations (arrays, counters, etc.)
 
 ### Actions Required for External Updates
-**All resource updates outside of behavior run blocks must be wrapped in actions.**
+**All signal updates outside of behavior run blocks must be wrapped in actions.**
 
 ❌ **WRONG - Direct updates in event handlers:**
 ```javascript
@@ -80,13 +80,13 @@ button.addEventListener('click', () => {
 });
 ```
 
-### Side Effects for Async Operations
-**Use side effects for async operations that will later update resources.**
+### Effects for Async Operations
+**Use effects for async operations that will later update signals.**
 
 ❌ **WRONG - Async update in behavior:**
 ```javascript
 this.behavior()
-  .demands(this.loadData)
+  .dependsOn(this.loadData)
   .supplies(this.data)
   .runs(() => {
     if (this.loadData.justUpdated) {
@@ -98,15 +98,15 @@ this.behavior()
   });
 ```
 
-✅ **CORRECT - Side effect + action pattern:**
+✅ **CORRECT - Effect + action pattern:**
 ```javascript
 this.behavior()
-  .demands(this.loadData)
+  .dependsOn(this.loadData)
   .supplies(this.data)
   .runs(() => {
     if (this.loadData.justUpdated) {
-      // DO: Use side effect for async operation
-      this.sideEffect(async () => {
+      // DO: Use effect for async operation
+      this.effect(async () => {
         const response = await fetch('/api/data');
         const data = await response.json();
         
@@ -119,12 +119,12 @@ this.behavior()
   });
 ```
 
-### Supplied Resources Cannot Be Updated in Actions
-**If a resource is supplied by a behavior, only that behavior can update it - not actions.**
+### Supplied Signals Cannot Be Updated in Actions
+**If a signal is supplied by a behavior, only that behavior can update it - not actions.**
 
-❌ **WRONG - Action updating supplied resource:**
+❌ **WRONG - Action updating supplied signal:**
 ```javascript
-// Behavior supplies the resource
+// Behavior supplies the signal
 this.behavior().supplies(this.data).runs(() => { /* behavior logic */ });
 
 // Later in async method - ERROR!
@@ -133,54 +133,54 @@ this.graph.action(() => {
 });
 ```
 
-✅ **CORRECT - Use moment resource pattern:**
+✅ **CORRECT - Use event signal pattern:**
 ```javascript
-// Create moment for async results
-this.dataLoaded = this.moment();
+// Create event signal for async results
+this.dataLoaded = this.signal();
 
-// Behavior responds to both trigger and result moments
+// Behavior responds to both trigger and result signals
 this.behavior()
-  .demands(this.loadData, this.dataLoaded)
+  .dependsOn(this.loadData, this.dataLoaded)
   .supplies(this.data)
   .runs(() => {
     if (this.loadData.justUpdated) {
-      this.sideEffect(() => { this.fetchData(); });
+      this.effect(() => { this.fetchData(); });
     }
     if (this.dataLoaded.justUpdated) {
-      this.data.update(this.dataLoaded.value); // ✅ Behavior can update its own resource
+      this.data.update(this.dataLoaded.value); // ✅ Behavior can update its own signal
     }
   });
 
-// Async method updates moment, not supplied resource
+// Async method updates signal, not supplied signal
 async fetchData() {
   const response = await fetch('/api/data');
   const data = await response.json();
   this.graph.action(() => {
-    this.dataLoaded.update(data); // ✅ Moment can be updated in action
+    this.dataLoaded.update(data); // ✅ Signal can be updated in action
   });
 }
 ```
 
-### DOM Updates Must Be Side Effects
-**All external system interactions (DOM, console, file I/O) must be side effects, not direct in behavior run blocks.**
+### DOM Updates Must Be Effects
+**All external system interactions (DOM, console, file I/O) must be effects, not direct in behavior run blocks.**
 
 ❌ **WRONG - Direct DOM manipulation in behavior:**
 ```javascript
 this.behavior()
-  .demands(this.counter)
+  .dependsOn(this.counter)
   .runs(() => {
     // DON'T: Direct DOM update in behavior run block
     document.getElementById('count').textContent = this.counter.value;
   });
 ```
 
-✅ **CORRECT - DOM updates in side effects:**
+✅ **CORRECT - DOM updates in effects:**
 ```javascript
 this.behavior()
-  .demands(this.counter)
+  .dependsOn(this.counter)
   .runs(() => {
-    // DO: Wrap DOM updates in side effects
-    this.sideEffect(() => {
+    // DO: Wrap DOM updates in effects
+    this.effect(() => {
       document.getElementById('count').textContent = this.counter.value;
     });
   });
@@ -188,17 +188,17 @@ this.behavior()
 
 ### Other Critical Rules
 - **No circular dependencies** - If A depends on B, B cannot depend on A
-- **Actions can only update resources NOT supplied by behaviors**
-- **Must declare ALL resource accesses in demands/supplies**
+- **Actions can only update signals NOT supplied by behaviors**
+- **Must declare ALL signal accesses in dependsOn/supplies**
 
 ### Quick Architecture Checklist
 Before writing Behavior Graph code, ask:
-1. **"Which behavior owns each resource?"** - Design ownership first
+1. **"Which behavior owns each signal?"** - Design ownership first
 2. **"Are there any cycles?"** - Trace dependency paths
-3. **"What moments trigger updates?"** - Identify all input events
-4. **"What side effects are needed?"** - Plan external interactions
-5. **"Are any updates happening outside behaviors?"** - Must use actions or side effects
-6. **"Are DOM/console/file operations in side effects?"** - Never direct in run blocks
+3. **"What events trigger updates?"** - Identify all input events
+4. **"What effects are needed?"** - Plan external interactions
+5. **"Are any updates happening outside behaviors?"** - Must use actions or effects
+6. **"Are DOM/console/file operations in effects?"** - Never direct in run blocks
 
 ---
 
@@ -212,54 +212,54 @@ Behavior Graph is a reactive programming architecture that replaces traditional 
 
 ## Fundamental Concepts
 
-### Resources (Data Containers)
-Resources are reactive containers that hold data and track when it changes.
+### Signals (Data Containers)
+Signals are reactive containers that hold data and track when it changes.
 
 **Two Types:**
 
-1. **State Resources:** Persistent data that changes over time
+1. **State Signals:** Persistent data that changes over time
    - Always contain data (cannot be null/undefined)
    - Persist between events
    - Example: user profile, current score, configuration settings
 
-2. **Moment Resources:** Events that happen at specific moments
+2. **Event Signals:** Events that happen at specific moments
    - May contain data payload or be empty
    - Do not persist (reset after each event)
    - Example: button clicks, network responses, timer events
 
 **Key Properties:**
-- `.value` - Current contents (State only)
+- `.value` - Current contents
 - `.justUpdated` - True if updated in current event
-- `.event` - Reference to current event with timestamp
+- `.moment` - Reference to current moment with timestamp
 - `.trace` - Value from beginning of current event (before updates)
 
 ### Behaviors (Reactive Code Blocks)
-Behaviors are units of logic that respond to resource changes.
+Behaviors are units of logic that respond to signal changes.
 
 **Three Parts:**
-1. **Demands:** Resources the behavior reads from (input dependencies)
-2. **Supplies:** Resources the behavior writes to (outputs)
+1. **Dependencies:** Signals the behavior reads from (input dependencies)
+2. **Supplies:** Signals the behavior writes to (outputs)
 3. **Runs:** Imperative code block that executes
 
 **Key Rules:**
-- Never called directly - only triggered by resource updates
+- Never called directly - only triggered by signal updates
 - Must declare all dependencies explicitly
 - Run in topologically sorted order (dependency graph)
-- Can only update resources they supply
-- Can access `.value` of demanded or supplied resources
+- Can only update signals they supply
+- Can access `.value` of dependent or supplied signals
 
 ### Extents (Lifecycle Containers)
-Extents are classes that group related behaviors and resources with shared lifetimes.
+Extents are classes that group related behaviors and signals with shared lifetimes.
 
 **Purpose:**
 - Organize components logically (like classes in OOP)
 - Manage creation/destruction of related elements
-- Provide factory methods for resources and behaviors
+- Provide factory methods for signals and behaviors
 - Handle dynamic graph modifications
 
-**Built-in Resources:**
-- `addedToGraph` - Moment that fires when extent is added
-- Useful for initialization side effects
+**Built-in Signals:**
+- `addedToGraph` - Signal that fires when extent is added
+- Useful for initialization effects
 
 ### Graph (Central Orchestrator)
 The Graph manages the entire reactive system.
@@ -275,50 +275,50 @@ Actions are the only way to introduce information from outside the system.
 
 **Characteristics:**
 - Started with `graph.action(() => { ... })`
-- Can update resources not supplied by behaviors
+- Can update signals not supplied by behaviors
 - Trigger cascading behavior execution
 - Atomic - all updates treated as simultaneous
 
-### Side Effects (External Output)
-Side effects interact with external systems (UI, network, files).
+### Effects (External Output)
+Effects interact with external systems (UI, network, files).
 
 **Key Properties:**
-- Created inside behaviors with `this.sideEffect(() => { ... })`
+- Created inside behaviors with `this.effect(() => { ... })`
 - Deferred until all behaviors complete
 - Ensure consistent state access
 - Run in creation order
 
-## The Event Loop
+## The Action Loop
 
-Each action triggers an "event" - a complete pass through the dependency graph:
+Each action triggers a "moment" - a complete pass through the dependency graph:
 
-1. **Action starts** - External code updates resources
+1. **Action starts** - External code updates signals
 2. **Behaviors activate** - Runtime identifies dependent behaviors
 3. **Behaviors run** - Execute in topological order
-4. **Side effects queue** - Behaviors can create deferred operations
-5. **Side effects execute** - Run in order after all behaviors complete
-6. **Event ends** - All resources marked as no longer "just updated"
+4. **Effects queue** - Behaviors can create deferred operations
+5. **Effects execute** - Run in order after all behaviors complete
+6. **Moment ends** - All signals marked as no longer "just updated"
 
 ## Core Programming Patterns
 
-### Basic Resource Creation
+### Basic Signal Creation
 ```
-// State resource with initial value
+// State signal with initial value
 this.counter = this.state(0);
 
-// Moment resource (no initial value)
-this.buttonClick = this.moment();
+// Event signal (no initial value)
+this.buttonClick = this.signal();
 ```
 
 ### Basic Behavior Structure
 ```
 this.behavior()
-    .demands(this.inputResource1, this.inputResource2)
-    .supplies(this.outputResource)
+    .dependsOn(this.inputSignal1, this.inputSignal2)
+    .supplies(this.outputSignal)
     .runs(() => {
         // Imperative code here
-        if (this.inputResource1.justUpdated) {
-            this.outputResource.update(this.inputResource1.value + 1);
+        if (this.inputSignal1.justUpdated) {
+            this.outputSignal.update(this.inputSignal1.value + 1);
         }
     });
 ```
@@ -326,14 +326,14 @@ this.behavior()
 ### Checking What Changed
 ```
 .runs(() => {
-    if (this.resource1.justUpdated) {
-        // React to resource1 changing
+    if (this.signal1.justUpdated) {
+        // React to signal1 changing
     }
-    if (this.resource2.justUpdated) {
-        // React to resource2 changing
+    if (this.signal2.justUpdated) {
+        // React to signal2 changing
     }
     // Always access current values with .value
-    let current = this.resource1.value;
+    let current = this.signal1.value;
 })
 ```
 
@@ -352,19 +352,19 @@ this.behavior()
 Behaviors can have dependencies that change at runtime:
 
 ```
-.dynamicDemands([this.itemList], () => {
+.dynamicDependsOn([this.itemList], () => {
     return this.itemList.value.map(item => item.status);
 })
 ```
 
 ### Order-Only Dependencies
-Access resource values without triggering on their updates:
+Access signal values without triggering on their updates:
 
 ```
-.demands(this.triggerResource, this.configResource.order)
+.dependsOn(this.triggerSignal, this.configSignal.order)
 ```
 
-The behavior only runs when `triggerResource` updates, but can still read `configResource.value`.
+The behavior only runs when `triggerSignal` updates, but can still read `configSignal.value`.
 
 ### Extent Hierarchies
 Extents can contain child extents with managed lifetimes:
@@ -378,44 +378,44 @@ childExtent.addToGraph();
 ## Critical Rules
 
 ### Dependency Graph Must Be Acyclic (DAG)
-The graph cannot have cycles. If behavior A depends on resource X, and behavior B (which supplies X) depends on resource Y, then behavior C (which supplies Y) cannot depend on resources supplied by behavior A.
+The graph cannot have cycles. If behavior A depends on signal X, and behavior B (which supplies X) depends on signal Y, then behavior C (which supplies Y) cannot depend on signals supplied by behavior A.
 
 **Solutions for Cycles:**
 1. **Lift dependencies** - Create new behavior higher in graph
 2. **Use trace values** - Access previous values without creating dependency
-3. **Move to side effects** - Update resources in deferred side effects
+3. **Move to effects** - Update signals in deferred effects
 
-### Resource Ownership
-- Each resource can only be supplied by ONE behavior (or none)
-- Actions can only update resources not supplied by behaviors
-- Behaviors can only update resources they supply
-- Multiple behaviors can demand the same resource
+### Signal Ownership
+- Each signal can only be supplied by ONE behavior (or none)
+- Actions can only update signals not supplied by behaviors
+- Behaviors can only update signals they supply
+- Multiple behaviors can depend on the same signal
 
 ### Explicit Dependencies
-- Must declare all resource accesses in demands/supplies
-- Runtime will error if you access undeclared resources
+- Must declare all signal accesses in dependsOn/supplies
+- Runtime will error if you access undeclared signals
 - This explicitness aids debugging and understanding
 
 ## Common Anti-Patterns
 
-### ❌ Multiple Behaviors Supplying Same Resource (RUNTIME ERROR)
+### ❌ Multiple Behaviors Supplying Same Signal (RUNTIME ERROR)
 ```javascript
-// DON'T: This will cause "Resource cannot be supplied by more than one behavior" error
+// DON'T: This will cause "Signal cannot be supplied by more than one behavior" error
 class BadExtent extends bg.Extent {
   constructor(graph) {
     super(graph);
     this.projects = this.state([]);
-    this.loadProjects = this.moment();
-    this.createProject = this.moment();
+    this.loadProjects = this.signal();
+    this.createProject = this.signal();
     
     // WRONG: Two behaviors both supply projects
     this.behavior()
-      .demands(this.loadProjects)
+      .dependsOn(this.loadProjects)
       .supplies(this.projects)  // ❌ First supplier
       .runs(() => { /* load logic */ });
       
     this.behavior()
-      .demands(this.createProject)  
+      .dependsOn(this.createProject)  
       .supplies(this.projects)  // ❌ Second supplier - ERROR!
       .runs(() => { /* create logic */ });
   }
@@ -426,12 +426,12 @@ class GoodExtent extends bg.Extent {
   constructor(graph) {
     super(graph);
     this.projects = this.state([]);
-    this.loadProjects = this.moment();
-    this.createProject = this.moment();
+    this.loadProjects = this.signal();
+    this.createProject = this.signal();
     
     // CORRECT: One behavior handles all projects updates
     this.behavior()
-      .demands(this.loadProjects, this.createProject)
+      .dependsOn(this.loadProjects, this.createProject)
       .supplies(this.projects)  // ✅ Single supplier
       .runs(() => {
         if (this.loadProjects.justUpdated) { /* load logic */ }
@@ -443,37 +443,37 @@ class GoodExtent extends bg.Extent {
 
 ### ❌ Hidden Dependencies
 ```
-.demands(this.input)
+.dependsOn(this.input)
 .runs(() => {
-    // DON'T: accessing undeclared resource
-    if (this.hiddenResource.value > 0) { ... }
+    // DON'T: accessing undeclared signal
+    if (this.hiddenSignal.value > 0) { ... }
 })
 ```
 
-### ❌ Updating Non-Supplied Resources
+### ❌ Updating Non-Supplied Signals
 ```
 .supplies(this.output)
 .runs(() => {
-    // DON'T: updating resource not in supplies
-    this.someOtherResource.update(value);
+    // DON'T: updating signal not in supplies
+    this.someOtherSignal.update(value);
 })
 ```
 
-### ❌ Side Effects in Main Logic
+### ❌ Effects in Main Logic
 ```
 .runs(() => {
     // DON'T: direct UI updates in behaviors
     document.getElementById("button").disabled = false;
     
-    // DO: use side effects
-    this.sideEffect(() => {
+    // DO: use effects
+    this.effect(() => {
         document.getElementById("button").disabled = false;
     });
 })
 ```
 
 ### ❌ Using Actions to Bypass Single Supplier Rule
-**This is a common antipattern - using `graph.action()` to update state resources from multiple behaviors.**
+**This is a common antipattern - using `graph.action()` to update state signals from multiple behaviors.**
 
 ```javascript
 // DON'T: Violating single supplier principle with actions
@@ -481,12 +481,12 @@ class BadExtent extends bg.Extent {
   constructor(graph) {
     super(graph);
     this.counter = this.state(0);
-    this.increment = this.moment();
-    this.reset = this.moment();
+    this.increment = this.signal();
+    this.reset = this.signal();
     
     // WRONG: This behavior supplies counter
     this.behavior()
-      .demands(this.increment)
+      .dependsOn(this.increment)
       .supplies(this.counter)
       .runs(() => {
         if (this.increment.justUpdated) {
@@ -496,30 +496,30 @@ class BadExtent extends bg.Extent {
       
     // WRONG: Another behavior also tries to update counter using action hack
     this.behavior()
-      .demands(this.reset)
+      .dependsOn(this.reset)
       .supplies(this.someOtherState)
       .runs(() => {
-        this.sideEffect(() => {
+        this.effect(() => {
           // Antipattern: Using action to bypass single supplier rule
           this.graph.action(() => {
-            this.counter.update(0);  // ❌ Multiple behaviors updating same resource
+            this.counter.update(0);  // ❌ Multiple behaviors updating same signal
           });
         });
       });
   }
 }
 
-// DO: Use moments for events, single behavior for state
+// DO: Use event signals for events, single behavior for state
 class GoodExtent extends bg.Extent {
   constructor(graph) {
     super(graph);
     this.counter = this.state(0);
-    this.incrementRequested = this.moment();
-    this.resetRequested = this.moment();
+    this.incrementRequested = this.signal();
+    this.resetRequested = this.signal();
     
     // CORRECT: Single behavior supplies counter, reacts to all events
     this.behavior()
-      .demands(this.incrementRequested, this.resetRequested)
+      .dependsOn(this.incrementRequested, this.resetRequested)
       .supplies(this.counter)
       .runs(() => {
         if (this.incrementRequested.justUpdated) {
@@ -531,7 +531,7 @@ class GoodExtent extends bg.Extent {
       });
   }
   
-  // Methods emit events via moments instead of direct updates
+  // Methods emit events via signals instead of direct updates
   increment() {
     this.graph.action(() => {
       this.incrementRequested.update({});
@@ -548,11 +548,11 @@ class GoodExtent extends bg.Extent {
 
 **Why this antipattern is harmful:**
 - Makes state changes unpredictable and hard to debug
-- Breaks Behavior Graph's core principle of single resource ownership
+- Breaks Behavior Graph's core principle of single signal ownership
 - `graph.action()` is intended for external events, not internal state coordination
 - Leads to scattered state update logic instead of centralized control
 
-**Key principle: Use moments to communicate events between behaviors, not actions to bypass the single supplier rule.**
+**Key principle: Use event signals to communicate events between behaviors, not actions to bypass the single supplier rule.**
 
 ## Debugging Dependency Cycles
 
@@ -567,13 +567,13 @@ When you get a cycle error:
 
 ### Unit Testing Behaviors
 - Create minimal extent with just the behavior under test
-- Update demanded resources via actions
-- Assert on supplied resource values
+- Update dependent signals via actions
+- Assert on supplied signal values
 - Test both positive and negative cases
 
 ### Integration Testing
 - Test complete extent interactions
-- Verify side effects occur correctly
+- Verify effects occur correctly
 - Test dynamic dependency updates
 - Verify lifecycle management
 
@@ -597,7 +597,7 @@ Behavior Graph is designed for incremental adoption:
 
 1. **Start small** - Convert one component at a time
 2. **Bridge with actions** - External code can trigger actions
-3. **Bridge with side effects** - Behaviors can call existing APIs
+3. **Bridge with effects** - Behaviors can call existing APIs
 4. **Coexist** - Behavior Graph and traditional code can work together
 
 ## Performance Considerations
@@ -606,6 +606,6 @@ Behavior Graph is designed for incremental adoption:
 - Excellent for typical application performance requirements
 - Avoid for nanosecond-critical code paths
 - Dynamic dependencies have additional cost
-- Side effect deferral prevents some immediate operations
+- Effect deferral prevents some immediate operations
 
 This foundation applies universally across all Behavior Graph platforms. Platform-specific syntax and patterns are covered in the platform-specific guides.

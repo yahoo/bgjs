@@ -1,9 +1,9 @@
 import * as bg from "behavior-graph"
 
 export class CounterExtent extends bg.Extent {
-    increment = this.moment();
+    increment = this.signal();
     count = this.state(0);
-    remove = this.moment();
+    remove = this.signal();
 
     id;
 
@@ -14,7 +14,7 @@ export class CounterExtent extends bg.Extent {
 
         this.behavior()
             .supplies(this.count)
-            .demands(this.increment, allCounters.resetCounters)
+            .dependsOn(this.increment, allCounters.resetCounters)
             .runs( ext => {
                 if (this.increment.justUpdated) {
                     this.count.update(this.count.value + 1);
