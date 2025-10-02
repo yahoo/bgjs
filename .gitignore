@@ -5,6 +5,7 @@ lib
 .idea
 .vscode
 .parcel-cache
+RENAME_PLAN.md
 
 # Logs
 logs

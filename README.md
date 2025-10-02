@@ -5,19 +5,6 @@ It is an architecture and supporting library that simplifies the type of complex
 
 It's also a fun way to program.
 
-## ✅ Terminology Migration Complete!
-
-**Behavior Graph has completed its terminology migration to be more intuitive and consistent.** The new API uses cleaner, more descriptive names:
-
-**Key changes:**
-- `resource` → `signal` (reactive data containers)
-- `moment` resource → `signal` (event-like signals)  
-- `state` resource → `state` (state signals)
-- `demands` → `dependsOn` (behavior dependencies)
-- `sideEffect` → `effect` (external interactions)
-
-The old APIs have been removed for a clean, consistent API surface. See the migration guide in [BGforLLMs-Core.md](BGforLLMs-Core.md) for update instructions.
-
 ## Who's it for?
 
 It is particularly helpful for developers building:
