@@ -37,7 +37,7 @@ export enum LinkType {
 export class Moment {
     sequence: number;
     timestamp: Date;
-    static readonly initialEvent: Moment = new Moment(0, new Date(0));
+    static readonly initialMoment: Moment = new Moment(0, new Date(0));
 
     constructor(sequence: number, timestamp: Date) {
         this.sequence = sequence;

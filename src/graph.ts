@@ -53,7 +53,7 @@ export class Graph {
     justUpdatedCallbacks: Set<Subscription> = new Set();
 
     constructor() {
-       this.lastMoment = Moment.initialEvent;
+       this.lastMoment = Moment.initialMoment;
     }
 
     action(block: () => void, debugName?: string) {
@@ -66,7 +66,7 @@ export class Graph {
             throw err;
         }
         this.actions.push(action);
-        this.eventLoop();
+        this.actionLoop();
     }
 
     async actionAsync(block: () => void, debugName?: string) {
@@ -83,7 +83,7 @@ export class Graph {
                 action.resolve = resolve;
                 this.actions.push(action);
                 if (this.currentMoment == null) {
-                    this.eventLoop();
+                    this.actionLoop();
                 }
             } catch (e) {
                 reject(e);
@@ -91,7 +91,7 @@ export class Graph {
         });
     }
 
-    private eventLoop() {
+    private actionLoop() {
 
         while (true) {
 

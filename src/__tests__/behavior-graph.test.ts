@@ -50,7 +50,7 @@ describe('State Resource', () => {
         sr1.updateWithAction(2);
 
         expect(sr1.value).toBe(2);
-        expect(sr1.event).toBe(g.lastMoment);
+        expect(sr1.moment).toBe(g.lastMoment);
     });
 
     test('filters duplicates', () => {
@@ -59,12 +59,12 @@ describe('State Resource', () => {
         ext.addToGraphWithAction();
 
         // |> When updated with same value and filtering on
-        let entered = sr1.event;
+        let entered = sr1.moment;
         sr1.updateWithAction(1);
 
         // |> Then update doesn't happen
-        expect(sr1.event).not.toBe(g.lastMoment);
-        expect(sr1.event).toBe(entered);
+        expect(sr1.moment).not.toBe(g.lastMoment);
+        expect(sr1.moment).toBe(entered);
     });
 
     test('filters with ===', () => {
@@ -74,12 +74,12 @@ describe('State Resource', () => {
         ext.addToGraphWithAction();
 
         // |> When updated with another falsy value and filtering on
-        let entered = sr1.event;
+        let entered = sr1.moment;
         sr1.updateWithAction(false);
 
         // |> Then the update does happen
-        expect(sr1.event).toBe(g.lastMoment);
-        expect(sr1.event).not.toBe(entered);
+        expect(sr1.moment).toBe(g.lastMoment);
+        expect(sr1.moment).not.toBe(entered);
     });
 
     test('can override duplicate filter', () => {
@@ -88,13 +88,13 @@ describe('State Resource', () => {
         ext.addToGraphWithAction();
 
         // |> When updated with same value and filtering off
-        let entered = sr1.event;
+        let entered = sr1.moment;
         g.action(() => {
             sr1.updateForce(1);
         })
 
         // |> Then update does happen
-        expect(sr1.event).toBe(g.lastMoment);
+        expect(sr1.moment).toBe(g.lastMoment);
     });
 
     test('can be a nullable state', () => {
@@ -190,9 +190,9 @@ describe('State Resource', () => {
             before = sr1.traceValue;
             sr1.update(1);
             after = sr1.traceValue;
-            afterEntered = sr1.traceEvent;
+            afterEntered = sr1.traceMoment;
         });
-        let beforeEvent = sr1.event;
+        let beforeEvent = sr1.moment;
         ext.addToGraphWithAction();
 
         // |> When trace is accessed before the update
@@ -212,19 +212,19 @@ describe('State Resource', () => {
 
         // |> When it is updated multiple times in action (or behavior)
         let traceValue;
-        let traceEvent;
+        let traceMoment;
         g.action(() => {
             sr1.update(1);
             sr1.update(2);
             g.effect(() => {
                 traceValue = sr1.traceValue;
-                traceEvent = sr1.traceEvent;
+                traceMoment = sr1.traceMoment;
             });
         });
 
         // |> Then trace is still the value from beginning of
         expect(traceValue).toBe(0);
-        expect(traceEvent).toBe(Moment.initialEvent);
+        expect(traceMoment).toBe(Moment.initialMoment);
     });
 
     test('start state is transient after updates', () => {
@@ -427,10 +427,10 @@ describe('State Resource', () => {
             // |> Given resource that are supplied and demanded
             ext.behavior().dependsOn(sr1).supplies(sr2).runs(ext => {
                 sr1.value;
-                sr1.event;
+                sr1.moment;
                 sr1.justUpdated;
                 sr2.value;
-                sr2.event;
+                sr2.moment;
                 sr2.justUpdated;
             });
             ext.addToGraphWithAction();
@@ -442,7 +442,7 @@ describe('State Resource', () => {
             // |> And when they are accessed outside an event or behavior
             // |> Then it will succeed
             sr1.value;
-            sr1.event;
+            sr1.moment;
             sr1.justUpdated;
 
             // |> And when we access a non-supplied resource inside an action
@@ -462,7 +462,7 @@ describe('State Resource', () => {
             ext2.behavior()
                 .dependsOn(sr4)
                 .runs(ext => {
-                    sr2.event;
+                    sr2.moment;
                 });
 
             ext2.behavior().dependsOn(sr5).runs(ext => {
@@ -505,11 +505,11 @@ describe('Moment Resource', () => {
 
         // |> When it is read in the graph (and was not updated)
         let beforeUpdate = false;
-        let happenedEvent = null;
+        let happenedMoment: Moment | null = null;
         ext.action(() => {
             beforeUpdate = mr1.justUpdated;
             mr1.update();
-            happenedEvent = ext.graph.currentMoment;
+            happenedMoment = ext.graph.currentMoment;
         });
 
         // |> Then it didn't happen
@@ -524,7 +524,7 @@ describe('Moment Resource', () => {
         expect(mr1.justUpdated).toBeFalsy();
 
         // |> And event stays the same from when it last happened
-        expect(mr1.moment).toEqual(happenedEvent);
+        expect(mr1.moment).toEqual(happenedMoment);
     });
 
     test('can have data', () => {
@@ -711,7 +711,7 @@ describe('dependencies', () => {
         r_a.updateWithAction(1);
 
         expect(r_b.value).toBe(2);
-        expect(r_a.event).toBe(r_b.event);
+        expect(r_a.moment).toBe(r_b.moment);
     });
 
     test('behavior activated once per event', () => {
@@ -811,7 +811,7 @@ describe('dynamic graph changes', () => {
         let ext2 = new Extent(g);
         setupExt.addChildLifetime(ext2);
         ext2.behavior().dependsOn(r_b).supplies(r_c).runs((extent: Extent) => {
-            if (r_b.event != null) {
+            if (r_b.moment != null) {
                 r_c.update(r_b.value + 1);
             }
         });
@@ -822,7 +822,7 @@ describe('dynamic graph changes', () => {
         });
         ext.addToGraphWithAction();
 
-        expect(r_c.event.sequence).toEqual(0);
+        expect(r_c.moment.sequence).toEqual(0);
 
         // when that something happens
         r_a.updateWithAction(1);
@@ -2601,7 +2601,7 @@ describe('Effects, Actions, Events', () => {
         let r1 = ext3.state<number>(0, 'r1');
         ext3.addToGraphWithAction();
         r1.updateWithAction(1);
-        expect(r1.event.timestamp).toEqual(new Date(1));
+        expect(r1.moment.timestamp).toEqual(new Date(1));
     });
 
     test('effects can only be run during an event', () => {

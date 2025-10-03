@@ -258,13 +258,13 @@ class LoginExtent extends Extent {
 
     // tag::login_sequence_compare[]
     emailChangedSincePassword() {
-        return this.email.event.sequence > this.password.event.sequence;
+        return this.email.moment.sequence > this.password.moment.sequence;
     }
     // end::login_sequence_compare[]
 
     // tag::login_timestamp[]
     loginCompletedWhen() {
-        return this.loginComplete.event.timestamp;
+        return this.loginComplete.moment.timestamp;
     }
     // end::login_timestamp[]
 

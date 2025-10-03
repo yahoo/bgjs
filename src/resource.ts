@@ -193,7 +193,7 @@ export class State<T> extends Signal<T> implements Transient {
 
     constructor(extent: Extent, initialState: T, name?: string) {
         super(extent, name);
-        this.currentState = { value: initialState, moment: Moment.initialEvent };
+        this.currentState = { value: initialState, moment: Moment.initialMoment };
         // Initialize the Event's value with the initial state
         this._happenedValue = initialState;
         this._happened = false;
@@ -255,7 +255,7 @@ export class State<T> extends Signal<T> implements Transient {
         return this.currentState.value;
     }
 
-    get event(): Moment {
+    get moment(): Moment {
         this.assertValidAccessor();
         return this.currentState.moment;
     }
@@ -272,7 +272,7 @@ export class State<T> extends Signal<T> implements Transient {
         return this.trace.value;
     }
 
-    get traceEvent(): Moment {
+    get traceMoment(): Moment {
         return this.trace.moment;
     }
 

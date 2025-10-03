@@ -505,7 +505,7 @@ describe('Version 5: Jammed', () => {
         v.completeVendAction.updateWithAction();
         v.timeoutAction.updateWithAction();
         expect(v.jammed.value).toBe(false);
-        expect(v.jammed.event).toBe(Moment.initialEvent); // never jams
+        expect(v.jammed.moment).toBe(Moment.initialMoment); // never jams
     });
 
     test('fix jam clears the jammed state', () => {
