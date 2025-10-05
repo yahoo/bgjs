@@ -34,16 +34,17 @@ export enum LinkType {
     order,
 }
 
-export class GraphEvent {
+export class Moment {
     sequence: number;
     timestamp: Date;
-    static readonly initialEvent: GraphEvent = new GraphEvent(0, new Date(0));
+    static readonly initialMoment: Moment = new Moment(0, new Date(0));
 
     constructor(sequence: number, timestamp: Date) {
         this.sequence = sequence;
         this.timestamp = timestamp;
     }
 }
+
 
 export interface Transient {
     clear(): void;

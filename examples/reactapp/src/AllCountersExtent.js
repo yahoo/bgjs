@@ -3,19 +3,19 @@ import { CounterExtent } from "./CounterExtent";
 import produce from "immer"
 
 export class AllCountersExtent extends bg.Extent {
-    resetCounters = this.moment();
-    addCounter = this.moment();
+    resetCounters = this.signal();
+    addCounter = this.signal();
     total = this.state(0);
     counters = this.state([]);
     nextId = this.state(0);
-    removeCounter = this.moment();
+    removeCounter = this.signal();
 
     constructor(gr) {
         super(gr);
 
         this.behavior()
             .supplies(this.removeCounter)
-            .dynamicDemands([this.counters], ext => {
+            .dynamicDependsOn([this.counters], ext => {
                 return this.counters.value.map(counter => counter.remove);
             }, bg.RelinkingOrder.relinkingOrderSubsequent)
             .runs(ext => {
@@ -29,7 +29,7 @@ export class AllCountersExtent extends bg.Extent {
 
         this.behavior()
             .supplies(this.counters, this.nextId)
-            .demands(this.addCounter, this.removeCounter)
+            .dependsOn(this.addCounter, this.removeCounter)
             .runs(ext => {
                 if (this.addCounter.justUpdated) {
                     let newCounter = new CounterExtent(ext.graph, ext, this.nextId.value);
@@ -46,8 +46,8 @@ export class AllCountersExtent extends bg.Extent {
 
         this.behavior()
             .supplies(this.total)
-            .demands(this.counters)
-            .dynamicDemands([this.counters], ext => {
+            .dependsOn(this.counters)
+            .dynamicDependsOn([this.counters], ext => {
                 return this.counters.value.map((counter) => counter.count);
             })
             .runs(ext => {

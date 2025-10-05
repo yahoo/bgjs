@@ -12,23 +12,23 @@ export class ListExtent extends bg.Extent {
         super(graph);
 
         this.allItems = this.state([]);
-        this.addNewItem = this.moment();
-        this.itemsCreated = this.moment();
-        this.itemsRemoved = this.moment();
-        this.markAllCompleted = this.moment();
+        this.addNewItem = this.signal();
+        this.itemsCreated = this.signal();
+        this.itemsRemoved = this.signal();
+        this.markAllCompleted = this.signal();
         this.allCompleted = this.state(false);
-        this.clearAllCompleted = this.moment();
+        this.clearAllCompleted = this.signal();
         this.remainingCount = this.state(0);
         this.anyCompleted = this.state(false);
         this.viewState = this.state(this.hashToViewState(hash));
-        this.loadedFromLocalStorage = this.moment();
+        this.loadedFromLocalStorage = this.signal();
 
         this.listView = new ListView(this);
 
         this.behavior()
             .supplies(this.allItems, this.itemsCreated, this.itemsRemoved)
-            .demands(this.addNewItem, this.addedToGraph, this.loadedFromLocalStorage)
-            .dynamicDemands([this.allItems], () => {
+            .dependsOn(this.addNewItem, this.addedToGraph, this.loadedFromLocalStorage)
+            .dynamicDependsOn([this.allItems], () => {
                 return this.allItems.value.map(item => item.removeItem);
             }, bg.RelinkingOrder.relinkingOrderSubsequent)
             .runs(() => {
@@ -78,8 +78,8 @@ export class ListExtent extends bg.Extent {
 
         this.behavior()
             .supplies(this.allCompleted, this.remainingCount, this.anyCompleted)
-            .demands(this.allItems)
-            .dynamicDemands([this.allItems], () => {
+            .dependsOn(this.allItems)
+            .dynamicDependsOn([this.allItems], () => {
                 return this.allItems.value.map(item => item.completed);
             })
             .runs(() => {
@@ -100,12 +100,12 @@ export class ListExtent extends bg.Extent {
             });
 
         this.behavior()
-            .demands(this.allItems)
-            .dynamicDemands([this.allItems], () => {
+            .dependsOn(this.allItems)
+            .dynamicDependsOn([this.allItems], () => {
                 return this.allItems.value.flatMap(item => [item.completed, item.itemText]);
             })
             .runs(() => {
-                this.sideEffect(ext => {
+                this.effect(ext => {
                     let output = [];
                     for (let item of this.allItems.value) {
                         let itemPojo = {

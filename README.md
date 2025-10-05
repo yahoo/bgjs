@@ -65,7 +65,7 @@ We're proposing that maybe all this work isn't necessary. What if function defin
 
 __Behavior Graph__ is a library that provides this alternative. It introduces a new unit of code organization called the __behavior__. It is a block of code together with its dependency relationships.
 
-Unlike functions, behaviors are never called directly. Instead, behaviors declare their interfaces using reactive containers of data called __resources__. When data in these resources changes, Behavior Graph knows that any dependent behaviors need to run. Behaviors together with resources form a graph. (A graph of behaviors! Get it?!)
+Unlike functions, behaviors are never called directly. Instead, behaviors declare their interfaces using reactive containers of data called __signals__. When data in these signals changes, Behavior Graph knows that any dependent behaviors need to run. Behaviors together with signals form a graph. (A graph of behaviors! Get it?!)
 
 This gives us:
 1. _Control flow for free_: The computer uses the dependency relationships to run our behaviors in the correct sequence. This works just like spreadsheet formulas.
@@ -142,13 +142,13 @@ Behavior Graph is also not a reactive UI library. You should continue to use you
 
 Instead Behavior Graph gives developers a tool for organizing their software around dependency relationships. We consider the following features essential for this:
 
-* __Bipartite Graph__: Behavior Graph separates reactive blocks of code, _behaviors_, from reactive containers of data, _resources_. Behaviors can update multiple resources independently. Their relationships can vary dynamically at runtime. They can exist in separate modules and with separate lifetimes.
-* __Imperative Friendly__: Many reactive libraries have a strong functional programming flavor. This can lead to added friction when working with non-reactive code. Behavior Graph is designed to be compatible with existing imperative code and APIs. The code inside behaviors is as imperative as you like. We provide ways to create side effects and mutate state. You are free to read the contents of resources from external code.
+* __Bipartite Graph__: Behavior Graph separates reactive blocks of code, _behaviors_, from reactive containers of data, _signals_. Behaviors can update multiple signals independently. Their relationships can vary dynamically at runtime. They can exist in separate modules and with separate lifetimes.
+* __Imperative Friendly__: Many reactive libraries have a strong functional programming flavor. This can lead to added friction when working with non-reactive code. Behavior Graph is designed to be compatible with existing imperative code and APIs. The code inside behaviors is as imperative as you like. We provide ways to create effects and mutate state. You are free to read the contents of signals from external code.
 * __Explicit__: Behaviors declare their relationships explicitly. This aids in navigation and readability in large codebases. Reading and writing reactive data does not look like normal variable access. Reactive variables are not the same as normal variables and we prefer presenting them that way.
 * __Error Detection__: By understanding the underlying graph, the computer is able to detect errors for us. Behavior Graph tells us when we have specified our dependencies incorrectly.
 * __Glitch Free__: Glitches occur when multiple dependency paths result in the same reactive code getting run twice. Behavior Graph does not have glitches.
-* __Transactional__: Side effects are always postponed until after all other reactive code has completed to ensure consistent state. Reactive events are serialized to prevent side effects from leaking new reactive events into the current event.
-* __A Language for Change__: We can ask a resource if it "just updated" and "what it updated from".
+* __Transactional__: Effects are always postponed until after all other reactive code has completed to ensure consistent state. Reactive moments are serialized to prevent effects from leaking new reactive moments into the current moment.
+* __A Language for Change__: We can ask a signal if it "just updated" and "what it updated from".
 * __Dynamic Graph__: Dependencies are dynamically updatable. Different parts of a running program which have different lifetimes can all be part of the same graph.
 
 ## Challenges

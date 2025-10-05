@@ -8,10 +8,10 @@ export {
 } from "./graph.js";
 
 export {
-    Resource,
-    Moment,
-    State
-} from "./resource.js"
+    Signal,
+    State,
+    Dependable
+} from "./signal.js"
 
 export {
     Extent,
@@ -23,7 +23,7 @@ export {
 } from "./behavior.js"
 
 export {
-    GraphEvent,
+    Moment,
     RelinkingOrder,
     RelinkingTarget,
     LinkType,

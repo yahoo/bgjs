@@ -3,11 +3,11 @@ import console from "console"
 import { performance, PerformanceObserver } from "perf_hooks"
 
 class RootExtent extends bg.Extent {
-    root : bg.Moment;
-    addExtents: bg.Moment;
-    extentAdder : bg.Moment;
-    linkUpdater : bg.Moment;
-    bulkResources : bg.Moment<undefined>[][] = [];
+    root : bg.Signal;
+    addExtents: bg.Signal;
+    extentAdder : bg.Signal;
+    linkUpdater : bg.Signal;
+    bulkResources : bg.Signal<undefined>[][] = [];
     bulkBehaviors : bg.Behavior[][] = [];
     subextents : Sub1Extent[] = [];
     width: number = 300;
@@ -15,14 +15,14 @@ class RootExtent extends bg.Extent {
 
     constructor(g: bg.Graph) {
         super(g);
-        this.root = this.moment();
-        this.extentAdder = this.moment();
-        this.linkUpdater = this.moment();
-        this.addExtents = this.moment();
+        this.root = this.signal();
+        this.extentAdder = this.signal();
+        this.linkUpdater = this.signal();
+        this.addExtents = this.signal();
 
         this.behavior()
             .supplies(this.extentAdder)
-            .demands(this.addExtents)
+            .dependsOn(this.addExtents)
             .runs(ext => {
                 for (let i = 0; i<3; i++) {
                     let e = new Sub1Extent(g, this.root);
@@ -35,21 +35,21 @@ class RootExtent extends bg.Extent {
 
         this.behavior()
             .supplies(this.linkUpdater)
-            .demands(this.extentAdder)
+            .dependsOn(this.extentAdder)
             .runs(extent => {
                 // make all the behaviors in the first row of this extent
-                // demand the resources in the first row of each subextent
-                let newDemands: bg.Moment[] = [];
+                // depend on the signals in the first row of each subextent
+                let newDependencies: bg.Signal[] = [];
                 for (let ext of this.subextents) {
-                    newDemands.push(...ext.bulkResources[0])
+                    newDependencies.push(...ext.bulkResources[0])
                 }
                 for (let j = 0; j < this.width; j++) {
-                    this.bulkBehaviors[0][j].setDynamicDemands(newDemands)
+                    this.bulkBehaviors[0][j].setDynamicDemands(newDependencies)
                 }
 
                 // make each behavior in the last row of each subextent
-                // demand each resource in the last row of this extent
-                let allSupplied: bg.Moment[] = this.bulkResources[this.depth - 1];
+                // depend on each signal in the last row of this extent
+                let allSupplied: bg.Signal[] = this.bulkResources[this.depth - 1];
                 for (let ext of this.subextents) {
                     for (let j = 0; j < ext.width; j++) {
                         ext.bulkBehaviors[ext.depth - 1][j].setDynamicDemands(allSupplied);
@@ -57,19 +57,19 @@ class RootExtent extends bg.Extent {
                 }
             });
 
-        let previousRow: bg.Moment[] = [];
+        let previousRow: bg.Signal[] = [];
         for (let i = 0; i < this.depth; i++) {
             this.bulkResources[i] = [];
             this.bulkBehaviors[i] = [];
-            let demands = [this.root, this.linkUpdater].concat(previousRow);
+            let dependencies = [this.root, this.linkUpdater].concat(previousRow);
             for (let j = 0; j < this.width; j++) {
-                let moment: bg.Moment<undefined> = this.moment();
-                this.bulkResources[i][j] = moment;
+                let signal: bg.Signal<undefined> = this.signal();
+                this.bulkResources[i][j] = signal;
                 this.bulkBehaviors[i][j] = this.behavior()
-                    .supplies(moment)
-                    .demands(...demands)
+                    .supplies(signal)
+                    .dependsOn(...dependencies)
                     .runs(ext => {
-                        moment.update();
+                        signal.update();
                     });
             }
             previousRow = this.bulkResources[i];
@@ -78,27 +78,27 @@ class RootExtent extends bg.Extent {
 }
 
 class Sub1Extent extends bg.Extent {
-    bulkResources : bg.Moment[][] = [];
+    bulkResources : bg.Signal[][] = [];
     bulkBehaviors : bg.Behavior[][] = [];
     width: number = 10;
     depth: number = 100;
 
-    constructor(g: bg.Graph, root: bg.Moment) {
+    constructor(g: bg.Graph, root: bg.Signal) {
         super(g);
 
-        let previousRow: bg.Moment[] = [];
+        let previousRow: bg.Signal[] = [];
         for (let i = 0; i < this.depth; i++) {
             this.bulkResources[i] = [];
             this.bulkBehaviors[i] = [];
-            let demands = previousRow;
+            let dependencies = previousRow;
             for (let j = 0; j < this.width; j++) {
-                let moment: bg.Moment<undefined> = this.moment();
-                this.bulkResources[i][j] = moment;
+                let signal: bg.Signal<undefined> = this.signal();
+                this.bulkResources[i][j] = signal;
                 this.bulkBehaviors[i][j] = this.behavior()
-                    .supplies(moment)
-                    .demands(...demands)
+                    .supplies(signal)
+                    .dependsOn(...dependencies)
                     .runs(ext => {
-                        moment.update();
+                        signal.update();
                     });
             }
             previousRow = this.bulkResources[i];

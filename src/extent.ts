@@ -5,7 +5,7 @@
 
 import {Graph} from "./graph.js";
 import {Behavior, BehaviorBuilder} from "./behavior.js";
-import {Moment, Resource, State} from "./resource.js";
+import {Signal, State} from "./signal.js";
 import {RelinkingOrder} from "./common.js";
 
 export enum ExtentRemoveStrategy {
@@ -117,7 +117,7 @@ export class Extent {
     debugConstructorName: string | undefined;
     debugName: string | undefined;
     behaviors: Behavior[] = [];
-    resources: Resource[] = [];
+    signals: Signal<unknown>[] = [];
     graph: Graph;
     addedToGraphWhen: number | null = null;
     addedToGraph: State<boolean>;
@@ -169,8 +169,8 @@ export class Extent {
         this.behaviors.push(behavior);
     }
 
-    addResource(resource: Resource) {
-        this.resources.push(resource);
+    addSignal(signal: Signal<unknown>) {
+        this.signals.push(signal);
     }
 
     addToGraphWithAction(debugName?: string) {
@@ -180,8 +180,8 @@ export class Extent {
     }
 
     addToGraph() {
-        if (this.graph.currentEvent != null) {
-            this.nameResources();
+        if (this.graph.currentMoment != null) {
+            this.nameSignals();
             this.graph.addExtent(this);
         } else {
             let err: any = new Error("addToGraph must be called within an event.");
@@ -198,7 +198,7 @@ export class Extent {
 
     removeFromGraph(strategy?: ExtentRemoveStrategy) {
         let graph = this.graph;
-        if (graph.currentEvent != null) {
+        if (graph.currentMoment != null) {
             if (this.addedToGraphWhen != null) {
                 if (strategy == ExtentRemoveStrategy.extentOnly || strategy === undefined || this.lifetime === null) {
                     graph.removeExtent(this);
@@ -215,7 +215,7 @@ export class Extent {
         }
     }
 
-    subscribeToJustUpdated(resources: Resource[], callback: (ext: this) => void): () => void {
+    subscribeToJustUpdated(resources: Signal<unknown>[], callback: (ext: this) => void): () => void {
         let unsubscribe = this.graph._subscribeToJustUpdated(resources, {extent: this, callback:callback as ((arg0: Extent | null) => void)});
         this.unsubscribes.add(unsubscribe);
         return unsubscribe;
@@ -228,14 +228,14 @@ export class Extent {
         this.unsubscribes.clear();
     }
 
-    nameResources() {
-        // automatically add any behaviors and resources that are contained
+    nameSignals() {
+        // automatically add any behaviors and signals that are contained
         // by this Extent object and name them with corresponding keys
         for (let key in this) {
             let object = this[key];
-            if (object && (object as any)['isResource'] !== undefined) {
-                if ((object as any as Resource).debugName == null) {
-                    (object as any as Resource).debugName = key;
+            if (object && (object as any)['isSignal'] !== undefined) {
+                if ((object as any as Signal).debugName == null) {
+                    (object as any as Signal).debugName = key;
                 }
             }
         }
@@ -246,19 +246,15 @@ export class Extent {
         return b;
     }
 
-    resource(name?: string): Resource {
-        return new Resource(this, name);
-    }
-
-    moment<T>(name?: string): Moment<T> {
-        return new Moment<T>(this, name);
+    signal<T>(name?: string): Signal<T> {
+        return new Signal<T>(this, name);
     }
 
     state<T>(initialState: T, name?: string): State<T> {
         return new State<T>(this, initialState, name);
     }
 
-    sideEffect(block: (ext: this) => void, debugName?: string) {
+    effect(block: (ext: this) => void, debugName?: string) {
         // This requires a cast because we know the extent won't be null at runtime because this side effect
         // was created with one
         this.graph.sideEffectHelper({

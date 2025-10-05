@@ -6,32 +6,39 @@
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
 import {Graph} from "./graph.js";
-import {GraphEvent, Subscription, Transient} from "./common";
+import {Moment, Subscription, Transient} from "./common";
 
 export enum LinkType {
     reactive,
     order,
 }
 
-export interface Demandable {
-    resource: Resource,
+export interface Dependable {
+    signal: Signal<unknown>,
     type: LinkType
 }
 
-export class Resource implements Demandable {
+
+
+export class Signal<T = undefined> implements Dependable, Transient {
     debugName: string | null;
-    isResource: boolean = true;
+    isSignal: boolean = true;
     extent: Extent;
     graph: Graph;
     subsequents: Set<Behavior> = new Set();
     suppliedBy: Behavior | null = null;
     skipChecks: boolean = false;
     didUpdateSubscribers?: Set<Subscription>;
+    
+    // Signal value and timestamp properties
+    protected _happened: boolean = false;
+    protected _happenedValue: T | undefined = undefined;
+    protected _happenedWhen: Moment | null = null;
 
     constructor(extent: Extent, name?: string) {
         this.extent = extent;
         this.graph = extent.graph;
-        extent.addResource(this);
+        extent.addSignal(this);
         if (name !== undefined) {
             this.debugName = name;
         } else {
@@ -39,11 +46,12 @@ export class Resource implements Demandable {
         }
     }
 
-    get order(): Demandable {
-        return {resource: this, type: LinkType.order }
+    // Dependable interface implementation
+    get order(): Dependable {
+        return {signal: this, type: LinkType.order }
     }
 
-    get resource(): Resource {
+    get signal(): Signal<unknown> {
         return this;
     }
 
@@ -51,19 +59,12 @@ export class Resource implements Demandable {
         return LinkType.reactive;
     }
 
-    toString() {
-        let name = "Resource";
-        if (this.debugName != null) {
-            name = this.debugName + "(r)";
-        }
-        return name;
-    }
-
+    // Validation methods
     assertValidUpdater() {
         let graph = this.graph;
         let currentBehavior = graph.currentBehavior;
-        let currentEvent = graph.currentEvent;
-        if (currentBehavior == null && currentEvent == null) {
+        let currentMoment = graph.currentMoment;
+        if (currentBehavior == null && currentMoment == null) {
             let err: any = new Error("Resource must be updated inside a behavior or action.");
             err.resource = this;
             throw err;
@@ -95,11 +96,7 @@ export class Resource implements Demandable {
         }
     }
 
-    get justUpdated(): boolean {
-        this.assertValidAccessor();
-        return false;
-    }
-
+    // Subscription methods
     subscribeToJustUpdated(callback: () => void): (() => void) {
         return this._subscribeToJustUpdated({extent: null, callback: callback})
     }
@@ -120,32 +117,26 @@ export class Resource implements Demandable {
             this.graph._notifyJustUpdatedSubscribers(this.didUpdateSubscribers!);
         }
     }
-}
-
-export class Moment<T = undefined> extends Resource implements Transient {
-    private _happened: boolean = false;
-    private _happenedValue: T | undefined = undefined;
-    private _happenedWhen: GraphEvent | null = null;
 
     get justUpdated(): boolean {
         this.assertValidAccessor();
         return this._happened;
     }
 
-    get value(): T | undefined {
+    get value(): T {
         this.assertValidAccessor();
-        return this._happenedValue;
+        return this._happenedValue as T;
     }
 
-    get event(): GraphEvent | null {
+    get moment(): Moment | null {
         this.assertValidAccessor();
         return this._happenedWhen;
     }
 
     toString() {
-        let name = "Moment";
+        let name = "Signal";
         if (this.debugName != null) {
-            name = (this.debugName + "(m)" )
+            name = (this.debugName + "(s)" )
         }
         if (this._happenedValue !== undefined) {
             name = name + "=" + this._happenedValue;
@@ -157,65 +148,84 @@ export class Moment<T = undefined> extends Resource implements Transient {
     }
 
     justUpdatedTo(value: T): boolean {
-        return this.justUpdated && this._happenedValue == value;
+        return this.justUpdated && this._happenedValue === value;
     }
 
-    updateWithAction(value: T | undefined = undefined, debugName?: string) {
+    // Method overloading for updateWithAction
+    updateWithAction(value: T, debugName?: string): void;
+    updateWithAction(value?: T extends undefined ? undefined : never, debugName?: string): void;
+    updateWithAction(value?: T, debugName?: string): void {
         this.graph.action(() => {
-            this.update(value);
+            this.update(value as T);
         }, debugName);
-        return;
     }
 
-    update(value: T | undefined = undefined) {
+    // Method overloading for update
+    update(value: T): void;
+    update(value?: T extends undefined ? undefined : never): void;
+    update(value?: T): void {
         this.assertValidUpdater();
         this._happened = true;
         this._happenedValue = value;
-        this._happenedWhen = this.graph.currentEvent;
+        this._happenedWhen = this.graph.currentMoment;
         this.notifyJustUpdatedSubscribers();
-        this.graph.resourceTouched(this);
-        this.graph.trackTransient(this);
+        this.graph.resourceUpdated(this);
     }
 
     clear(): void {
         this._happened = false;
+        // Note: _happenedValue is not meaningful when _happened is false
+        // but we need to set it to something for type safety
         this._happenedValue = undefined;
     }
 
 }
 
-export type StateHistory<T> = { value: T, event: GraphEvent };
-export class State<T> extends Resource implements Transient {
+
+
+
+
+
+export type StateHistory<T> = { value: T, moment: Moment };
+export class State<T> extends Signal<T> implements Transient {
     private currentState: StateHistory<T>;
     private previousState: StateHistory<T> | null = null;
 
     constructor(extent: Extent, initialState: T, name?: string) {
         super(extent, name);
-        this.currentState = { value: initialState, event: GraphEvent.initialEvent };
+        this.currentState = { value: initialState, moment: Moment.initialMoment };
+        // Initialize the Event's value with the initial state
+        this._happenedValue = initialState;
+        this._happened = false;
     }
 
     toString() {
-        let name = "State";
+        let name = "StateSignal";
         if (this.debugName != null) {
-            name = (this.debugName + "(s)" );
+            name = (this.debugName + "(ss)" );
         }
         name = name + "=" + this.currentState.value;
-        name = name + " : " + this.currentState.event.sequence;
+        name = name + " : " + this.currentState.moment.sequence;
         return name;
     }
 
-    updateWithAction(newValue: T, debugName?: string) {
+    // Override with compatible method signature
+    updateWithAction(newValue: T, debugName?: string): void;
+    updateWithAction(newValue?: T extends undefined ? undefined : never, debugName?: string): void;
+    updateWithAction(newValue?: T, debugName?: string): void {
         this.graph.action(() => {
-            this.update(newValue);
+            this.update(newValue as T);
         }, debugName);
-        return;
     }
 
-    update(newValue: T) {
+    // Override with compatible method signature
+    update(newValue: T): void;
+    update(newValue?: T extends undefined ? undefined : never): void;
+    update(newValue?: T): void {
         if (this.currentState.value === newValue) {
             return;
         }
-        this.updateForce(newValue);
+        this.updateForce(newValue as T);
     }
 
     updateForce(newValue: T) {
@@ -224,17 +234,16 @@ export class State<T> extends Resource implements Transient {
     }
 
     private _updateForce(newValue: T) {
-        if (this.graph.currentEvent != null && this.currentState.event.sequence < this.graph.currentEvent?.sequence) {
+        if (this.graph.currentMoment != null && this.currentState.moment.sequence < this.graph.currentMoment?.sequence) {
             // captures trace as the value before any updates
             this.previousState = this.currentState;
         }
 
-        this.currentState = { value: newValue, event: this.graph.currentEvent! };
+        this.currentState = { value: newValue, moment: this.graph.currentMoment! };
 
         this.notifyJustUpdatedSubscribers();
 
-        this.graph.resourceTouched(this);
-        this.graph.trackTransient(this);
+        this.graph.resourceUpdated(this);
     }
 
     clear(): void {
@@ -246,13 +255,13 @@ export class State<T> extends Resource implements Transient {
         return this.currentState.value;
     }
 
-    get event(): GraphEvent {
+    get moment(): Moment {
         this.assertValidAccessor();
-        return this.currentState.event;
+        return this.currentState.moment;
     }
 
     private get trace(): StateHistory<T> {
-        if (this.currentState.event === this.graph.currentEvent) {
+        if (this.currentState.moment === this.graph.currentMoment) {
             return this.previousState!;
         } else {
             return this.currentState;
@@ -263,13 +272,13 @@ export class State<T> extends Resource implements Transient {
         return this.trace.value;
     }
 
-    get traceEvent(): GraphEvent {
-        return this.trace.event;
+    get traceMoment(): Moment {
+        return this.trace.moment;
     }
 
     get justUpdated(): boolean {
         this.assertValidAccessor();
-        return this.currentState.event === this.graph.currentEvent
+        return this.currentState.moment === this.graph.currentMoment
     }
 
     justUpdatedTo(toState: T): boolean {
@@ -284,4 +293,5 @@ export class State<T> extends Resource implements Transient {
         return this.justUpdatedTo(toState) && this.justUpdatedFrom(fromState);
     }
 }
+
 

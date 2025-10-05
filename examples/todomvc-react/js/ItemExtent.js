@@ -9,20 +9,20 @@ export class ItemExtent extends Extent {
          this.key = initialKey;
          this.itemText = this.state(initialText);
          this.editingText = this.state("");
-         this.markCompleted = this.moment();
+         this.markCompleted = this.signal();
          this.completed = this.state(initialCompleted);
-         this.destroyItemClicked = this.moment();
-         this.removeItem = this.moment();
+         this.destroyItemClicked = this.signal();
+         this.removeItem = this.signal();
          this.editing = this.state(false);
-         this.requestEdit = this.moment();
-         this.updateEditingText= this.moment();
-         this.completeEdit = this.moment();
+         this.requestEdit = this.signal();
+         this.updateEditingText= this.signal();
+         this.completeEdit = this.signal();
          this.visible = this.state(true);
 
 
          this.behavior()
              .supplies(this.completed)
-             .demands(this.markCompleted, list.markAllCompleted)
+             .dependsOn(this.markCompleted, list.markAllCompleted)
              .runs(() => {
                     if (this.markCompleted.justUpdated) {
                         this.completed.update(this.markCompleted.value);
@@ -33,7 +33,7 @@ export class ItemExtent extends Extent {
 
          this.behavior()
              .supplies(this.editing, this.editingText)
-             .demands(this.completeEdit, this.requestEdit, this.updateEditingText, this.itemText.order)
+             .dependsOn(this.completeEdit, this.requestEdit, this.updateEditingText, this.itemText.order)
              .runs(() => {
                  if (this.requestEdit.justUpdated) {
                      this.editing.update(true);
@@ -47,7 +47,7 @@ export class ItemExtent extends Extent {
 
          this.behavior()
              .supplies(this.itemText)
-             .demands(this.completeEdit)
+             .dependsOn(this.completeEdit)
                 .runs(() => {
                     let newText = this.completeEdit.value.trim();
                     if (newText.length > 0) {
@@ -57,7 +57,7 @@ export class ItemExtent extends Extent {
 
          this.behavior()
              .supplies(this.removeItem)
-             .demands(this.destroyItemClicked, list.clearAllCompleted, this.completed.order)
+             .dependsOn(this.destroyItemClicked, list.clearAllCompleted, this.completed.order)
              .runs(() => {
                  if (this.destroyItemClicked.justUpdated) {
                      this.removeItem.update();
@@ -70,7 +70,7 @@ export class ItemExtent extends Extent {
 
          this.behavior()
              .supplies(this.visible)
-             .demands(this.completed, this.list.viewState, this.addedToGraph)
+             .dependsOn(this.completed, this.list.viewState, this.addedToGraph)
              .runs(() => {
                  if (this.completed.value && this.list.viewState.value === ListExtent.ViewStateActive) {
                      this.visible.update(false);

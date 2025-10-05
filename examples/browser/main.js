@@ -41,44 +41,44 @@ class LoginExtent extends bg.Extent {
     passwordValid = this.state(false);
     loginEnabled = this.state(false);
     loggingIn = this.state(false);
-    loginClick = this.moment();
-    loginComplete = this.moment(this);
+    loginClick = this.signal();
+    loginComplete = this.signal(this);
 
     constructor(graph) {
         super(graph);
 
         this.behavior()
             .supplies(this.emailValid)
-            .demands(this.email, this.addedToGraph)
+            .dependsOn(this.email, this.addedToGraph)
             .runs(extent => {
                 let email = extent.email.value;
                 let emailValid = validateEmail(email);
                 extent.emailValid.update(emailValid);
-                extent.sideEffect((extent) => {
+                extent.effect((extent) => {
                     inputFeedback("emailFeedback", extent.emailValid.value);
                 }, undefined, null);
             });
 
         this.behavior()
             .supplies(this.passwordValid)
-            .demands(this.password, this.addedToGraph)
+            .dependsOn(this.password, this.addedToGraph)
             .runs(extent => {
                 let password = extent.password.value ?? "";
                 let passwordValid = password.length > 0;
                 extent.passwordValid.update(passwordValid);
-                extent.sideEffect((extent) => {
+                extent.effect((extent) => {
                     inputFeedback("passwordFeedback", extent.passwordValid.value);
                 }, undefined, "passwordFeedback");
             });
 
         this.behavior()
             .supplies(this.loginEnabled)
-            .demands(this.emailValid, this.passwordValid, this.loggingIn, this.addedToGraph)
+            .dependsOn(this.emailValid, this.passwordValid, this.loggingIn, this.addedToGraph)
             .runs(extent => {
 
                 let enabled = extent.emailValid.value && extent.passwordValid.value && !extent.loggingIn.value;
                 extent.loginEnabled.update(enabled)
-                extent.sideEffect((extent) => {
+                extent.effect((extent) => {
                     loginButtonEnable(extent.loginEnabled.value);
                 }, undefined, "enable login button");
 
@@ -86,7 +86,7 @@ class LoginExtent extends bg.Extent {
 
         this.behavior()
             .supplies(this.loggingIn)
-            .demands(this.loginClick, this.loginComplete, this.addedToGraph)
+            .dependsOn(this.loginClick, this.loginComplete, this.addedToGraph)
             .runs(extent => {
 
                 if (extent.loginClick.justUpdated && extent.loginEnabled.traceValue) {
@@ -96,16 +96,16 @@ class LoginExtent extends bg.Extent {
                 }
 
                 if (extent.loggingIn.justUpdatedTo(true)) {
-                    extent.sideEffect((extent) => {
+                    extent.effect((extent) => {
                         loginToServer(extent.email.value, extent.password.value);
                     }, undefined, "login api call");
                 }
             });
 
         this.behavior()
-            .demands(this.loggingIn, this.loginComplete, this.addedToGraph)
+            .dependsOn(this.loggingIn, this.loginComplete, this.addedToGraph)
             .runs(extent => {
-                extent.sideEffect((extent) => {
+                extent.effect((extent) => {
                     let status = "&nbsp;"
                     if (extent.loggingIn.value) {
                         status = "Logging in...";
