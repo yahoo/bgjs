@@ -5,7 +5,7 @@
 
 import {Orderable} from "./bufferedqueue.js";
 import {Extent} from "./extent.js";
-import {Signal, Dependable} from "./resource.js";
+import {Signal, Dependable} from "./signal.js";
 import {OrderingState, RelinkingOrder} from "./common";
 
 

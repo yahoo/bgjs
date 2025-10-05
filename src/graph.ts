@@ -6,7 +6,7 @@
 import {BufferedPriorityQueue} from "./bufferedqueue.js";
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
-import {Dependable, LinkType, Signal} from "./resource.js";
+import {Dependable, LinkType, Signal} from "./signal.js";
 import {DateProvider, Moment, OrderingState, Subscription, Transient} from "./common";
 
 interface StateInternal<T> {

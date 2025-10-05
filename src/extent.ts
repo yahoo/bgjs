@@ -5,7 +5,7 @@
 
 import {Graph} from "./graph.js";
 import {Behavior, BehaviorBuilder} from "./behavior.js";
-import {Signal, State} from "./resource.js";
+import {Signal, State} from "./signal.js";
 import {RelinkingOrder} from "./common.js";
 
 export enum ExtentRemoveStrategy {

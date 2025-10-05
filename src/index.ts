@@ -11,7 +11,7 @@ export {
     Signal,
     State,
     Dependable
-} from "./resource.js"
+} from "./signal.js"
 
 export {
     Extent,
