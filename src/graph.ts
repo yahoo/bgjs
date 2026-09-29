@@ -402,7 +402,24 @@ export class Graph {
                 behavior.supplies = new Set(allUntrackedSupplies);
                 for (let newSupply of behavior.supplies) {
                     if (newSupply.suppliedBy != null && newSupply.suppliedBy != behavior) {
-                        let err: any = new Error("Resource cannot be supplied by more than one behavior.");
+                        let describe = (b: any) => {
+                            let ext = b.extent?.debugName ? ` in extent "${b.extent.debugName}"` : "";
+                            let others = [...(b.untrackedSupplies ?? []), ...(b.untrackedDynamicSupplies ?? [])]
+                                .filter((s: any) => s !== newSupply)
+                                .map((s: any) => s.debugName ?? "<unnamed>");
+                            let also = others.length > 0 ? ` (also supplies: ${others.join(", ")})` : " (supplies nothing else)";
+                            return `behavior${ext}${also}`;
+                        };
+                        let rname = newSupply.debugName ?? "<unnamed resource>";
+                        let err: any = new Error(
+                            `Resource "${rname}" is supplied by two behaviors: ` +
+                            `${describe(newSupply.suppliedBy)} and ${describe(behavior)}. ` +
+                            `A resource must have exactly one supplying behavior; that behavior is the only place it is updated. ` +
+                            `Fix: keep "${rname}" in the behavior that owns that state. In the other behavior replace ` +
+                            `.supplies(${rname}) with .demands(${rname}) and read ${rname}.value there, or supply a separate ` +
+                            `resource that the owner demands. Do not merge the two behaviors into one; splitting responsibilities ` +
+                            `across small behaviors is the intended design.`
+                        );
                         err.alreadySupplied = newSupply;
                         err.desiredSupplier = behavior;
                         throw err;
