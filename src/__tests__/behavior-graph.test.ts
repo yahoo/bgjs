@@ -1616,6 +1616,33 @@ describe('Extents', () => {
                 e.removeFromGraph();
             }).toThrow();
         });
+
+        test('check one-supplier error names the resource and both behaviors', () => {
+            let e = new Extent(g);
+            e.debugName = 'DupExtent';
+            let shared = e.state(0, 'shared');
+            let other = e.state(0, 'other');
+            e.behavior().supplies(shared, other).runs(() => {});
+            e.behavior().supplies(shared).runs(() => {});
+
+            let thrown: any = null;
+            try {
+                e.addToGraphWithAction();
+            } catch (err) {
+                thrown = err;
+            }
+            expect(thrown).not.toBeNull();
+            expect(thrown.alreadySupplied).toBe(shared);
+            expect(thrown.desiredSupplier).toBeInstanceOf(Behavior);
+            let msg: string = thrown.message;
+            expect(msg).toContain('"shared"');
+            expect(msg).toContain('is supplied by two behaviors');
+            expect(msg).toContain('in extent "DupExtent"');
+            expect(msg).toContain('also supplies: other');
+            expect(msg).toContain('supplies nothing else');
+            expect(msg).toContain('.demands(shared)');
+            expect(msg).toContain('Do not merge');
+        });
     });
 });
 
