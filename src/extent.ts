@@ -120,6 +120,7 @@ export class Extent {
     resources: Resource[] = [];
     graph: Graph;
     addedToGraphWhen: number | null = null;
+    removedFromGraphWhen: number | null = null;
     addedToGraph: State<boolean>;
     lifetime: ExtentLifetime | null = null;
     unsubscribes: Set<() => void> = new Set();
