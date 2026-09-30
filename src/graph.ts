@@ -114,13 +114,15 @@ export class Graph {
                 }
 
                 if (this.validateLifetimes) {
-                    if (this.extentsAdded.length > 0) {
-                        this.validateAddedExtents();
-                        this.extentsAdded.length = 0;
-                    }
+                    // validate removals first so extents removed without their children
+                    // in the same event they were added report the removal error
                     if (this.extentsRemoved.length > 0) {
                         this.validateRemovedExtents();
                         this.extentsRemoved.length = 0;
+                    }
+                    if (this.extentsAdded.length > 0) {
+                        this.validateAddedExtents();
+                        this.extentsAdded.length = 0;
                     }
                 }
 
@@ -187,6 +189,10 @@ export class Graph {
         // ensure extents with same lifetime also got added
         let needAdding: Set<Extent> = new Set();
         for (let added of this.extentsAdded) {
+            // extents added and then removed in the same event are validated as removed extents instead
+            if (added.addedToGraphWhen == null) {
+                continue;
+            }
             if (added.lifetime != null) {
                 for (let ext of added.lifetime.getAllContainingExtents()) {
                     if (ext.addedToGraphWhen == null) {
@@ -280,8 +286,8 @@ export class Graph {
         let topBehavior = this.activatedBehaviors.pop();
         // if no behavior left we quit
         while (topBehavior !== undefined) {
-            if (topBehavior!.removedWhen == sequence) {
-                // if this behavior has been removed already then try next one
+            if (topBehavior!.extent.addedToGraphWhen == null) {
+                // if this behavior's extent has been removed then try next one
                 topBehavior = this.activatedBehaviors.pop();
             } else {
                 // valid behavior, run it
@@ -371,6 +377,10 @@ export class Graph {
     private addUntrackedBehaviors() {
         if (this.untrackedBehaviors.length > 0) {
             for (let behavior of this.untrackedBehaviors) {
+                // extent may have been removed after it was added in the same event
+                if (behavior.extent.addedToGraphWhen == null) {
+                    continue;
+                }
                 this.modifiedDemandBehaviors.push(behavior);
                 this.modifiedSupplyBehaviors.push(behavior);
             }
@@ -381,6 +391,10 @@ export class Graph {
     private addUntrackedSupplies() {
         if (this.modifiedSupplyBehaviors.length > 0) {
             for (let behavior of this.modifiedSupplyBehaviors) {
+                // don't link supplies for behaviors whose extent was removed after the modification
+                if (behavior.extent.addedToGraphWhen == null) {
+                    continue;
+                }
                 if (behavior.untrackedSupplies != null) {
                     for (let supply of behavior.untrackedSupplies) {
                         if (this.validateLifetimes && !behavior.extent.hasCompatibleLifetime(supply.extent)) {
@@ -427,6 +441,10 @@ export class Graph {
     private addUntrackedDemands(sequence: number) {
         if (this.modifiedDemandBehaviors.length > 0) {
             for (let behavior of this.modifiedDemandBehaviors) {
+                // don't link demands for behaviors whose extent was removed after the modification
+                if (behavior.extent.addedToGraphWhen == null) {
+                    continue;
+                }
                 if (behavior.untrackedDemands != null) {
                     for (let demand of behavior.untrackedDemands) {
                         if (this.validateLifetimes && !behavior.extent.hasCompatibleLifetime(demand.resource.extent)) {
@@ -730,6 +748,7 @@ export class Graph {
         }
 
         extent.addedToGraphWhen = this.currentEvent.sequence;
+        extent.removedFromGraphWhen = null;
         this.extentsAdded.push(extent);
         // this casting below is a hack to get at the private method so we can skip integrity checks which
         // allow us to update addedToGraph from inside whatever behavior or action it is added
@@ -751,6 +770,9 @@ export class Graph {
             }
             extent.unsubscribeAll();
             extent.addedToGraphWhen = null;
+            extent.removedFromGraphWhen = this.currentEvent.sequence;
+            // same private access hack as addExtent to skip integrity checks
+            (extent.addedToGraph as unknown as StateInternal<boolean>)._updateForce(false);
         }
     }
 }

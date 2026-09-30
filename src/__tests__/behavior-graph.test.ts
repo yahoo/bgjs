@@ -968,6 +968,272 @@ describe('dynamic graph changes', () => {
         expect(didRun.value).toBeFalsy();
     });
 
+    test('activated behaviors of removed extents in later events dont run', () => {
+        // |> Given a removed extent whose behavior is still a subsequent of a local resource
+        let local = ext.moment('local');
+        let runs = 0;
+        ext.behavior().demands(local).runs(extent => {
+            runs++;
+        });
+        ext.addToGraphWithAction();
+        ext.removeFromGraphWithAction();
+        expect(local.subsequents.size).toEqual(1);
+
+        // |> When that resource is touched in a later event
+        g.action(() => {
+            g.resourceTouched(local);
+        });
+
+        // |> Then the removed behavior does not run
+        expect(runs).toEqual(0);
+    });
+
+    test('updating resources of removed extents does nothing', () => {
+        // |> Given a removed extent with a behavior demanding local and foreign resources
+        let m = ext.moment<number>('m');
+        let s = ext.state<number>(0, 's');
+        let runs = 0;
+        ext.behavior().demands(m, s, r_a).runs(extent => {
+            if (m.justUpdated || s.justUpdated) {
+                runs++;
+            }
+        });
+        ext.addToGraphWithAction();
+        ext.removeFromGraphWithAction();
+
+        // |> When its resources are updated afterwards (e.g. a queued UI event)
+        m.updateWithAction(1);
+        s.updateWithAction(1);
+        g.action(() => {
+            s.updateForce(2);
+        });
+
+        // |> Then nothing happens: no error, no behavior run, no value change
+        expect(runs).toEqual(0);
+        expect(m.event).toBeNull();
+        expect(s.value).toEqual(0);
+    });
+
+    test('updating locally supplied resources of removed extents does nothing', () => {
+        // |> Given a removed extent with a resource supplied by its own behavior
+        let supplied = ext.state<number>(0, 'supplied');
+        ext.behavior().supplies(supplied).demands(r_a).runs(extent => {
+            supplied.update(r_a.value);
+        });
+        ext.addToGraphWithAction();
+        ext.removeFromGraphWithAction();
+
+        // |> When it is updated from an action
+        // |> Then it doesn't throw the supplied resource error
+        expect(() => supplied.updateWithAction(1)).not.toThrow();
+        expect(supplied.value).toEqual(0);
+    });
+
+    test('resources of extents never added can still be updated', () => {
+        // |> Given an extent that was never added
+        let s = ext.state<number>(0, 's');
+
+        // |> When its resource is updated
+        s.updateWithAction(1);
+
+        // |> Then it updates
+        expect(s.value).toEqual(1);
+    });
+
+    test('removed then re-added extents update and run normally', () => {
+        // |> Given an extent that was removed and added back
+        let m = ext.moment('m');
+        let runs = 0;
+        ext.behavior().demands(m, r_a).runs(extent => {
+            runs++;
+        });
+        ext.addToGraphWithAction();
+        ext.removeFromGraphWithAction();
+        ext.addToGraphWithAction();
+
+        // |> When its resources are updated
+        m.updateWithAction();
+        r_a.updateWithAction(1);
+
+        // |> Then its behavior runs
+        expect(runs).toEqual(2);
+    });
+
+    test('dynamic demands updated in the same event as removal are not linked', () => {
+        // |> Given an added behavior
+        let runs = 0;
+        let b = ext.behavior().runs(extent => {
+            runs++;
+        });
+        ext.addToGraphWithAction();
+
+        // |> When its dynamic demands are changed and then its extent is removed in the same event
+        g.action(() => {
+            b.setDynamicDemands([r_a]);
+            ext.removeFromGraph();
+        });
+
+        // |> Then it is not linked to the foreign demand
+        expect(r_a.subsequents.has(b)).toBeFalsy();
+
+        // |> And does not run when that demand updates
+        r_a.updateWithAction(1);
+        expect(runs).toEqual(0);
+    });
+
+    test('dynamic supplies updated in the same event as removal are not linked', () => {
+        // |> Given an added behavior
+        let out = setupExt.state<number>(0, 'out');
+        let b = ext.behavior().runs(extent => {
+        });
+        ext.addToGraphWithAction();
+
+        // |> When its dynamic supplies are changed and then its extent is removed in the same event
+        g.action(() => {
+            b.setDynamicSupplies([out]);
+            ext.removeFromGraph();
+        });
+
+        // |> Then it is not the supplier of the foreign resource
+        expect(out.suppliedBy).toBeNull();
+    });
+
+    test('newly added extents link static and dynamic demands in the adding event', () => {
+        // |> Given an extent with static and dynamic demands
+        let staticRuns = 0;
+        let dynamicRuns = 0;
+        ext.behavior().demands(r_a).runs(extent => {
+            if (r_a.justUpdated) {
+                staticRuns++;
+            }
+        });
+        ext.behavior().dynamicDemands([ext.addedToGraph], extent => [r_b]).runs(extent => {
+            if (r_b.justUpdated) {
+                dynamicRuns++;
+            }
+        });
+
+        // |> When it is added in the same action that updates its demands
+        g.action(() => {
+            ext.addToGraph();
+            r_a.update(1);
+        });
+
+        // |> Then the static demand ran in the adding event
+        expect(staticRuns).toEqual(1);
+
+        // |> And both demands are linked for later events
+        r_a.updateWithAction(2);
+        r_b.updateWithAction(1);
+        expect(staticRuns).toEqual(2);
+        expect(dynamicRuns).toEqual(1);
+    });
+
+    test('extents added from inside a behavior link demands and supplies', () => {
+        // |> Given an extent that is added by a behavior
+        let ext2 = new Extent(g);
+        ext.addChildLifetime(ext2);
+        let out = ext2.state<number>(0, 'out');
+        ext2.behavior().demands(r_a).supplies(out).runs(extent => {
+            out.update(r_a.value * 10);
+        });
+        ext.behavior().demands(r_b).runs(extent => {
+            ext2.addToGraph();
+        });
+        ext.addToGraphWithAction();
+
+        // |> When the behavior adds it
+        r_b.updateWithAction(1);
+
+        // |> Then its demands and supplies are linked
+        r_a.updateWithAction(2);
+        expect(out.value).toEqual(20);
+        expect(out.suppliedBy).not.toBeNull();
+    });
+
+    test('extent added and removed in the same event', () => {
+        // |> Given an extent with a child lifetime and foreign demands
+        let ext2 = new Extent(g);
+        ext.addChildLifetime(ext2);
+        let runs = 0;
+        let b1 = ext.behavior().demands(r_a).runs(extent => {
+            runs++;
+        });
+        let b2 = ext2.behavior().demands(r_a).runs(extent => {
+            runs++;
+        });
+
+        // |> When they are added and removed in the same event
+        // |> Then lifetime validation doesn't complain
+        g.action(() => {
+            ext.addToGraph();
+            ext2.addToGraph();
+            ext.removeFromGraph(Extent.removeContainedLifetimes);
+        });
+        expect(ext.addedToGraphWhen).toBeNull();
+        expect(ext2.addedToGraphWhen).toBeNull();
+
+        // |> And the behaviors are not linked and don't run
+        expect(r_a.subsequents.has(b1)).toBeFalsy();
+        expect(r_a.subsequents.has(b2)).toBeFalsy();
+        r_a.updateWithAction(1);
+        expect(runs).toEqual(0);
+    });
+
+    test('addedToGraph tracks removal and re-adding', () => {
+        // |> Given a graph subscription to an extent's addedToGraph state
+        let notified = 0;
+        g.subscribeToJustUpdated([ext.addedToGraph], () => {
+            notified++;
+        });
+
+        // |> When it is added
+        ext.addToGraphWithAction();
+
+        // |> Then it is true
+        expect(ext.addedToGraph.value).toBe(true);
+        expect(notified).toEqual(1);
+
+        // |> When it is removed
+        ext.removeFromGraphWithAction();
+
+        // |> Then it is false, updated in the removal event
+        expect(ext.addedToGraph.value).toBe(false);
+        expect(ext.addedToGraph.event).toBe(g.lastEvent);
+        expect(notified).toEqual(2);
+
+        // |> When it is added back
+        ext.addToGraphWithAction();
+
+        // |> Then it is true again
+        expect(ext.addedToGraph.value).toBe(true);
+        expect(notified).toEqual(3);
+    });
+
+    test('addedToGraph is false for extent added and removed in the same event', () => {
+        g.action(() => {
+            ext.addToGraph();
+            ext.removeFromGraph();
+        });
+        expect(ext.addedToGraph.value).toBe(false);
+    });
+
+    test('extent added and removed in the same event still validates removed children', () => {
+        // |> Given a parent and child lifetime
+        let ext2 = new Extent(g);
+        ext.addChildLifetime(ext2);
+
+        // |> When both are added but only the parent is removed in the same event
+        // |> Then it throws as a removal error
+        expect(() => {
+            g.action(() => {
+                ext.addToGraph();
+                ext2.addToGraph();
+                ext.removeFromGraph();
+            });
+        }).toThrow(/must be removed during the same event/);
+    });
+
     test('can supply a resource by a behavior in a different extent after its subsequent is added', () => {
         // ext has resource a and process that depends on it, and then it is added
         let r_z: State<number> = ext.state(0, 'r_z');

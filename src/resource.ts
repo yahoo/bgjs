@@ -59,6 +59,12 @@ export class Resource implements Demandable {
         return name;
     }
 
+    // Updates to resources of removed extents are ignored. Queued actions (e.g. UI events)
+    // may still fire after their extent has been removed; those updates should do nothing.
+    protected get isExtentRemoved(): boolean {
+        return this.extent.removedFromGraphWhen != null;
+    }
+
     assertValidUpdater() {
         let graph = this.graph;
         let currentBehavior = graph.currentBehavior;
@@ -168,6 +174,7 @@ export class Moment<T = undefined> extends Resource implements Transient {
     }
 
     update(value: T | undefined = undefined) {
+        if (this.isExtentRemoved) { return; }
         this.assertValidUpdater();
         this._happened = true;
         this._happenedValue = value;
@@ -219,6 +226,7 @@ export class State<T> extends Resource implements Transient {
     }
 
     updateForce(newValue: T) {
+        if (this.isExtentRemoved) { return; }
         this.assertValidUpdater();
         this._updateForce(newValue);
     }
