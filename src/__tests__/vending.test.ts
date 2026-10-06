@@ -381,7 +381,7 @@ describe('Version 5: Jammed', () => {
 
             this.behavior()
                 .supplies(this.coinsTotal, this.cansTotal)
-                .demands(this.completeVendAction, this.insertCoinsAction, this.restockAction)
+                .demands(this.completeVendAction, this.insertCoinsAction, this.restockAction, this.jammed.trace)
                 .runs(extent => {
 
                     let coins = extent.coinsTotal.value;
@@ -454,7 +454,7 @@ describe('Version 5: Jammed', () => {
 
             this.behavior()
                 .supplies(this.jammed)
-                .demands(this.timeoutAction, this.fixJamAction)
+                .demands(this.timeoutAction, this.fixJamAction, this.vending.trace)
                 .runs(extent => {
                         // if we started vending
                         if (extent.vending.traceValue && extent.timeoutAction.justUpdated) {

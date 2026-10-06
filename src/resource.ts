@@ -3,7 +3,7 @@
 //
 
 
-import {accessMessage, unsuppliedInBehaviorMessage, updateOutsideMessage, wrongSupplierMessage} from "./errors.js";
+import {accessMessage, traceAccessMessage, unsuppliedInBehaviorMessage, updateOutsideMessage, wrongSupplierMessage} from "./errors.js";
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
 import {Graph} from "./graph.js";
@@ -12,6 +12,8 @@ import {GraphEvent, Subscription, Transient} from "./common";
 export enum LinkType {
     reactive,
     order,
+    // Declares a read of the value from before this event (traceValue). Not an ordering edge.
+    trace,
 }
 
 export interface Demandable {
@@ -260,7 +262,7 @@ export class State<T> extends Resource implements Transient {
         return this.currentState.event;
     }
 
-    private get trace(): StateHistory<T> {
+    private get history(): StateHistory<T> {
         if (this.currentState.event === this.graph.currentEvent) {
             return this.previousState!;
         } else {
@@ -268,12 +270,33 @@ export class State<T> extends Resource implements Transient {
         }
     }
 
+    // Demand this to read traceValue without ordering on this state:
+    // .demands(this.a, this.b.trace). It never forms a cycle and never activates the behavior.
+    get trace(): Demandable {
+        return {resource: this, type: LinkType.trace};
+    }
+
+    // Inside a behavior, traceValue may be read only by the supplier, a behavior that demands
+    // this state, or one that declares this.trace in its demands.
+    assertValidTraceAccessor() {
+        let currentBehavior = this.graph.currentBehavior;
+        if (currentBehavior != null && this.graph.validateTraceDemands && currentBehavior != this.suppliedBy &&
+            !currentBehavior.demands?.has(this) && !currentBehavior.traceDemands?.has(this)) {
+            let err: any = new Error(traceAccessMessage(this, currentBehavior));
+            err.resource = this;
+            err.currentBehavior = currentBehavior;
+            throw err;
+        }
+    }
+
     get traceValue(): T {
-        return this.trace.value;
+        this.assertValidTraceAccessor();
+        return this.history.value;
     }
 
     get traceEvent(): GraphEvent {
-        return this.trace.event;
+        this.assertValidTraceAccessor();
+        return this.history.event;
     }
 
     get justUpdated(): boolean {
@@ -286,7 +309,7 @@ export class State<T> extends Resource implements Transient {
     }
 
     justUpdatedFrom(fromState: T): boolean {
-        return this.justUpdated && this.traceValue == fromState;
+        return this.justUpdated && this.history.value == fromState;
     }
 
     justUpdatedToFrom(toState: T, fromState: T): boolean {

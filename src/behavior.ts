@@ -12,6 +12,7 @@ import {OrderingState, RelinkingOrder} from "./common";
 export class Behavior implements Orderable {
     demands: Set<Resource> | null;
     orderingDemands: Set<Resource> | null;
+    traceDemands: Set<Resource> | null = null;
     supplies: Set<Resource> | null;
     block: (extent: Extent) => void;
     enqueuedWhen: number | null = null;

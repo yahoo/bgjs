@@ -7,6 +7,7 @@
 // Every message names the resources involved and says what to change.
 
 import type {Behavior} from "./behavior.js";
+import {LinkType} from "./common.js";
 import type {Resource} from "./resource.js";
 
 const LIST_LIMIT = 8;
@@ -42,11 +43,32 @@ function suppliesOf(b: Behavior): Iterable<Resource> | null {
     return b.supplies ?? [...(b.untrackedSupplies ?? []), ...(b.untrackedDynamicSupplies ?? [])];
 }
 
-function demandsOf(b: Behavior): Iterable<Resource> | null {
+// Trace links (resource.trace) are listed as "name.trace".
+function demandNamesOf(b: Behavior): string[] {
+    let names: string[] = [];
     if (b.demands != null) {
-        return b.demands;
+        for (let r of b.demands) {
+            names.push(resourceName(r));
+        }
+        for (let r of b.traceDemands ?? []) {
+            names.push(resourceName(r) + ".trace");
+        }
+        return names;
     }
-    return [...(b.untrackedDemands ?? []), ...(b.untrackedDynamicDemands ?? [])].map(d => d.resource);
+    for (let d of [...(b.untrackedDemands ?? []), ...(b.untrackedDynamicDemands ?? [])]) {
+        names.push(resourceName(d.resource) + (d.type == LinkType.trace ? ".trace" : ""));
+    }
+    return names;
+}
+
+function joinNames(names: string[]): string {
+    if (names.length == 0) {
+        return "nothing";
+    }
+    if (names.length > LIST_LIMIT) {
+        return names.slice(0, LIST_LIMIT).join(", ") + `, +${names.length - LIST_LIMIT} more`;
+    }
+    return names.join(", ");
 }
 
 /** "the behavior in extent Player that supplies a, b and demands c, d" */
@@ -54,7 +76,7 @@ export function describeBehavior(b: Behavior | null | undefined): string {
     if (b == null) {
         return "no behavior";
     }
-    return `the behavior in ${extentName(b)} that supplies [${nameList(suppliesOf(b))}] and demands [${nameList(demandsOf(b))}]`;
+    return `the behavior in ${extentName(b)} that supplies [${nameList(suppliesOf(b))}] and demands [${joinNames(demandNamesOf(b))}]`;
 }
 
 function isState(r: Resource): boolean {
@@ -92,9 +114,9 @@ export function cycleMessage(start: Behavior, cycle: Resource[]): string {
     }
     let edges = cycle.map((r, i) => `B${i + 1} -> ${resourceName(r)}`).join(", ");
     lines.push(`The demand edges on the loop are: ${edges}. Remove one of them:`);
-    let stateEdges = cycle.map((r, i) => isState(r) ? `B${i + 1} reads ${resourceName(r)}.traceValue` : null).filter(e => e != null);
+    let stateEdges = cycle.map((r, i) => isState(r) ? `B${i + 1} demands ${resourceName(r)}.trace and reads ${resourceName(r)}.traceValue` : null).filter(e => e != null);
     if (stateEdges.length > 0) {
-        lines.push(`  (1) If a behavior only needs a state's value from before this event, drop that state from its demands and read .traceValue instead (on this loop: ${stateEdges.join("; ")}). Check every case: .traceValue ignores this event's update, and the behavior no longer runs when that state changes.`);
+        lines.push(`  (1) If a behavior only needs a state's value from before this event, replace that state in its demands with its .trace and read .traceValue (on this loop: ${stateEdges.join("; ")}). A .trace demand is not an edge, so it cannot form a cycle. Check every case: .traceValue ignores this event's update, and the behavior no longer runs when that state changes.`);
     } else {
         lines.push(`  (1) Every resource on the loop is a moment, so .traceValue does not apply; use (2) or (3).`);
     }
@@ -113,11 +135,22 @@ export function accessMessage(resource: Resource, current: Behavior): string {
     let r = resourceName(resource);
     let supplier = resource.suppliedBy != null ? describeBehavior(resource.suppliedBy) : "no behavior (it is an input, updated in actions)";
     let alt = isState(resource)
-        ? ` If adding the demand would create a cycle, or the behavior only needs the value from before this event, read ${r}.traceValue instead.`
+        ? ` If adding the demand would create a cycle, or the behavior only needs the value from before this event, add ${r}.trace to its demands instead and read ${r}.traceValue.`
         : "";
     return `Cannot read "${r}" here: ${describeBehavior(current)} neither demands nor supplies it. ` +
         `Reads in helper functions called from a behavior's runs block count as that behavior's reads. ` +
         `Fix: add ${r} to this behavior's .demands(...). It will then also run when ${r} updates, and after ${r}'s supplier, ${supplier}.${alt}`;
+}
+
+export function traceAccessMessage(resource: Resource, current: Behavior): string {
+    let r = resourceName(resource);
+    let supplier = resource.suppliedBy != null ? `its supplier, ${describeBehavior(resource.suppliedBy)}` : "an action (it is an input)";
+    return `Cannot read "${r}.traceValue" here: ${describeBehavior(current)} neither demands nor supplies ${r} and does not declare ${r}.trace. ` +
+        `A behavior that reads a state's previous value without demanding the state must say so, so the read is visible in its demands. ` +
+        `${r}.traceValue is the value from before this event: it ignores every update to ${r} in this event, including one made later in the event by ${supplier}. ` +
+        `Fix: if this rule needs the value from before this event (for example to avoid a cycle), add ${r}.trace to this behavior's .demands(...); ` +
+        `a .trace demand is not an edge, so it cannot form a cycle, and the behavior will not run when ${r} updates. ` +
+        `If the rule needs ${r} as updated in this event, add ${r} to .demands(...) and read ${r}.value.`;
 }
 
 export function updateOutsideMessage(resource: Resource): string {

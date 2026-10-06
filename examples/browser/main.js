@@ -86,7 +86,7 @@ class LoginExtent extends bg.Extent {
 
         this.behavior()
             .supplies(this.loggingIn)
-            .demands(this.loginClick, this.loginComplete, this.addedToGraph)
+            .demands(this.loginClick, this.loginComplete, this.addedToGraph, this.loginEnabled.trace)
             .runs(extent => {
 
                 if (extent.loginClick.justUpdated && extent.loginEnabled.traceValue) {

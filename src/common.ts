@@ -32,6 +32,7 @@ export enum ResourceType {
 export enum LinkType {
     reactive,
     order,
+    trace,
 }
 
 export class GraphEvent {
