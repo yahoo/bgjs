@@ -133,9 +133,15 @@ describe('access and update errors', () => {
     });
 });
 
+function strictGraph(): Graph {
+    let g = new Graph();
+    g.validateTraceDemands = true;
+    return g;
+}
+
 describe('trace demands', () => {
     test('reading traceValue of an undemanded state without .trace names the fix', () => {
-        let g = new Graph();
+        let g = strictGraph();
         let p = new Player(g);
         p.behavior().demands(p.input).supplies(p.countdown).runs(ext => {
             ext.countdown.update(ext.seq.traceValue + 1);
@@ -152,9 +158,9 @@ describe('trace demands', () => {
         expect(err.resource).toBe(p.seq);
     });
 
-    test('validateTraceDemands = false permits undeclared trace reads', () => {
+    test('off by default: undeclared trace reads are permitted', () => {
         let g = new Graph();
-        g.validateTraceDemands = false;
+        expect(g.validateTraceDemands).toBe(false);
         let p = new Player(g);
         p.behavior().demands(p.input).supplies(p.countdown).runs(ext => {
             ext.countdown.update(ext.seq.traceValue + 1);
@@ -165,7 +171,7 @@ describe('trace demands', () => {
     });
 
     test('traceEvent is checked the same way', () => {
-        let g = new Graph();
+        let g = strictGraph();
         let p = new Player(g);
         p.behavior().demands(p.input).supplies(p.countdown).runs(ext => {
             ext.seq.traceEvent;
@@ -175,7 +181,7 @@ describe('trace demands', () => {
     });
 
     test('.trace permits the read, gives the value from before the event, and is not an edge', () => {
-        let g = new Graph();
+        let g = strictGraph();
         let p = new Player(g);
         let seen: number[] = [];
         let runs = 0;
@@ -202,7 +208,7 @@ describe('trace demands', () => {
     });
 
     test('.trace does not permit reading value', () => {
-        let g = new Graph();
+        let g = strictGraph();
         let p = new Player(g);
         p.behavior().demands(p.input, p.seq.trace).supplies(p.countdown).runs(ext => {
             ext.countdown.update(ext.seq.value);
@@ -212,7 +218,7 @@ describe('trace demands', () => {
     });
 
     test('supplier and reactive demanders read traceValue without .trace', () => {
-        let g = new Graph();
+        let g = strictGraph();
         let p = new Player(g);
         let fromDemander = -1;
         p.behavior().demands(p.loadReq).supplies(p.seq).runs(ext => {
@@ -233,7 +239,7 @@ describe('trace demands', () => {
     });
 
     test('outside behaviors traceValue is readable anywhere', () => {
-        let g = new Graph();
+        let g = strictGraph();
         let p = new Player(g);
         p.addToGraphWithAction();
         let inSideEffect = -1;
@@ -246,7 +252,7 @@ describe('trace demands', () => {
     });
 
     test('dynamic trace demands are honored and replaced', () => {
-        let g = new Graph();
+        let g = strictGraph();
         let p = new Player(g);
         let read = -1;
         p.behavior()
@@ -262,7 +268,7 @@ describe('trace demands', () => {
     });
 
     test('a trace demand is listed as name.trace when describing a behavior', () => {
-        let g = new Graph();
+        let g = strictGraph();
         let p = new Player(g);
         p.behavior().demands(p.input, p.countdown.trace).supplies(p.seq).runs(ext => {
             ext.engineAccepted.update();
@@ -273,7 +279,7 @@ describe('trace demands', () => {
     });
 
     test('relinking a reactive demand to .trace removes the edge', () => {
-        let g = new Graph();
+        let g = strictGraph();
         let p = new Player(g);
         let runs = 0;
         p.behavior()
