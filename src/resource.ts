@@ -3,6 +3,7 @@
 //
 
 
+import {accessMessage, unsuppliedInBehaviorMessage, updateOutsideMessage, wrongSupplierMessage} from "./errors.js";
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
 import {Graph} from "./graph.js";
@@ -70,19 +71,19 @@ export class Resource implements Demandable {
         let currentBehavior = graph.currentBehavior;
         let currentEvent = graph.currentEvent;
         if (currentBehavior == null && currentEvent == null) {
-            let err: any = new Error("Resource must be updated inside a behavior or action.");
+            let err: any = new Error(updateOutsideMessage(this));
             err.resource = this;
             throw err;
         }
         if (this.skipChecks) { return; }
         if (this.suppliedBy && currentBehavior != this.suppliedBy) {
-            let err: any = new Error("Supplied resource can only be updated by its supplying behavior.");
+            let err: any = new Error(wrongSupplierMessage(this, currentBehavior));
             err.resource = this;
             err.currentBehavior = currentBehavior;
             throw err;
         }
         if (this.suppliedBy == null && currentBehavior != null) {
-            let err: any = new Error("Unsupplied resource can only be updated in an action.");
+            let err: any = new Error(unsuppliedInBehaviorMessage(this, currentBehavior));
             err.resource = this;
             err.currentBehavior = currentBehavior;
             throw err;
@@ -94,7 +95,7 @@ export class Resource implements Demandable {
         let currentBehavior = graph.currentBehavior;
 
         if (currentBehavior != null && currentBehavior != this.suppliedBy && !currentBehavior.demands?.has(this)) {
-            let err: any = new Error("Cannot access the value or event of a resource inside a behavior unless it is supplied or demanded.");
+            let err: any = new Error(accessMessage(this, currentBehavior));
             err.resource = this;
             err.currentBehavior = currentBehavior;
             throw err;
