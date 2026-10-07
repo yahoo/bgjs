@@ -3,6 +3,7 @@
 //
 
 
+import {cycleMessage, demandNotAddedMessage, lifetimeMessage, removedDemandMessage, removedSupplyMessage} from "./errors.js";
 import {BufferedPriorityQueue} from "./bufferedqueue.js";
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
@@ -231,14 +232,14 @@ export class Graph {
             for (let resource of removed.resources) {
                 for (let demandedBy of resource.subsequents) {
                     if (demandedBy.extent.addedToGraphWhen != null) {
-                        let err: any = new Error("Remaining behaviors must remove dynamicDemands to removed resources.");
+                        let err: any = new Error(removedDemandMessage(resource, demandedBy));
                         err.remainingBehavior = demandedBy;
                         err.removedResource = resource;
                         throw err;
                     }
                 }
                 if (resource.suppliedBy != null && resource.suppliedBy.extent.addedToGraphWhen != null) {
-                    let err: any = new Error("Remaining behaviors must remove dynamicSupplies to removed resources.");
+                    let err: any = new Error(removedSupplyMessage(resource, resource.suppliedBy));
                     err.remainingBehavior = resource.suppliedBy;
                     err.removedResource = resource;
                     throw err;
@@ -398,7 +399,7 @@ export class Graph {
                 if (behavior.untrackedSupplies != null) {
                     for (let supply of behavior.untrackedSupplies) {
                         if (this.validateLifetimes && !behavior.extent.hasCompatibleLifetime(supply.extent)) {
-                            let err: any = new Error("Static supplies can only be with extents with the unified or parent lifetimes.");
+                            let err: any = new Error(lifetimeMessage("supplies", supply, behavior));
                             err.currentBehavior = behavior;
                             err.supply = supply;
                             throw err;
@@ -465,7 +466,7 @@ export class Graph {
                 if (behavior.untrackedDemands != null) {
                     for (let demand of behavior.untrackedDemands) {
                         if (this.validateLifetimes && !behavior.extent.hasCompatibleLifetime(demand.resource.extent)) {
-                            let err: any = new Error("Static demands can only be with extents with the unified or parent lifetimes.");
+                            let err: any = new Error(lifetimeMessage("demands", demand.resource, behavior));
                             err.currentBehavior = behavior;
                             err.demand = demand.resource;
                             throw err;
@@ -490,7 +491,7 @@ export class Graph {
                 for (let linkableDemand of allUntrackedDemands) {
                     let untrackedDemand = linkableDemand.resource;
                     if (untrackedDemand.extent.addedToGraphWhen == null) {
-                        let err: any = new Error("All demands must be added to the graph.");
+                        let err: any = new Error(demandNotAddedMessage(untrackedDemand, behavior));
                         err.currentBehavior = behavior;
                         err.untrackedDemand = untrackedDemand;
                         throw err;
@@ -605,9 +606,10 @@ export class Graph {
 
     private sortDFS(behavior: Behavior, needsReheap: { value: boolean }) {
         if (behavior.orderingState == OrderingState.Ordering) {
-            let err: any = new Error("Behavior dependency cycle detected.");
+            let cycle = this.debugCycleForBehavior(behavior);
+            let err: any = new Error(cycleMessage(behavior, cycle));
             err.currentBehavior = behavior;
-            err.cycle = this.debugCycleForBehavior(behavior);
+            err.cycle = cycle;
             throw err;
         }
 
