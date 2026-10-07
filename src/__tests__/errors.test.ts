@@ -53,7 +53,7 @@ describe('cycle errors', () => {
         let demanderOf = (name: string) => edges.find(e => e[3] == name)![1];
         // seq is the only state on the loop, so its demander gets the only traceValue fix
         expect(msg.match(/\w+\.traceValue/g)).toEqual(["seq.traceValue"]);
-        expect(msg).toContain(`${demanderOf("seq")} could read seq.traceValue`);
+        expect(msg).toContain(`${demanderOf("seq")} could demand seq.trace`);
         // the countdown owner supplies two resources: the split fix names it and both supplies
         expect(msg).toMatch(new RegExp(`${demanderOf("engineAccepted")} also supplies \\[countdown\\].*If advance does not need engineAccepted`));
     });
@@ -93,6 +93,7 @@ describe('access and update errors', () => {
         expect(msg).toContain('"seq"');
         expect(msg).toContain("supplies [countdown] and demands [input]");
         expect(msg).toContain(".demands(");
+        expect(msg).toContain("seq.trace ");
         expect(msg).toContain("seq.traceValue");
     });
 
@@ -186,5 +187,172 @@ describe('graph membership errors', () => {
         expect(msg).toContain('"seq"');
         expect(msg).toContain("Other");
         expect(msg).not.toContain("unnamed");
+    });
+});
+
+function strictGraph(): Graph {
+    let g = new Graph();
+    g.validateTraceDemands = true;
+    return g;
+}
+
+describe('trace demands', () => {
+    test('reading traceValue of an undemanded state without .trace names both fixes', () => {
+        let g = strictGraph();
+        let p = new Player(g);
+        p.behavior().demands(p.input).supplies(p.countdown).runs(ext => {
+            ext.countdown.update(ext.seq.traceValue + 1);
+        });
+        p.behavior().demands(p.loadReq).supplies(p.seq).runs(() => {});
+        p.addToGraphWithAction();
+        let err = thrown(() => p.input.updateWithAction(1));
+        let msg: string = err.message;
+        expect(msg).toContain('"seq.traceValue"');
+        expect(msg).toContain("supplies [countdown] and demands [input]");
+        expect(msg).toContain("seq.trace ");
+        expect(msg).toContain(".demands(");
+        expect(msg).toContain("seq.value");
+        expect(err.resource).toBe(p.seq);
+    });
+
+    test('off by default: undeclared trace reads are permitted', () => {
+        let g = new Graph();
+        expect(g.validateTraceDemands).toBe(false);
+        let p = new Player(g);
+        p.behavior().demands(p.input).supplies(p.countdown).runs(ext => {
+            ext.countdown.update(ext.seq.traceValue + 1);
+        });
+        p.addToGraphWithAction();
+        p.input.updateWithAction(1);
+        expect(p.countdown.value).toBe(1);
+    });
+
+    test('traceEvent is checked the same way', () => {
+        let g = strictGraph();
+        let p = new Player(g);
+        p.behavior().demands(p.input).supplies(p.countdown).runs(ext => {
+            ext.seq.traceEvent;
+        });
+        p.addToGraphWithAction();
+        expect(thrown(() => p.input.updateWithAction(1)).message).toContain('"seq.traceValue"');
+    });
+
+    test('.trace permits the read, gives the value from before the event, and is not an edge', () => {
+        let g = strictGraph();
+        let p = new Player(g);
+        let seen: number[] = [];
+        let runs = 0;
+        // seq's owner demands countdown, and countdown's owner reads seq's previous value:
+        // a cycle if it were a normal demand.
+        p.behavior().demands(p.loadReq, p.countdown).supplies(p.seq).runs(ext => {
+            if (ext.loadReq.justUpdated) ext.seq.update(ext.seq.value + 1);
+        });
+        p.behavior().demands(p.input, p.seq.trace).supplies(p.countdown).runs(ext => {
+            runs++;
+            seen.push(ext.seq.traceValue);
+            ext.countdown.update(ext.input.value);
+        });
+        p.addToGraphWithAction();
+        runs = 0;
+        g.action(() => { p.loadReq.update(); p.input.update(7); });
+        // the read is the value before this event even though seq updated in it
+        expect(seen[seen.length - 1]).toBe(0);
+        expect(p.seq.value).toBe(1);
+        // updating seq alone does not run the trace-demanding behavior
+        runs = 0;
+        p.loadReq.updateWithAction();
+        expect(runs).toBe(0);
+    });
+
+    test('.trace does not permit reading value', () => {
+        let g = strictGraph();
+        let p = new Player(g);
+        p.behavior().demands(p.input, p.seq.trace).supplies(p.countdown).runs(ext => {
+            ext.countdown.update(ext.seq.value);
+        });
+        p.addToGraphWithAction();
+        let msg: string = thrown(() => p.input.updateWithAction(1)).message;
+        expect(msg).toContain('"seq"');
+        expect(msg).not.toContain('"seq.traceValue"');
+    });
+
+    test('supplier and reactive demanders read traceValue without .trace', () => {
+        let g = strictGraph();
+        let p = new Player(g);
+        let fromDemander = -1;
+        p.behavior().demands(p.loadReq).supplies(p.seq).runs(ext => {
+            ext.seq.update(ext.seq.traceValue + 1);
+        });
+        p.behavior().demands(p.seq).supplies(p.countdown).runs(ext => {
+            fromDemander = ext.seq.traceValue;
+            if (ext.seq.justUpdatedFrom(0)) ext.countdown.update(1);
+        });
+        p.behavior().demands(p.seq.order).supplies(p.input).runs(ext => {
+            ext.input.update(ext.seq.traceValue);
+        });
+        p.addToGraphWithAction();
+        p.loadReq.updateWithAction();
+        expect(p.seq.value).toBe(1);
+        expect(fromDemander).toBe(0);
+        expect(p.countdown.value).toBe(1);
+    });
+
+    test('outside behaviors traceValue is readable anywhere', () => {
+        let g = strictGraph();
+        let p = new Player(g);
+        p.addToGraphWithAction();
+        let inSideEffect = -1;
+        g.action(() => {
+            p.seq.update(3);
+            g.sideEffect(() => { inSideEffect = p.seq.traceValue; });
+        });
+        expect(inSideEffect).toBe(0);
+        expect(p.seq.traceValue).toBe(3);
+    });
+
+    test('dynamic trace demands are honored and replaced', () => {
+        let g = strictGraph();
+        let p = new Player(g);
+        let read = -1;
+        p.behavior()
+            .demands(p.input)
+            .dynamicDemands([p.addedToGraph, p.loadReq], ext => ext.loadReq.justUpdated ? [] : [ext.seq.trace])
+            .supplies(p.countdown)
+            .runs(ext => { read = ext.seq.traceValue; });
+        p.addToGraphWithAction();
+        p.input.updateWithAction(1);
+        expect(read).toBe(0);
+        p.loadReq.updateWithAction();
+        expect(thrown(() => p.input.updateWithAction(2)).message).toContain('"seq.traceValue"');
+    });
+
+    test('a trace demand is listed as name.trace when describing a behavior', () => {
+        let g = strictGraph();
+        let p = new Player(g);
+        p.behavior().demands(p.input, p.countdown.trace).supplies(p.seq).runs(ext => {
+            ext.engineAccepted.update();
+        });
+        p.behavior().demands(p.loadReq).supplies(p.engineAccepted).runs(() => {});
+        p.addToGraphWithAction();
+        expect(thrown(() => p.input.updateWithAction(1)).message).toContain("demands [input, countdown.trace]");
+    });
+
+    test('relinking a reactive demand to .trace removes the edge', () => {
+        let g = strictGraph();
+        let p = new Player(g);
+        let runs = 0;
+        p.behavior()
+            .dynamicDemands([p.addedToGraph, p.loadReq], ext => ext.loadReq.justUpdated ? [ext.seq.trace] : [ext.seq])
+            .supplies(p.countdown)
+            .runs(() => { runs++; });
+        p.behavior().demands(p.advance).supplies(p.seq).runs(ext => ext.seq.update(ext.seq.value + 1));
+        p.addToGraphWithAction();
+        runs = 0;
+        p.advance.updateWithAction();
+        expect(runs).toBe(1);
+        p.loadReq.updateWithAction();
+        runs = 0;
+        p.advance.updateWithAction();
+        expect(runs).toBe(0);
     });
 });
