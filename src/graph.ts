@@ -51,6 +51,11 @@ export class Graph {
     extentsAdded: Extent[] = [];
     extentsRemoved: Extent[] = [];
     validateLifetimes: boolean = true;
+    // When true, a behavior may read state.traceValue only if it supplies or demands the state,
+    // or declares state.trace in its demands. Off by default so existing code keeps running;
+    // turning it on is recommended, and it is planned to become the default in a future
+    // breaking release.
+    validateTraceDemands: boolean = false;
     justUpdatedCallbacks: Set<Subscription> = new Set();
 
     constructor() {
@@ -470,7 +475,25 @@ export class Graph {
                         }
                     }
                 }
-                let allUntrackedDemands = [...(behavior.untrackedDemands ?? []), ...(behavior.untrackedDynamicDemands ?? [])];
+                let allLinks = [...(behavior.untrackedDemands ?? []), ...(behavior.untrackedDynamicDemands ?? [])];
+                // trace links only permit traceValue reads; they are not edges
+                let allUntrackedDemands = allLinks.filter(linkable => linkable.type != LinkType.trace);
+                let traceDemands: Set<Resource> | null = null;
+                for (let linkable of allLinks) {
+                    if (linkable.type == LinkType.trace) {
+                        if (linkable.resource.extent.addedToGraphWhen == null) {
+                            let err: any = new Error(demandNotAddedMessage(linkable.resource, behavior));
+                            err.currentBehavior = behavior;
+                            err.untrackedDemand = linkable.resource;
+                            throw err;
+                        }
+                        if (traceDemands == null) {
+                            traceDemands = new Set();
+                        }
+                        traceDemands.add(linkable.resource);
+                    }
+                }
+                behavior.traceDemands = traceDemands;
 
                 let removedDemands: Resource[] | undefined;
                 if (behavior.demands != null) {
@@ -713,6 +736,8 @@ export class Graph {
                 behavior.demands.clear();
             }
         }
+
+        behavior.traceDemands = null;
 
         // any foreign resources should no longer be supplied by this behavior
         if (behavior.supplies != null) {
