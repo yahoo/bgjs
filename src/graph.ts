@@ -288,27 +288,24 @@ export class Graph {
     }
 
     private runNextBehavior(sequence: number) {
-        // take top behavior off queue
-        let topBehavior = this.activatedBehaviors.pop();
-        // if no behavior left we quit
-        while (topBehavior !== undefined) {
-            if (topBehavior!.extent.addedToGraphWhen == null) {
-                // if this behavior's extent has been removed then try next one
-                topBehavior = this.activatedBehaviors.pop();
-            } else {
-                // valid behavior, run it
-                this.currentBehavior = topBehavior!;
-                topBehavior!.block(topBehavior!.extent);
-                this.currentBehavior = null;
-                // check if there is a next behavior and it's the same ordering as the first behavior
-                let nextBehavior = this.activatedBehaviors.peek();
-                if (nextBehavior !== undefined && nextBehavior!.order == topBehavior!.order) {
-                    // if so we will try running it also
-                    topBehavior = this.activatedBehaviors.pop();
-                } else {
-                    break;
-                }
+        // Run the top behavior and any others of the same order. Once a behavior has run, only
+        // same-order behaviors may follow before the event loop relinks and reorders, including
+        // after skipping a behavior whose extent was removed.
+        let ranOrder: number | null = null;
+        while (true) {
+            let nextBehavior = this.activatedBehaviors.peek();
+            if (nextBehavior === undefined || (ranOrder !== null && nextBehavior.order != ranOrder)) {
+                break;
             }
+            this.activatedBehaviors.pop();
+            if (nextBehavior.extent.addedToGraphWhen == null) {
+                // this behavior's extent has been removed, skip it
+                continue;
+            }
+            this.currentBehavior = nextBehavior;
+            nextBehavior.block(nextBehavior.extent);
+            this.currentBehavior = null;
+            ranOrder = nextBehavior.order;
         }
     }
 

@@ -1615,6 +1615,66 @@ describe('dynamic graph changes', () => {
         expect(didRun).toBeFalsy();
     });
 
+    test('skipping a removed extent behavior does not run a later behavior before relinking', () => {
+        // |> Given children whose behaviors demand a parent moment, and an aggregate that
+        // dynamically demands every live child's state
+        class Child extends Extent {
+            group: State<string>;
+            constructor(graph: Graph, parent: Parent, public id: string) {
+                super(graph);
+                this.group = this.state<string>('', 'group');
+                this.behavior().demands(parent.assign).supplies(this.group).runs(e => {
+                    e.group.update('g-' + id);
+                });
+            }
+        }
+        class Parent extends Extent {
+            desired: Moment<string[]>;
+            assign: Moment;
+            children: State<Child[]>;
+            seen: string[] = [];
+            constructor(graph: Graph) {
+                super(graph);
+                this.desired = this.moment<string[]>('desired');
+                this.assign = this.moment('assign');
+                this.children = this.state<Child[]>([], 'children');
+                // membership: activate the existing children, then add new ones and remove absent ones
+                this.behavior().demands(this.desired).supplies(this.children, this.assign).runs(e => {
+                    let want = e.desired.value!;
+                    let current = e.children.value;
+                    e.assign.update();
+                    let fresh = want.filter(id => !current.some(c => c.id == id)).map(id => {
+                        let c = new Child(graph, e, id);
+                        e.addChildLifetime(c);
+                        c.addToGraph();
+                        return c;
+                    });
+                    for (let c of current) {
+                        if (!want.includes(c.id)) {
+                            c.removeFromGraph();
+                        }
+                    }
+                    e.children.update([...current.filter(c => want.includes(c.id)), ...fresh]);
+                });
+                this.behavior()
+                    .demands(this.children)
+                    .dynamicDemands([this.children], e => e.children.value.map(c => c.group))
+                    .runs(e => {
+                        e.seen = e.children.value.map(c => c.group.value);
+                    });
+            }
+        }
+        let parent = new Parent(g);
+        parent.addToGraphWithAction();
+        parent.desired.updateWithAction(['a', 'b']);
+
+        // |> When an event removes an activated child and adds a new one
+        parent.desired.updateWithAction(['a', 'c']);
+
+        // |> Then the aggregate runs with links to the new children
+        expect(parent.seen).toEqual(['g-a', 'g-c']);
+    });
+
     test('can relink dynamicSupplies after a behavior runs', () => {
         // NOTE: As an example, pressing a button may say, "update state current item and move to next time"
         // So our behavior supplies the current item's state which we update when a button press
