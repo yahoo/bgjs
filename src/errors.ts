@@ -8,7 +8,7 @@
 
 import type {Behavior} from "./behavior.js";
 import {LinkType} from "./common.js";
-import type {Resource} from "./resource.js";
+import type {Demandable, Resource} from "./resource.js";
 
 const LIST_LIMIT = 8;
 
@@ -181,4 +181,21 @@ export function lifetimeMessage(kind: "demands" | "supplies", resource: Resource
     return `${capitalize(describeBehavior(current))} statically ${kind} "${r}" of ${ext}, which may leave the graph first. ` +
         `Static ${kind} must point at the behavior's own extent or one with the same or a longer lifetime. ` +
         `Fix: before adding this behavior's extent, call ${ext}.addChildLifetime(thisExtent) or ${ext}.unifyLifetime(thisExtent), or use ${dynamic} instead.`;
+}
+
+export function traceOnlyMessage(extent: any, demands: Demandable[], supplies: Resource[]): string {
+    let names = joinNames(demands.map(d => resourceName(d.resource) + ".trace"));
+    return `The behavior in ${extentName(extent)} that supplies [${nameList(supplies)}] and demands [${names}] can never run: every demand is a .trace link, and a .trace demand never runs the behavior. ` +
+        `Fix: demand without .trace at least one resource whose update should run it (the states a derived value is computed from, or the moment that triggers the rule); keep .trace only for values from before this event.`;
+}
+
+export function repeatedDynamicMessage(kind: "dynamicDemands" | "dynamicSupplies", extent: any): string {
+    return `.${kind}(...) was called twice while building one behavior in ${extentName(extent)}; the second call would replace the first. ` +
+        `Fix: make one .${kind}(switches, links) call with every switch, and return all the links from one links function.`;
+}
+
+export function shadowedMemberMessage(extent: any, name: string, isMethod: boolean): string {
+    let use = isMethod ? `this.${name}(...)` : `this.${name}`;
+    return `${extentName(extent)} has a field named "${name}", which hides Extent's own ${isMethod ? "method" : "field"} "${name}", so ${use} no longer works on it. ` +
+        `Fix: rename the field (for example to "phase", "status" or "${name}Value").`;
 }

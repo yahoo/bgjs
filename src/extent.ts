@@ -7,6 +7,7 @@ import {Graph} from "./graph.js";
 import {Behavior, BehaviorBuilder} from "./behavior.js";
 import {Moment, Resource, State} from "./resource.js";
 import {RelinkingOrder} from "./common.js";
+import {shadowedMemberMessage} from "./errors.js";
 
 export enum ExtentRemoveStrategy {
     extentOnly,
@@ -182,6 +183,7 @@ export class Extent {
 
     addToGraph() {
         if (this.graph.currentEvent != null) {
+            this.checkShadowedMembers();
             this.nameResources();
             this.graph.addExtent(this);
         } else {
@@ -227,6 +229,31 @@ export class Extent {
             unsubscribe();
         }
         this.unsubscribes.clear();
+    }
+
+    // A subclass field named like an Extent method or field (state, moment, action, graph, ...)
+    // hides it, and code that calls it breaks far from the cause. Name the field instead.
+    checkShadowedMembers() {
+        for (let name of Object.getOwnPropertyNames(Extent.prototype)) {
+            if (name != "constructor" && Object.prototype.hasOwnProperty.call(this, name)) {
+                let err: any = new Error(shadowedMemberMessage(this, name, true));
+                err.extent = this;
+                throw err;
+            }
+        }
+        let fields: {[name: string]: boolean} = {
+            graph: this.graph instanceof Graph,
+            behaviors: Array.isArray(this.behaviors),
+            resources: Array.isArray(this.resources),
+            addedToGraph: this.addedToGraph instanceof State,
+        };
+        for (let name in fields) {
+            if (!fields[name]) {
+                let err: any = new Error(shadowedMemberMessage(this, name, false));
+                err.extent = this;
+                throw err;
+            }
+        }
     }
 
     nameResources() {
