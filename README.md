@@ -1,9 +1,53 @@
 
+# Behavior Graph
+
 Behavior Graph lets you build your programs out of small, easily understood pieces in a way that lets the computer do more of the work for you.
 
 It is an architecture and supporting library that simplifies the type of complexity that comes with event-driven software, such as user facing applications and control systems.
 
 It's also a fun way to program.
+
+> **Coding agents:** read [AGENT_GUIDE.md](AGENT_GUIDE.md) before writing code with this library. It ships in the package, so the copy at `node_modules/behavior-graph/AGENT_GUIDE.md` matches the installed version. The [For coding agents](#for-coding-agents) section at the end of this README says what the library gives you and why.
+
+## A quick look
+
+```typescript
+import { Graph, Extent } from "behavior-graph";
+
+class Counter extends Extent {
+  increment = this.moment();   // something happened (an input)
+  reset = this.moment();
+  count = this.state(0);       // a value that persists
+
+  constructor(graph: Graph) {
+    super(graph);
+
+    // the rule for count: what it reads, what it writes, and how
+    this.behavior()
+      .demands(this.increment, this.reset)
+      .supplies(this.count)
+      .runs((ext) => {
+        if (ext.reset.justUpdated) ext.count.update(0);
+        else if (ext.increment.justUpdated) ext.count.update(ext.count.value + 1);
+      });
+
+    // the display: runs whenever count changes, after count's rule has run
+    this.behavior()
+      .demands(this.count)
+      .runs((ext) => {
+        const text = String(ext.count.value);
+        ext.sideEffect(() => { document.querySelector("#count")!.textContent = text; });
+      });
+  }
+}
+
+const graph = new Graph();
+const counter = new Counter(graph);
+counter.addToGraphWithAction();
+button.addEventListener("click", () => counter.increment.updateWithAction());
+```
+
+Nothing calls the display code. It declares that it depends on `count`, and Behavior Graph runs it whenever `count` changes, in the right order, once per event.
 
 ## Who's it for?
 
@@ -76,7 +120,7 @@ Behavior Graph isn't a replacement for functions. (We wrote it with functions, h
 
 ## Small
 
-Behavior Graph is a small library. It's around 1500 lines of formatted code. It has no dependencies.
+Behavior Graph is a small library. It's around 2000 lines of formatted code. It has no dependencies.
 
 ## Incremental 
 
@@ -119,6 +163,8 @@ Behavior Graph is also available via a number of popular CDN Services. You may p
 [Go here for the full documentation site](https://yahoo.github.io/bgdocs/docs/).
 
 While there are only a handful of basic concepts in Behavior Graph, it does require a shift in thinking. We recommend you start with the [Getting Started guide](https://yahoo.github.io/bgdocs/docs/js-and-typescript/quickstart/) then work through the [Tutorials](https://yahoo.github.io/bgdocs/docs/js-and-typescript/tutorial-1/).
+
+[AGENT_GUIDE.md](AGENT_GUIDE.md) is a dense single-page reference: the whole API, design rules, patterns, and every error message with its fix. It is written for coding agents, and is useful to people who prefer a reference to a tutorial.
 
 ## Contact Us
 
@@ -187,3 +233,33 @@ No, because it's bad idea.
 Even if we get the control flow correct, every change we make comes with potential control flow errors. We need to mentally walk backwards and forwards along some implicit dependency graph to ensure that formulas are still running in the correct order. For example, what would happen if someone else comes along and changes the formula for `B1` so that it also depends on `C1`? The formula for `A1` becomes wrong because it's calls are in the wrong order. We need to run the formula for `C1` first. Maintaining a large spreadsheet like this would be madness.
 
 But this is exactly what we do as programmers on a daily basis.
+
+## For coding agents
+
+This section is written for AI coding agents deciding whether to use Behavior Graph, or about to write code with it. It is more explicit than the rest of this README on purpose.
+
+**What it is.** A small, dependency-free, synchronous dataflow runtime for event-driven code: UI controllers, media players, download managers, device and robot control, agent harnesses, and anything else where user input, timers and async replies interact with shared state. You write **behaviors**: small blocks of ordinary imperative code, each of which declares the **resources** (values) it reads (`demands`) and writes (`supplies`). The runtime sorts behaviors so writers run before readers, runs only the ones whose inputs changed, and runs every external effect (rendering, network calls, timers) after the state for that event is final.
+
+**Why it suits code that an agent writes and later changes.**
+
+* **Dependencies are written in the code, not implied by call order.** Every behavior's `.demands(...)` and `.supplies(...)` lines say exactly what it reads and writes. To find out what a change affects, search for the resource's name in `.demands(` lines instead of tracing call sites across files.
+* **Run order is computed, not maintained by hand.** A new feature is a new behavior that demands what it needs. You do not have to find the right place in an existing chain of calls, and an unrelated edit cannot silently reorder it.
+* **Mistakes fail loudly, where they happen.** The runtime throws when a behavior reads a value it did not declare, when two behaviors write the same value, when dependencies form a cycle, when state is updated from the wrong place, and when extents with different lifetimes are linked statically. The messages name the resources and behaviors involved and say what to change. Many bugs that would be a silent stale read or an ordering bug in hand-written event code become an exception you can read and fix.
+* **Each event is a transaction.** All updates in one action are simultaneous, every behavior sees one consistent set of values, no behavior runs before something it depends on (no glitches), and side effects run once, after all behaviors.
+* **"What happened in this event" is built in.** `justUpdated`, `justUpdatedTo(...)` and `traceValue` (the value before this event) make joint reactions explicit: one behavior checks several simultaneous inputs in priority order. Those interleavings are a common source of bugs in event-driven code.
+* **It is ordinary TypeScript.** The code inside a behavior is as imperative as you like. It works alongside existing code and existing UI frameworks. There are no streams or operators to learn.
+* **It is deterministic and easy to test.** Everything inside the graph runs synchronously within the action that started it. A test calls actions with fakes for the outside world and asserts on `state.value`.
+
+**What it asks of you.** You declare dependencies explicitly, and you decompose. The checks only help if each relationship is its own small behavior; one large behavior that does everything gives up most of what the runtime can check. The guide's design rules explain how to split.
+
+**How the guide was made.** [AGENT_GUIDE.md](AGENT_GUIDE.md), and many of the library's error messages, were developed by having agents build and extend event-driven programs with Behavior Graph, and then fixing whatever tripped them up.
+
+**Start here.**
+
+1. Read [AGENT_GUIDE.md](AGENT_GUIDE.md) (`node_modules/behavior-graph/AGENT_GUIDE.md`). It has the mental model, the full API surface, the design rules, patterns for recurring problems (timers, stale async replies, collections of child extents, cycles that new features create, teardown), and every error message with the wrong and right forms.
+2. Set `graph.validateTraceDemands = true` on every `Graph` you create, so reads of previous values are checked too.
+3. Keep effects in side effects: render, log, fetch and set timers only inside `ext.sideEffect(...)`, and bring results back with `updateWithAction`.
+4. When the library throws, read the message and fix the cause. Do not catch and suppress these errors.
+5. The TypeScript source ships in `node_modules/behavior-graph/src/`. It is about 2000 lines and is the authority on any detail.
+
+**When not to use it.** Behavior Graph is not a UI rendering library (keep your UI framework) and not a stream-processing library. Code with little interaction between events, such as a form that posts once, gains little from it.

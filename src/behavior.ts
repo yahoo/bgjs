@@ -6,7 +6,7 @@
 import {Orderable} from "./bufferedqueue.js";
 import {Extent} from "./extent.js";
 import {Resource, Demandable} from "./resource.js";
-import {LinkType, OrderingState, RelinkingOrder} from "./common";
+import {LinkType, OrderingState, RelinkingOrder} from "./common.js";
 import {repeatedDynamicMessage, traceOnlyMessage} from "./errors.js";
 
 
