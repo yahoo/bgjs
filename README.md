@@ -180,6 +180,8 @@ Or as a classic script, which defines a global `bg`:
 
 While there are only a handful of basic concepts in Behavior Graph, it does require a shift in thinking. We recommend you start with the [Getting Started guide](https://yahoo.github.io/bgdocs/docs/js-and-typescript/quickstart/) then work through the [Tutorials](https://yahoo.github.io/bgdocs/docs/js-and-typescript/tutorial-1/).
 
+Runnable examples, including TodoMVC with plain DOM code and with React, are in [examples](examples).
+
 [AGENT_GUIDE.md](AGENT_GUIDE.md) is a dense single-page reference: the whole API, design rules, patterns, and every error message with its fix. It is written for coding agents, and is useful to people who prefer a reference to a tutorial.
 
 ## Contact Us
