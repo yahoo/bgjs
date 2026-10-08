@@ -1,6 +1,8 @@
 {
   "name": "behavior-graph",
   "version": "1.4.0",
+  "description": "Dataflow runtime for event-driven TypeScript and JavaScript. Each behavior declares what it reads and writes; the graph runs them in dependency order once per event, then runs side effects. Includes a guide for coding agents.",
+  "homepage": "https://yahoo.github.io/bgdocs/docs/",
   "main": "lib/cjs/index.js",
   "module": "lib/mjs/index.js",
   "types": "lib/mjs/index.d.ts",
@@ -23,7 +25,20 @@
     "rxjs",
     "effects",
     "reactive",
-    "dataflow"
+    "dataflow",
+    "event-driven",
+    "reactive programming",
+    "side effects",
+    "async",
+    "timers",
+    "controller",
+    "dependency graph",
+    "incremental computation",
+    "glitch-free",
+    "deterministic",
+    "typescript",
+    "coding agents",
+    "ai agents"
   ],
   "license": "Apache-2.0",
   "devDependencies": {

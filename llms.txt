@@ -1,0 +1,31 @@
+# Behavior Graph
+
+> Behavior Graph (`behavior-graph` on npm) is a small, dependency-free, synchronous dataflow runtime for event-driven TypeScript and JavaScript. You write behaviors: small blocks of ordinary imperative code that each declare the resources (values) they read (`demands`) and write (`supplies`). The runtime runs behaviors in dependency order, runs only the ones whose inputs changed, treats each event as a transaction, and runs external effects (rendering, network calls, timers) after the state for that event is final.
+
+It suits code where user input, timers and async replies interact with shared state: UI controllers, media players, download managers, device and robot control, and agent harnesses. It works alongside existing UI frameworks; it is not a rendering library and not a stream-processing library. Mistakes such as undeclared reads, two writers for one value, dependency cycles and updates from the wrong place throw errors that name the resources involved and say what to change.
+
+Install with `npm install behavior-graph`. Coding agents should read the agent guide before writing code. Set `graph.validateTraceDemands = true` on every `Graph`, keep effects inside `ext.sideEffect(...)`, and fix the cause of any error the library throws rather than catching it.
+
+## Docs
+
+- [Agent guide](https://raw.githubusercontent.com/yahoo/bgjs/master/AGENT_GUIDE.md): the mental model, full API, design rules, patterns for recurring problems (timers, stale async replies, collections, cycles, teardown) and every error message with its fix. Also ships at `node_modules/behavior-graph/AGENT_GUIDE.md`, matching the installed version.
+- [README](https://raw.githubusercontent.com/yahoo/bgjs/master/README.md): overview, a short example, and a section for coding agents on when to use the library.
+- [Getting started](https://yahoo.github.io/bgdocs/docs/js-and-typescript/quickstart/): install and a first program.
+- [API](https://yahoo.github.io/bgdocs/docs/js-and-typescript/api/): reference for Graph, Extent, behaviors and resources.
+
+## Tutorials
+
+- [Tutorial 1 - Basics](https://yahoo.github.io/bgdocs/docs/js-and-typescript/tutorial-1/): behaviors, resources, moments and actions.
+- [Tutorial 2 - IO](https://yahoo.github.io/bgdocs/docs/js-and-typescript/tutorial-2/): a thermostat: side effects and connecting the graph to input and output.
+- [Tutorial 3 - Extents](https://yahoo.github.io/bgdocs/docs/js-and-typescript/tutorial-3/): a todo list: extents that are added and removed at runtime, and dynamic behaviors.
+- [Code example](https://yahoo.github.io/bgdocs/docs/js-and-typescript/code-example/): a login form with validation, actions and side effects.
+
+## Source
+
+- [TypeScript source](https://github.com/yahoo/bgjs/tree/master/src): about 2000 lines; the authority on any detail. Also ships at `node_modules/behavior-graph/src/`.
+- [Examples](https://github.com/yahoo/bgjs/tree/master/examples): TodoMVC (plain and React), a browser example and a React app.
+
+## Optional
+
+- [Behavior Graph docs home](https://yahoo.github.io/bgdocs/docs/): all platforms.
+- [BGSwift](https://github.com/yahoo/BGSwift), [bgkotlin](https://github.com/yahoo/bgkotlin), [bgobjc](https://github.com/yahoo/bgobjc): the same architecture for Swift, Kotlin/JVM and Objective-C.
