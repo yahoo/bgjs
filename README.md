@@ -153,10 +153,26 @@ Would like to help us with any of these adapters? We would certainly love to hav
 
 Javascript Behavior Graph is hosted on NPM @ [behavior-graph](https://www.npmjs.com/package/behavior-graph).
 
-Behavior Graph is also available via a number of popular CDN Services. You may prefer to use these when importing directly into the browser or with Deno.
+```bash
+npm install behavior-graph
+```
 
-* [Skypack.dev](https://www.skypack.dev/view/behavior-graph)
-* [JSDelivr](https://www.jsdelivr.com/package/npm/behavior-graph)
+To use it directly in a browser without a build step, load it from a CDN that serves npm packages, such as [jsDelivr](https://www.jsdelivr.com/package/npm/behavior-graph). As an ES module:
+
+```html
+<script type="module">
+  import { Graph, Extent } from "https://cdn.jsdelivr.net/npm/behavior-graph@2/+esm";
+</script>
+```
+
+Or as a classic script, which defines a global `bg`:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/behavior-graph@2/lib/behavior-graph.js"></script>
+<script>
+  const { Graph, Extent } = bg;
+</script>
+```
 
 ## Documentation
 
