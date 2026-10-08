@@ -32,9 +32,11 @@ export enum ResourceType {
     state,
 }
 
+/** The kind of a {@link Demandable}: a plain demand, `resource.order`, or `state.trace`. */
 export enum LinkType {
     reactive,
     order,
+    // Declares a read of the value from before this event (traceValue). Not an ordering edge.
     trace,
 }
 

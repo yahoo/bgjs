@@ -7,14 +7,7 @@ import {accessMessage, traceAccessMessage, unsuppliedInBehaviorMessage, updateOu
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
 import {Graph} from "./graph.js";
-import {GraphEvent, Subscription, Transient} from "./common.js";
-
-export enum LinkType {
-    reactive,
-    order,
-    // Declares a read of the value from before this event (traceValue). Not an ordering edge.
-    trace,
-}
+import {GraphEvent, LinkType, Subscription, Transient} from "./common.js";
 
 /** Anything a behavior can demand: a resource, `resource.order`, or `state.trace`. */
 export interface Demandable {

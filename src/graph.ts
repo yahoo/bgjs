@@ -7,8 +7,8 @@ import {cycleMessage, demandNotAddedMessage, lifetimeMessage, removedDemandMessa
 import {BufferedPriorityQueue} from "./bufferedqueue.js";
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
-import {Demandable, LinkType, Resource} from "./resource.js";
-import {DateProvider, GraphEvent, OrderingState, Subscription, Transient} from "./common.js";
+import {Demandable, Resource} from "./resource.js";
+import {DateProvider, GraphEvent, LinkType, OrderingState, Subscription, Transient} from "./common.js";
 
 interface StateInternal<T> {
     _updateForce(newValue: T): void;
