@@ -1,4 +1,4 @@
-import {Extent} from "./extent";
+import {Extent} from "./extent.js";
 
 export enum OrderingState {
     Untracked, // new behaviors

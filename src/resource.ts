@@ -7,7 +7,7 @@ import {accessMessage, traceAccessMessage, unsuppliedInBehaviorMessage, updateOu
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
 import {Graph} from "./graph.js";
-import {GraphEvent, Subscription, Transient} from "./common";
+import {GraphEvent, Subscription, Transient} from "./common.js";
 
 export enum LinkType {
     reactive,
