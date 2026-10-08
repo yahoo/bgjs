@@ -143,9 +143,9 @@ Behavior Graph has been ported to multiple platforms.
 
 This Javascript/Typescript version is not used in production at Yahoo currently. It is a direct port from the original Objective-C. It has excellent test coverage. We are confident it works as intended.
 
-But it is also newly open sourced. You won't find blog posts and Stack Overflow answers to your questions. If you are on a team that expects that type of support you should proceed with caution.
+You won't find many blog posts and Stack Overflow answers to your questions. If you are on a team that expects that type of support you should proceed with caution.
 
-If you are building a browser based app using imperative UI libraries such as JQuery or direct DOM manipulation we think you should be fine. But if you are using any of the popular reactive UI frameworks such as React, Angular, or Ember you will need to figure out how to make that work. We do not have existing adapters.
+If you are building a browser based app using imperative UI libraries such as JQuery or direct DOM manipulation we think you should be fine. For React there is a small adapter, [react-behavior-graph](https://www.npmjs.com/package/react-behavior-graph) (see `examples/todomvc-react`). With other reactive UI frameworks such as Angular or Ember you will need to figure out how to make that work. We do not have adapters for them.
 
 Would like to help us with any of these adapters? We would certainly love to have your help. Please reach out to us on [discord](https://discord.gg/5mvat8tc7d).
 
