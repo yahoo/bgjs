@@ -1,5 +1,9 @@
 # Behavior Graph: guide for coding agents
 
+<!-- Maintainers: the skeleton (section 3) and collection (section 4) examples are copied
+     in src/__tests__/agent-guide.test.ts, which runs them and fails if the copies differ.
+     Change both together. -->
+
 This guide is for an AI coding agent (or a person who likes dense references) writing
 TypeScript or JavaScript with `behavior-graph`. It ships inside the npm package, so the copy
 at `node_modules/behavior-graph/AGENT_GUIDE.md` matches the installed version. The

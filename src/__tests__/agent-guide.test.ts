@@ -2,27 +2,35 @@
 //  Copyright Yahoo 2021
 //
 
-// The code examples from AGENT_GUIDE.md, kept here so the guide cannot drift from the library.
-// When an example in the guide changes, change it here too.
+// Runs the code examples from AGENT_GUIDE.md. Each region between "guide-example: <name>" and
+// "end guide-example" is a copy of a code block in the guide, and the last test fails if the
+// two differ (ignoring indentation and blank lines). When you change an example, change it in
+// both places.
 
+import {readFileSync} from "fs";
 import {Extent, ExtentRemoveStrategy, Graph} from "../index.js";
 
 // Section 3: minimal skeleton
 
+// guide-example: skeleton
 type View = { count: number; greeting: string | null; loading: boolean };
 
+// The outside world, injected so tests can replace it.
 interface Deps {
     fetchGreeting(count: number): Promise<string>;
     render(view: View): void;
 }
 
 class Counter extends Extent {
+    // inputs: updated only from actions (UI events, timer callbacks, network callbacks)
     pressed = this.moment();
     resetFired = this.moment();
     greetingArrived = this.moment<{ token: number; text: string | null }>();
+    // state: each supplied by exactly one behavior below
     count = this.state(0);
     activeRequest = this.state<number | null>(null);
     greeting = this.state<string | null>(null);
+    // plain bookkeeping, not reactive
     private timer: ReturnType<typeof setTimeout> | undefined;
     private nextToken = 1;
     disposed = false;
@@ -30,6 +38,7 @@ class Counter extends Extent {
     constructor(graph: Graph, private readonly deps: Deps) {
         super(graph);
 
+        // one owner for count, reacting to two inputs with a fixed priority
         this.behavior()
             .demands(this.pressed, this.resetFired)
             .supplies(this.count)
@@ -38,6 +47,7 @@ class Counter extends Extent {
                 else if (ext.pressed.justUpdated) ext.count.update(ext.count.value + 1);
             });
 
+        // timer tied to an input: restart on every press
         this.behavior()
             .demands(this.pressed)
             .runs((ext) => {
@@ -50,6 +60,7 @@ class Counter extends Extent {
                 });
             });
 
+        // async request per count, with a token so a stale reply is ignored
         this.behavior()
             .demands(this.count, this.greetingArrived)
             .supplies(this.activeRequest, this.greeting)
@@ -60,7 +71,7 @@ class Counter extends Extent {
                     ext.activeRequest.update(token);
                     ext.sideEffect(() => {
                         const arrived = (text: string | null) => {
-                            if (!this.disposed) ext.greetingArrived.updateWithAction({token, text});
+                            if (!this.disposed) ext.greetingArrived.updateWithAction({ token, text });
                         };
                         deps.fetchGreeting(count).then(arrived, () => arrived(null));
                     });
@@ -72,10 +83,11 @@ class Counter extends Extent {
                 }
             });
 
+        // all rendering from one behavior; addedToGraph gives the first render
         this.behavior()
             .demands(this.addedToGraph, this.count, this.greeting, this.activeRequest)
             .runs((ext) => {
-                const view = {count: ext.count.value, greeting: ext.greeting.value, loading: ext.activeRequest.value !== null};
+                const view = { count: ext.count.value, greeting: ext.greeting.value, loading: ext.activeRequest.value !== null };
                 ext.sideEffect(() => deps.render(view));
             });
     }
@@ -87,6 +99,7 @@ class Counter extends Extent {
         this.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes);
     }
 }
+// end guide-example
 
 describe("AGENT_GUIDE skeleton", () => {
     let graph: Graph;
@@ -164,6 +177,7 @@ describe("AGENT_GUIDE skeleton", () => {
 
 // Section 4: collections whose membership changes
 
+// guide-example: collection
 class Item extends Extent {
     done = this.state(false);
     toggle = this.moment();
@@ -183,6 +197,7 @@ class List extends Extent {
     constructor(graph: Graph) {
         super(graph);
 
+        // membership: create children inside the behavior, in the same event
         this.behavior()
             .demands(this.addRequested, this.removeRequested)
             .supplies(this.items)
@@ -201,6 +216,7 @@ class List extends Extent {
                 }
             });
 
+        // aggregate: demands change whenever the list changes
         this.behavior()
             .demands(this.items)
             .dynamicDemands([this.items], (ext) => ext.items.value.map((i) => i.done))
@@ -210,6 +226,7 @@ class List extends Extent {
             });
     }
 }
+// end guide-example
 
 describe("AGENT_GUIDE collection", () => {
     test("adds, toggles, aggregates and removes children", () => {
@@ -244,5 +261,25 @@ describe("AGENT_GUIDE collection", () => {
         const child = new Child(graph);
         child.addToGraphWithAction();
         expect(ranIn).toBe(graph.lastEvent.sequence);
+    });
+});
+
+describe("AGENT_GUIDE examples match this file", () => {
+    const normalize = (code: string) =>
+        code.split("\n").map((line) => line.trim()).filter((line) => line !== "").join("\n");
+    const guideBlocks = [...readFileSync("AGENT_GUIDE.md", "utf8").matchAll(/```ts\n([\s\S]*?)```/g)]
+        .map((m) => normalize(m[1]));
+    const regions = [...readFileSync("src/__tests__/agent-guide.test.ts", "utf8")
+        .matchAll(/\/\/ guide-example: (\S+)\n([\s\S]*?)\/\/ end guide-example/g)]
+        .map((m) => ({name: m[1], code: normalize(m[2])}));
+
+    test("every region is found", () => {
+        expect(regions.map((r) => r.name)).toEqual(["skeleton", "collection"]);
+    });
+
+    test.each(regions.map((r) => [r.name, r.code]))("%s appears verbatim in a guide code block", (name, code) => {
+        if (!guideBlocks.some((block) => block.includes(code))) {
+            throw new Error(`The "${name}" example in agent-guide.test.ts no longer matches any code block in AGENT_GUIDE.md. Update the guide and this file together.`);
+        }
     });
 });
