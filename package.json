@@ -2,7 +2,7 @@
   "name": "behavior-graph",
   "version": "2.0.0",
   "description": "Behavior Graph is a TypeScript and JavaScript library for organizing event-driven code: apps and controllers where clicks, timers and network replies all change shared state. You write small blocks of ordinary code that each say what they read and write, and the library runs them in the right order every time something happens, then runs your side effects. Adding a feature means adding a block instead of rewiring callbacks, and mistakes such as reading a value you didn't declare throw a clear error instead of causing a silent bug. Includes a guide for coding agents.",
-  "homepage": "https://yahoo.github.io/bgdocs/docs/",
+  "homepage": "https://github.com/yahoo/bgjs#readme",
   "main": "lib/cjs/index.js",
   "module": "lib/mjs/index.js",
   "types": "lib/mjs/index.d.ts",
