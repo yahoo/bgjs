@@ -114,6 +114,33 @@ class ExtentLifetime {
     }
 }
 
+// The values Extent's constructor gave its own fields, so addToGraph can tell when a subclass field replaced one.
+const originalFields = new WeakMap<Extent, {[name: string]: unknown}>();
+let extentMethodNames: string[] | null = null;
+
+// A subclass field named like an Extent method or field (state, moment, action, graph, ...)
+// hides it, and code that calls it breaks far from the cause. Name the field instead.
+function checkShadowedMembers(extent: Extent) {
+    if (extentMethodNames == null) {
+        extentMethodNames = Object.getOwnPropertyNames(Extent.prototype).filter(name => name != "constructor");
+    }
+    for (let name of extentMethodNames) {
+        if (Object.prototype.hasOwnProperty.call(extent, name)) {
+            let err: any = new Error(shadowedMemberMessage(extent, name, true));
+            err.extent = extent;
+            throw err;
+        }
+    }
+    let fields = originalFields.get(extent)!;
+    for (let name in fields) {
+        if ((extent as any)[name] !== fields[name]) {
+            let err: any = new Error(shadowedMemberMessage(extent, name, false));
+            err.extent = extent;
+            throw err;
+        }
+    }
+}
+
 export class Extent {
     debugConstructorName: string | undefined;
     debugName: string | undefined;
@@ -137,6 +164,7 @@ export class Extent {
         this.debugConstructorName = this.constructor.name;
         this.graph = graph;
         this.addedToGraph = new State<boolean>(this, false);
+        originalFields.set(this, {graph: this.graph, behaviors: this.behaviors, resources: this.resources, addedToGraph: this.addedToGraph});
     }
 
     debugHere(): string {
@@ -182,8 +210,9 @@ export class Extent {
     }
 
     addToGraph() {
+        // before the event check, which would read a replaced graph
+        checkShadowedMembers(this);
         if (this.graph.currentEvent != null) {
-            this.checkShadowedMembers();
             this.nameResources();
             this.graph.addExtent(this);
         } else {
@@ -229,31 +258,6 @@ export class Extent {
             unsubscribe();
         }
         this.unsubscribes.clear();
-    }
-
-    // A subclass field named like an Extent method or field (state, moment, action, graph, ...)
-    // hides it, and code that calls it breaks far from the cause. Name the field instead.
-    checkShadowedMembers() {
-        for (let name of Object.getOwnPropertyNames(Extent.prototype)) {
-            if (name != "constructor" && Object.prototype.hasOwnProperty.call(this, name)) {
-                let err: any = new Error(shadowedMemberMessage(this, name, true));
-                err.extent = this;
-                throw err;
-            }
-        }
-        let fields: {[name: string]: boolean} = {
-            graph: this.graph instanceof Graph,
-            behaviors: Array.isArray(this.behaviors),
-            resources: Array.isArray(this.resources),
-            addedToGraph: this.addedToGraph instanceof State,
-        };
-        for (let name in fields) {
-            if (!fields[name]) {
-                let err: any = new Error(shadowedMemberMessage(this, name, false));
-                err.extent = this;
-                throw err;
-            }
-        }
     }
 
     nameResources() {

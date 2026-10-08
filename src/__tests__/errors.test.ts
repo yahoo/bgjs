@@ -411,15 +411,17 @@ describe('builder and extent mistakes', () => {
     });
 
     test('a field that hides an Extent method throws at addToGraph and names it', () => {
+        // As the last field, nothing after it calls this.state(...), so construction succeeds
         class Panel extends Extent {
             phase = this.state(0);
+            // @ts-ignore: the clash this check exists for
+            state = this.state(1);
         }
         let g = new Graph();
         let panel = new Panel(g);
-        (panel as any).state = panel.phase;
         let msg = thrown(() => panel.addToGraphWithAction()).message;
         expect(msg).toContain('Panel has a field named "state"');
-        expect(msg).toContain("rename the field");
+        expect(msg).toContain('rename the field (for example to "phase", "status" or "stateValue")');
     });
 
     test('a field that replaces an Extent field throws at addToGraph', () => {
@@ -431,5 +433,17 @@ describe('builder and extent mistakes', () => {
         (panel as any).addedToGraph = 3;
         let msg = thrown(() => panel.addToGraphWithAction()).message;
         expect(msg).toContain('field named "addedToGraph"');
+        expect(msg).toContain('(for example to "addedToGraphValue")');
+    });
+
+    test('a field that replaces graph with another Graph throws at addToGraph', () => {
+        let g = new Graph();
+        class Panel extends Extent {
+            phase = this.state(0);
+            graph = new Graph();
+        }
+        let panel = new Panel(g);
+        let msg = thrown(() => g.action(() => panel.addToGraph())).message;
+        expect(msg).toContain('field named "graph"');
     });
 });

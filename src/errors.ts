@@ -197,5 +197,5 @@ export function repeatedDynamicMessage(kind: "dynamicDemands" | "dynamicSupplies
 export function shadowedMemberMessage(extent: any, name: string, isMethod: boolean): string {
     let use = isMethod ? `this.${name}(...)` : `this.${name}`;
     return `${extentName(extent)} has a field named "${name}", which hides Extent's own ${isMethod ? "method" : "field"} "${name}", so ${use} no longer works on it. ` +
-        `Fix: rename the field (for example to "phase", "status" or "${name}Value").`;
+        `Fix: rename the field (for example to ${name == "state" ? `"phase", "status" or ` : ""}"${name}Value").`;
 }
