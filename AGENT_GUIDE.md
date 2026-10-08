@@ -110,7 +110,7 @@ class Graph {
   currentBehavior: Behavior | null;  // non-null while a behavior block is running
   dateProvider: { now(): Date };     // stamps events; replace it to control time in tests
   validateLifetimes: boolean;        // default true; see lifetimes below
-  validateTraceDemands: boolean;     // default false; set true: traceValue needs a demand or .trace
+  validateTraceDemands: boolean;     // default true: traceValue needs a demand or .trace
   debugHere(): string;               // text dump of current event/behavior
   subscribeToJustUpdated(resources: Resource[], callback: () => void): () => void;
 }
@@ -186,9 +186,9 @@ Rules the builder implies:
 - `state.trace` is a trace demand: the behavior may read `state.traceValue` (the value from
   before this event) but not `.value`. It is not an edge: the behavior is not sorted after
   the state's supplier, does not run when the state updates, and can never form a cycle.
-  With `graph.validateTraceDemands = true` (set it on every graph you create; the library
-  default is off), `traceValue` and `traceEvent` inside `runs` may be read only on states
-  the behavior supplies, demands (plain or `.order`), or declares with `.trace`.
+  With `graph.validateTraceDemands` on (the default; leave it on), `traceValue` and
+  `traceEvent` inside `runs` may be read only on states the behavior supplies, demands
+  (plain or `.order`), or declares with `.trace`.
 - `dynamicDemands(switches, links)`: whenever any switch updates, `links(ext)` is re-run
   and its result becomes the behavior's extra demands for the rest of the event. With the
   default `relinkingOrderPrior` the relink happens before the behavior runs. Use
@@ -379,7 +379,6 @@ class Counter extends Extent {
 }
 
 const graph = new Graph();
-graph.validateTraceDemands = true; // traceValue reads must be declared (section 2)
 const counter = new Counter(graph, {
   fetchGreeting: (n) => fetch(`/greeting?n=${n}`).then((r) => r.text()),
   render: (view) => { /* update the DOM, or hand the view to your UI framework */ },
@@ -764,7 +763,7 @@ and read `ext.b.traceValue` if the previous value is what you want.
 
 **Reading a previous value you did not declare.**
 `Error: Cannot read "b.traceValue" here: the behavior in ... neither demands nor supplies b
-and does not declare b.trace ...` (only with `graph.validateTraceDemands = true`). Wrong:
+and does not declare b.trace ...`. Wrong:
 `.demands(this.a).runs(ext => ext.b.traceValue)`. Right: `.demands(this.a, this.b.trace)`, or
 demand `this.b` and read `.value` if the rule needs this event's value.
 

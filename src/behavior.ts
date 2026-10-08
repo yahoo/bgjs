@@ -10,21 +10,40 @@ import {LinkType, OrderingState, RelinkingOrder} from "./common.js";
 import {repeatedDynamicMessage, traceOnlyMessage} from "./errors.js";
 
 
+/**
+ * A block of code together with the resources it demands and supplies. Create one with
+ * `extent.behavior()...runs(block)`; the graph runs it in any event in which a demand updated,
+ * after the suppliers of its demands. Never call it directly.
+ */
 export class Behavior implements Orderable {
+    /** The resources this behavior is linked to as demands, static and dynamic, including `.order` ones. Null until linked. */
     demands: Set<Resource> | null;
+    /** The subset of `demands` that are `.order` demands. */
     orderingDemands: Set<Resource> | null;
+    /** The states declared with `.trace`. These are not edges. */
     traceDemands: Set<Resource> | null = null;
+    /** The resources this behavior supplies, static and dynamic. Null until linked. */
     supplies: Set<Resource> | null;
+    /** @internal */
     block: (extent: Extent) => void;
+    /** @internal */
     enqueuedWhen: number | null = null;
+    /** @internal */
     removedWhen: number | null = null;
+    /** The extent this behavior belongs to. */
     extent: Extent;
+    /** @internal */
     orderingState: OrderingState = OrderingState.Untracked;
+    /** Topological rank: a behavior runs after every behavior with a lower order that it depends on. */
     order: number = 0;
 
+    /** @internal */
     untrackedDemands: Demandable[] | null;
+    /** @internal */
     untrackedDynamicDemands: Demandable[] | null;
+    /** @internal */
     untrackedSupplies: Resource[] | null;
+    /** @internal */
     untrackedDynamicSupplies: Resource[] | null;
 
     constructor(extent: Extent, demands: Demandable[] | null, supplies: Resource[] | null, block: (extent: Extent) => void) {
@@ -60,42 +79,65 @@ export class Behavior implements Orderable {
         return name;
     }
 
+    /** Replaces this behavior's dynamic demands. Usually done for you by `dynamicDemands` on the builder. */
     setDynamicDemands(newDemands: (Demandable | undefined)[] | null) {
         this.extent.graph.updateDemands(this, newDemands?.filter(item => item != undefined) as (Demandable[] | null));
     }
 
+    /** Replaces this behavior's dynamic supplies. Usually done for you by `dynamicSupplies` on the builder. */
     setDynamicSupplies(newSupplies: (Resource | undefined)[] | null) {
         this.extent.graph.updateSupplies(this, newSupplies?.filter(item => item !== undefined) as (Resource[] | null));
     }
 
 }
 
+/** Builds a {@link Behavior}. Get one from `extent.behavior()` and finish with `runs`. */
 export class BehaviorBuilder<T extends Extent> {
+    /** @internal */
     extent: T;
+    /** @internal */
     untrackedDemands: Demandable[] | null = null;
+    /** @internal */
     untrackedSupplies: Resource[] | null = null;
+    /** @internal */
     dynamicDemandSwitches: Demandable[] | null = null;
+    /** @internal */
     dynamicDemandLinks: ((ext: T) => (Demandable | undefined)[] | null) | null = null;
+    /** @internal */
     dynamicDemandRelinkingOrder : RelinkingOrder = RelinkingOrder.relinkingOrderPrior;
+    /** @internal */
     dynamicSupplySwitches: Demandable[] | null = null;
+    /** @internal */
     dynamicSupplyLinks: ((ext: T) => (Resource | undefined)[] | null) | null = null;
+    /** @internal */
     dynamicSupplyRelinkingOrder : RelinkingOrder = RelinkingOrder.relinkingOrderPrior;
 
     constructor(extent: T) {
         this.extent = extent;
     }
 
-    // A second .demands() or .supplies() call adds to the first; it does not replace it.
+    /**
+     * Adds demands: the behavior runs in any event in which one of these updated (except `.order`
+     * and `.trace` demands) and may read them. A second call adds to the list.
+     */
     demands(...demands: Demandable[]): this {
         this.untrackedDemands = [...(this.untrackedDemands ?? []), ...demands];
         return this;
     }
 
+    /** Adds resources this behavior supplies (is the only one allowed to update). A second call adds to the list. */
     supplies(...supplies: Resource[]): this {
         this.untrackedSupplies = [...(this.untrackedSupplies ?? []), ...supplies];
         return this;
     }
 
+    /**
+     * Demands that change at runtime. Whenever a resource in `switches` updates, `links` runs and
+     * its result replaces the behavior's dynamic demands. With the default
+     * {@link RelinkingOrder.relinkingOrderPrior} the relink happens before the behavior runs; use
+     * relinkingOrderSubsequent when the behavior supplies a switch itself. `undefined` entries are
+     * dropped. May be called once per behavior.
+     */
     dynamicDemands(switches: Demandable[], links: ((ext: T) => (Demandable | undefined)[] | null), relinkingOrder?: RelinkingOrder): this {
         if (this.dynamicDemandSwitches != null) {
             let err: any = new Error(repeatedDynamicMessage("dynamicDemands", this.extent));
@@ -110,6 +152,10 @@ export class BehaviorBuilder<T extends Extent> {
         return this;
     }
 
+    /**
+     * Supplies that change at runtime, relinked like {@link BehaviorBuilder.dynamicDemands}. May
+     * be called once per behavior.
+     */
     dynamicSupplies(switches: Demandable[], links: ((ext: T) => (Resource | undefined)[] | null), relinkingOrder?: RelinkingOrder): this {
         if (this.dynamicSupplySwitches != null) {
             let err: any = new Error(repeatedDynamicMessage("dynamicSupplies", this.extent));
@@ -124,6 +170,7 @@ export class BehaviorBuilder<T extends Extent> {
         return this;
     }
 
+    /** Finishes the behavior with the code to run. `block` receives the extent; inside it, read only demanded or supplied resources and update only supplied ones. */
     runs(block: (ext: T) => void): Behavior {
         let hasDynamicDemands = this.dynamicDemandSwitches != null;
         if (this.untrackedDemands == null) { this.untrackedDemands = []; }

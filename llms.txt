@@ -4,7 +4,7 @@
 
 It suits code where user input, timers and async replies interact with shared state: UI controllers, media players, download managers, device and robot control, and agent harnesses. It works alongside existing UI frameworks; it is not a rendering library and not a stream-processing library. Mistakes such as undeclared reads, two writers for one value, dependency cycles and updates from the wrong place throw errors that name the resources involved and say what to change.
 
-Install with `npm install behavior-graph`. Coding agents should read the agent guide before writing code. Set `graph.validateTraceDemands = true` on every `Graph`, keep effects inside `ext.sideEffect(...)`, and fix the cause of any error the library throws rather than catching it.
+Install with `npm install behavior-graph`. Coding agents should read the agent guide before writing code. Leave the graph's checks on (`validateLifetimes` and `validateTraceDemands` are on by default), keep effects inside `ext.sideEffect(...)`, and fix the cause of any error the library throws rather than catching it.
 
 ## Docs
 
@@ -23,7 +23,8 @@ Install with `npm install behavior-graph`. Coding agents should read the agent g
 ## Source
 
 - [TypeScript source](https://github.com/yahoo/bgjs/tree/master/src): about 2000 lines; the authority on any detail. Also ships at `node_modules/behavior-graph/src/`.
-- [Examples](https://github.com/yahoo/bgjs/tree/master/examples): TodoMVC (plain and React), a browser example and a React app.
+- [Examples](https://github.com/yahoo/bgjs/tree/master/examples): TodoMVC with plain DOM code and with React, each with a list extent that owns a child extent per item.
+- [Changelog](https://raw.githubusercontent.com/yahoo/bgjs/master/CHANGELOG.md): what changed in each version, and how to upgrade across breaking changes.
 
 ## Optional
 

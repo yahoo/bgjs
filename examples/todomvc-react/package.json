@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "build-adapter": "cd ../../react-behavior-graph && npm install --no-audit --no-fund && npm run build",
+    "predev": "npm run build-adapter",
+    "prebuild": "npm run build-adapter",
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",

@@ -9,6 +9,7 @@ import {Moment, Resource, State} from "./resource.js";
 import {RelinkingOrder} from "./common.js";
 import {shadowedMemberMessage} from "./errors.js";
 
+/** How {@link Extent.removeFromGraph} treats extents whose lifetimes are tied to this one. */
 export enum ExtentRemoveStrategy {
     extentOnly,
     containedLifetimes
@@ -141,18 +142,37 @@ function checkShadowedMembers(extent: Extent) {
     }
 }
 
+/**
+ * A group of resources and behaviors with a shared lifetime. Subclass it, declare resources as
+ * fields (`count = this.state(0)`), build behaviors in the constructor with
+ * {@link Extent.behavior}, and add the instance to the graph with
+ * {@link Extent.addToGraphWithAction}. Do not name a field after an Extent member (`state`,
+ * `moment`, `action`, `graph`, ...); addToGraph throws if one is hidden.
+ */
 export class Extent {
+    /** Internal: the subclass name, used in messages. Do not assign. */
     debugConstructorName: string | undefined;
+    /** An optional name for this extent in debugging output. */
     debugName: string | undefined;
+    /** The behaviors created on this extent. Do not assign. */
     behaviors: Behavior[] = [];
+    /** The resources created on this extent. Do not assign. */
     resources: Resource[] = [];
+    /** The graph this extent belongs to. Do not assign. */
     graph: Graph;
+    /** Sequence of the event that added this extent to the graph, or null when it is not in the graph. */
     addedToGraphWhen: number | null = null;
+    /** Internal: sequence of the event that removed this extent. Do not assign. */
     removedFromGraphWhen: number | null = null;
+    /** True while the extent is in the graph; justUpdated in the event that adds it. Demand it to run a behavior on add. */
     addedToGraph: State<boolean>;
+    /** Internal: set by unifyLifetime and addChildLifetime. Do not assign. */
     lifetime: ExtentLifetime | null = null;
+    /** Internal: subscriptions to cancel on removal. Do not assign. */
     unsubscribes: Set<() => void> = new Set();
+    /** Shorthand for {@link ExtentRemoveStrategy.containedLifetimes}. */
     static readonly removeContainedLifetimes = ExtentRemoveStrategy.containedLifetimes;
+    /** Shorthand for {@link RelinkingOrder.relinkingOrderSubsequent}. */
     static readonly relinkingOrderSubsequent = RelinkingOrder.relinkingOrderSubsequent;
 
     constructor(graph: Graph) {
@@ -167,10 +187,15 @@ export class Extent {
         originalFields.set(this, {graph: this.graph, behaviors: this.behaviors, resources: this.resources, addedToGraph: this.addedToGraph});
     }
 
+    /** Same as {@link Graph.debugHere}. */
     debugHere(): string {
         return this.graph.debugHere();
     }
 
+    /**
+     * Gives `extent` the same lifetime as this one, so behaviors on either may statically demand
+     * and supply the other's resources. Both must then be added to the graph in the same event.
+     */
     unifyLifetime<T extends Extent>(extent: T) {
         if (this.lifetime == null) {
             this.lifetime = new ExtentLifetime(this);
@@ -178,6 +203,13 @@ export class Extent {
         this.lifetime.unify(extent);
     }
 
+    /**
+     * Makes `extent` a child of this one: the child's behaviors may statically demand this
+     * extent's resources, and removing this extent with
+     * {@link ExtentRemoveStrategy.containedLifetimes} removes the child too. Call it before the
+     * child is added to the graph. This extent reaches the child's resources only through
+     * dynamicDemands.
+     */
     addChildLifetime<T extends Extent>(extent: T) {
         if (this.lifetime == null) {
             this.lifetime = new ExtentLifetime(this);
@@ -185,6 +217,7 @@ export class Extent {
         this.lifetime.addChild(extent);
     }
 
+    /** @internal */
     hasCompatibleLifetime<T extends Extent>(extent: T): boolean {
         if (this === extent as Extent) {
             return true;
@@ -195,20 +228,27 @@ export class Extent {
         }
     }
 
+    /** @internal */
     addBehavior(behavior: Behavior) {
         this.behaviors.push(behavior);
     }
 
+    /** @internal */
     addResource(resource: Resource) {
         this.resources.push(resource);
     }
 
+    /** Adds this extent to the graph in a new action. Use it at setup, outside any event. */
     addToGraphWithAction(debugName?: string) {
         this.graph.action(() => {
             this.addToGraph();
         }, debugName);
     }
 
+    /**
+     * Adds this extent's resources and behaviors to the graph. Only valid inside an event (an
+     * action or a behavior); use {@link Extent.addToGraphWithAction} from outside one.
+     */
     addToGraph() {
         // before the event check, which would read a replaced graph
         checkShadowedMembers(this);
@@ -222,12 +262,19 @@ export class Extent {
         }
     }
 
+    /** Removes this extent from the graph in a new action. */
     removeFromGraphWithAction(strategy?: ExtentRemoveStrategy, debugName?: string) {
         this.action(() => {
             this.removeFromGraph(strategy);
         }, debugName);
     }
 
+    /**
+     * Removes this extent from the graph; with {@link ExtentRemoveStrategy.containedLifetimes},
+     * also every extent whose lifetime it contains. Only valid inside an event. Behaviors of a
+     * removed extent stop running and updates to its resources are ignored. In the same event,
+     * update whatever switches other behaviors' dynamic demands on its resources.
+     */
     removeFromGraph(strategy?: ExtentRemoveStrategy) {
         let graph = this.graph;
         if (graph.currentEvent != null) {
@@ -247,12 +294,17 @@ export class Extent {
         }
     }
 
+    /**
+     * Like {@link Graph.subscribeToJustUpdated}, passing this extent to `callback`. The
+     * subscription ends when the extent is removed. Returns an unsubscribe function.
+     */
     subscribeToJustUpdated(resources: Resource[], callback: (ext: this) => void): () => void {
         let unsubscribe = this.graph._subscribeToJustUpdated(resources, {extent: this, callback:callback as ((arg0: Extent | null) => void)});
         this.unsubscribes.add(unsubscribe);
         return unsubscribe;
     }
 
+    /** @internal */
     unsubscribeAll() {
         for (let unsubscribe of this.unsubscribes) {
             unsubscribe();
@@ -260,6 +312,7 @@ export class Extent {
         this.unsubscribes.clear();
     }
 
+    /** @internal */
     nameResources() {
         // automatically add any behaviors and resources that are contained
         // by this Extent object and name them with corresponding keys
@@ -273,23 +326,36 @@ export class Extent {
         }
     }
 
+    /**
+     * Starts a behavior: chain `.demands(...)`, `.supplies(...)` and optionally
+     * `.dynamicDemands(...)` or `.dynamicSupplies(...)`, then finish with `.runs(block)`.
+     */
     behavior(): BehaviorBuilder<this> {
         let b: BehaviorBuilder<this> = new BehaviorBuilder(this);
         return b;
     }
 
+    /** Creates a resource with no value, for ordering (`r.order`) or as a link anchor. */
     resource(name?: string): Resource {
         return new Resource(this, name);
     }
 
+    /** Creates a {@link Moment}: something that happened in one event, with an optional payload. */
     moment<T>(name?: string): Moment<T> {
         return new Moment<T>(this, name);
     }
 
+    /** Creates a {@link State}: a value that persists across events. */
     state<T>(initialState: T, name?: string): State<T> {
         return new State<T>(this, initialState, name);
     }
 
+    /**
+     * Queues `block` to run, with this extent as its argument, after every activated behavior in
+     * the current event has run. Side effects run in the order queued and are the only place to
+     * touch the outside world (render, log, fetch, timers) or start another action. Only valid
+     * inside a behavior or action.
+     */
     sideEffect(block: (ext: this) => void, debugName?: string) {
         // This requires a cast because we know the extent won't be null at runtime because this side effect
         // was created with one
@@ -301,6 +367,7 @@ export class Extent {
         });
     }
 
+    /** Like {@link Graph.actionAsync}, passing this extent to the block. */
     async actionAsync(action: (ext: this) => void, debugName?: string) {
         return this.graph.actionAsyncHelper({
             block: action as (arg0: Extent | null) => void,
@@ -310,6 +377,7 @@ export class Extent {
         })
     }
 
+    /** Like {@link Graph.action}, passing this extent to the block. */
     action(action: (ext: this) => void, debugName?: string) {
         this.graph.actionHelper({
             block: action as (arg0: Extent | null) => void,
