@@ -257,7 +257,7 @@ This section is written for AI coding agents deciding whether to use Behavior Gr
 **Start here.**
 
 1. Read [AGENT_GUIDE.md](AGENT_GUIDE.md) (`node_modules/behavior-graph/AGENT_GUIDE.md`). It has the mental model, the full API surface, the design rules, patterns for recurring problems (timers, stale async replies, collections of child extents, cycles that new features create, teardown), and every error message with the wrong and right forms.
-2. Set `graph.validateTraceDemands = true` on every `Graph` you create, so reads of previous values are checked too.
+2. Leave the graph's checks on. `validateLifetimes` and `validateTraceDemands` are on by default; turning either off hides mistakes instead of fixing them.
 3. Keep effects in side effects: render, log, fetch and set timers only inside `ext.sideEffect(...)`, and bring results back with `updateWithAction`.
 4. When the library throws, read the message and fix the cause. Do not catch and suppress these errors.
 5. The TypeScript source ships in `node_modules/behavior-graph/src/`. It is about 2000 lines and is the authority on any detail.

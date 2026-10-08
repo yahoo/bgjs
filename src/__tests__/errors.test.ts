@@ -215,9 +215,13 @@ describe('trace demands', () => {
         expect(err.resource).toBe(p.seq);
     });
 
-    test('off by default: undeclared trace reads are permitted', () => {
+    test('on by default', () => {
+        expect(new Graph().validateTraceDemands).toBe(true);
+    });
+
+    test('turned off: undeclared trace reads are permitted', () => {
         let g = new Graph();
-        expect(g.validateTraceDemands).toBe(false);
+        g.validateTraceDemands = false;
         let p = new Player(g);
         p.behavior().demands(p.input).supplies(p.countdown).runs(ext => {
             ext.countdown.update(ext.seq.traceValue + 1);

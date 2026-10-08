@@ -52,10 +52,9 @@ export class Graph {
     extentsRemoved: Extent[] = [];
     validateLifetimes: boolean = true;
     // When true, a behavior may read state.traceValue only if it supplies or demands the state,
-    // or declares state.trace in its demands. Off by default so existing code keeps running;
-    // turning it on is recommended, and it is planned to become the default in a future
-    // breaking release.
-    validateTraceDemands: boolean = false;
+    // or declares state.trace in its demands. On by default since 2.0; set it to false to run
+    // 1.x code that reads traceValue without declaring it while migrating.
+    validateTraceDemands: boolean = true;
     justUpdatedCallbacks: Set<Subscription> = new Set();
 
     constructor() {
