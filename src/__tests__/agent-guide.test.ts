@@ -112,7 +112,6 @@ describe("AGENT_GUIDE skeleton", () => {
     beforeEach(() => {
         jest.useFakeTimers();
         graph = new Graph();
-        graph.validateTraceDemands = true;
         views = [];
         pending = new Map();
         counter = new Counter(graph, {
@@ -231,7 +230,6 @@ class List extends Extent {
 describe("AGENT_GUIDE collection", () => {
     test("adds, toggles, aggregates and removes children", () => {
         const graph = new Graph();
-        graph.validateTraceDemands = true;
         const list = new List(graph);
         list.addToGraphWithAction();
 

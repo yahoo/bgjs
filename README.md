@@ -143,9 +143,9 @@ Behavior Graph has been ported to multiple platforms.
 
 This Javascript/Typescript version is not used in production at Yahoo currently. It is a direct port from the original Objective-C. It has excellent test coverage. We are confident it works as intended.
 
-But it is also newly open sourced. You won't find blog posts and Stack Overflow answers to your questions. If you are on a team that expects that type of support you should proceed with caution.
+You won't find many blog posts and Stack Overflow answers to your questions. If you are on a team that expects that type of support you should proceed with caution.
 
-If you are building a browser based app using imperative UI libraries such as JQuery or direct DOM manipulation we think you should be fine. But if you are using any of the popular reactive UI frameworks such as React, Angular, or Ember you will need to figure out how to make that work. We do not have existing adapters.
+If you are building a browser based app using imperative UI libraries such as JQuery or direct DOM manipulation we think you should be fine. For React there is a small adapter, [react-behavior-graph](https://www.npmjs.com/package/react-behavior-graph) (see `examples/todomvc-react`). With other reactive UI frameworks such as Angular or Ember you will need to figure out how to make that work. We do not have adapters for them.
 
 Would like to help us with any of these adapters? We would certainly love to have your help. Please reach out to us on [discord](https://discord.gg/5mvat8tc7d).
 
@@ -153,16 +153,34 @@ Would like to help us with any of these adapters? We would certainly love to hav
 
 Javascript Behavior Graph is hosted on NPM @ [behavior-graph](https://www.npmjs.com/package/behavior-graph).
 
-Behavior Graph is also available via a number of popular CDN Services. You may prefer to use these when importing directly into the browser or with Deno.
+```bash
+npm install behavior-graph
+```
 
-* [Skypack.dev](https://www.skypack.dev/view/behavior-graph)
-* [JSDelivr](https://www.jsdelivr.com/package/npm/behavior-graph)
+To use it directly in a browser without a build step, load it from a CDN that serves npm packages, such as [jsDelivr](https://www.jsdelivr.com/package/npm/behavior-graph). As an ES module:
+
+```html
+<script type="module">
+  import { Graph, Extent } from "https://cdn.jsdelivr.net/npm/behavior-graph@2/+esm";
+</script>
+```
+
+Or as a classic script, which defines a global `bg`:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/behavior-graph@2/lib/behavior-graph.js"></script>
+<script>
+  const { Graph, Extent } = bg;
+</script>
+```
 
 ## Documentation
 
 [Go here for the full documentation site](https://yahoo.github.io/bgdocs/docs/).
 
 While there are only a handful of basic concepts in Behavior Graph, it does require a shift in thinking. We recommend you start with the [Getting Started guide](https://yahoo.github.io/bgdocs/docs/js-and-typescript/quickstart/) then work through the [Tutorials](https://yahoo.github.io/bgdocs/docs/js-and-typescript/tutorial-1/).
+
+Runnable examples, including TodoMVC with plain DOM code and with React, are in [examples](examples).
 
 [AGENT_GUIDE.md](AGENT_GUIDE.md) is a dense single-page reference: the whole API, design rules, patterns, and every error message with its fix. It is written for coding agents, and is useful to people who prefer a reference to a tutorial.
 
@@ -257,7 +275,7 @@ This section is written for AI coding agents deciding whether to use Behavior Gr
 **Start here.**
 
 1. Read [AGENT_GUIDE.md](AGENT_GUIDE.md) (`node_modules/behavior-graph/AGENT_GUIDE.md`). It has the mental model, the full API surface, the design rules, patterns for recurring problems (timers, stale async replies, collections of child extents, cycles that new features create, teardown), and every error message with the wrong and right forms.
-2. Set `graph.validateTraceDemands = true` on every `Graph` you create, so reads of previous values are checked too.
+2. Leave the graph's checks on. `validateLifetimes` and `validateTraceDemands` are on by default; turning either off hides mistakes instead of fixing them.
 3. Keep effects in side effects: render, log, fetch and set timers only inside `ext.sideEffect(...)`, and bring results back with `updateWithAction`.
 4. When the library throws, read the message and fix the cause. Do not catch and suppress these errors.
 5. The TypeScript source ships in `node_modules/behavior-graph/src/`. It is about 2000 lines and is the authority on any detail.

@@ -1,5 +1,6 @@
 import {Extent} from "./extent.js";
 
+/** @internal */
 export enum OrderingState {
     Untracked, // new behaviors
     NeedsOrdering, // added to list for ordering
@@ -8,10 +9,12 @@ export enum OrderingState {
     Ordered // has a valid order
 }
 
+/** Supplies event timestamps; see {@link Graph.dateProvider}. */
 export interface DateProvider {
     now(): Date
 }
 
+/** When a dynamic link is recomputed relative to the behavior running; see {@link BehaviorBuilder.dynamicDemands}. */
 export enum RelinkingOrder {
     relinkingOrderPrior,
     relinkingOrderSubsequent
@@ -29,14 +32,19 @@ export enum ResourceType {
     state,
 }
 
+/** The kind of a {@link Demandable}: a plain demand, `resource.order`, or `state.trace`. */
 export enum LinkType {
     reactive,
     order,
+    // Declares a read of the value from before this event (traceValue). Not an ordering edge.
     trace,
 }
 
+/** One run of the event loop, opened by an action. */
 export class GraphEvent {
+    /** Increases by one per event; 0 before the first. */
     sequence: number;
+    /** From {@link Graph.dateProvider} when the event started. */
     timestamp: Date;
     static readonly initialEvent: GraphEvent = new GraphEvent(0, new Date(0));
 
@@ -46,10 +54,12 @@ export class GraphEvent {
     }
 }
 
+/** Internal: resources that reset at the end of an event. */
 export interface Transient {
     clear(): void;
 }
 
+/** @internal */
 export interface Subscription {
     extent: Extent | null;
     callback: (extent: Extent | null) => void;
