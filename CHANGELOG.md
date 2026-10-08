@@ -21,6 +21,11 @@
   resources does nothing, and `addedToGraph` goes back to `false` on removal. Previously a
   later update to a removed extent's resource (a queued UI event, a late timer) ran its
   behaviors again. Adding and removing an extent in the same event is now allowed.
+- **Internal members are no longer in the type files.** Graph, Behavior, BehaviorBuilder and
+  Resource internals (`actionHelper`, `addExtent`, `untrackedDemands`, ...) are marked
+  `@internal` and left out of the published `.d.ts` files, so TypeScript code that used them
+  no longer compiles. They still exist at runtime. Extent's internal fields stay visible so
+  that a subclass field with the same name is still a type error.
 - **Error messages changed.** Graph errors now name the resources and behaviors involved and
   say how to fix the problem. The `err` properties (`err.cycle`, `err.alreadySupplied`,
   `err.desiredSupplier`, `err.resource`, ...) are unchanged, but code or tests that match
@@ -31,6 +36,10 @@
 - **`state.trace` demands.** `.demands(this.a, this.b.trace)` lets a behavior read
   `b.traceValue` (the value from before this event) without an edge to `b`'s supplier: it
   never orders or activates the behavior and cannot form a cycle. Works in `dynamicDemands`.
+- **Doc comments on the public API**, so editors and agents reading the type files see what
+  each class and member does.
+- **`Demandable` and `BehaviorBuilder` are exported**, for helpers that take demands or build
+  behaviors.
 - **`AGENT_GUIDE.md`**, a single-page reference for coding agents (mental model, API, design
   rules, patterns, and every error message with its fix). It ships in the package at
   `node_modules/behavior-graph/AGENT_GUIDE.md`.

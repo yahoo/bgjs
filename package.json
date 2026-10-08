@@ -48,8 +48,9 @@
     "test": "jest",
     "build": "rm -rf lib/* && tsc -p tsconfig-mjs.json && tsc -p tsconfig-cjs.json && ./fixup && rollup -c rollup.config.js && echo 'Build is successful!'",
     "test-coverage": "jest --coverage",
+    "test-types": "tsc -p test-types",
     "ci-build": "npm run build",
-    "ci-test": "jest --coverage --runInBand --coverageDirectory $SD_ARTIFACTS_DIR/coverage"
+    "ci-test": "jest --coverage --runInBand --coverageDirectory $SD_ARTIFACTS_DIR/coverage && npm run test-types"
   },
   "jest": {
     "preset": "ts-jest/presets/js-with-ts-esm",

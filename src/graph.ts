@@ -34,37 +34,73 @@ const DefaultDateProvider = {
     }
 }
 
+/**
+ * Owns the event loop. Usually there is one per application. Every {@link Extent} belongs to a
+ * graph, and every change to the graph's resources happens inside an event that an action opens.
+ *
+ * See AGENT_GUIDE.md in this package for the mental model, patterns and errors.
+ */
 export class Graph {
+    /** Supplies the timestamp of each new event. Replace it to control time in tests. */
     dateProvider: DateProvider = DefaultDateProvider;
+    /** The event in progress, or null between events. */
     currentEvent: GraphEvent | null = null;
+    /** The last completed event. Sequence 0 before the first action. */
     lastEvent: GraphEvent;
+    /** @internal */
     activatedBehaviors: BufferedPriorityQueue<Behavior> = new BufferedPriorityQueue();
+    /** The behavior whose `runs` block is executing, or null (including during side effects). */
     currentBehavior: Behavior | null = null;
+    /** @internal */
     effects: SideEffect[] = [];
+    /** @internal */
     actions: Action[] = [];
+    /** @internal */
     untrackedBehaviors: Behavior[] = [];
+    /** @internal */
     modifiedDemandBehaviors: Behavior[] = [];
+    /** @internal */
     modifiedSupplyBehaviors: Behavior[] = [];
+    /** @internal */
     updatedTransients: Transient[] = [];
+    /** @internal */
     needsOrdering: Behavior[] = [];
+    /** @internal */
     eventLoopState: EventLoopState | null = null;
+    /** @internal */
     extentsAdded: Extent[] = [];
+    /** @internal */
     extentsRemoved: Extent[] = [];
+    /**
+     * When true (the default), a behavior may statically demand or supply another extent's
+     * resources only if that extent has the same lifetime ({@link Extent.unifyLifetime}) or is an
+     * ancestor ({@link Extent.addChildLifetime}). Reach other extents through dynamicDemands.
+     */
     validateLifetimes: boolean = true;
-    // When true, a behavior may read state.traceValue only if it supplies or demands the state,
-    // or declares state.trace in its demands. On by default since 2.0; set it to false to run
-    // 1.x code that reads traceValue without declaring it while migrating.
+    /**
+     * When true, a behavior may read `state.traceValue` or `state.traceEvent` only if it supplies
+     * or demands the state, or declares `state.trace` in its demands. On by default since 2.0;
+     * set it to false to run 1.x code that reads traceValue without declaring it while migrating.
+     */
     validateTraceDemands: boolean = true;
+    /** @internal */
     justUpdatedCallbacks: Set<Subscription> = new Set();
 
     constructor() {
        this.lastEvent = GraphEvent.initialEvent;
     }
 
+    /**
+     * Opens an event, runs `block`, then runs every activated behavior and side effect. Returns
+     * when the event, and any events its side effects started, have completed. Inside `block`,
+     * update resources that no behavior supplies. Throws if called inside a behavior or another
+     * action; start actions from side effects or outside code.
+     */
     action(block: () => void, debugName?: string) {
         this.actionHelper({debugName: debugName, block: block, extent: null, resolve: null});
     }
 
+    /** @internal */
     actionHelper(action: Action) {
         if (this.eventLoopState != null && (this.eventLoopState.phase == EventLoopPhase.action || this.eventLoopState.phase == EventLoopPhase.updates)) {
             let err: any = new Error("Action cannot be created directly inside another action or behavior. Consider wrapping it in a side effect block.");
@@ -74,10 +110,16 @@ export class Graph {
         this.eventLoop();
     }
 
+    /**
+     * Like {@link Graph.action}, but returns a promise that resolves when the action's event has
+     * completed. Called during an event (from a side effect), the action is queued and runs after
+     * the current event rather than nested. Prefer `action` unless you need this.
+     */
     async actionAsync(block: () => void, debugName?: string) {
         return this.actionAsyncHelper({debugName: debugName, block: block, extent: null, resolve: null})
     }
 
+    /** @internal */
     async actionAsyncHelper(action: Action) {
         return new Promise((resolve, reject) => {
             try {
@@ -261,10 +303,12 @@ export class Graph {
         }
     }
 
+    /** @internal */
     trackTransient(resource: Transient) {
         this.updatedTransients.push(resource);
     }
 
+    /** @internal */
     resourceTouched(resource: Resource) {
         if (this.currentEvent != null) {
             if (this.eventLoopState != null && this.eventLoopState.phase == EventLoopPhase.action) {
@@ -308,10 +352,15 @@ export class Graph {
         }
     }
 
+    /**
+     * Runs `callback` as a side effect at the end of any event in which one of `resources`
+     * updated. Reading resource values inside it is allowed. Returns an unsubscribe function.
+     */
     subscribeToJustUpdated(resources: Resource[], callback: () => void): () => void {
         return this._subscribeToJustUpdated(resources, {extent: null, callback: callback});
     }
 
+    /** @internal */
     _subscribeToJustUpdated(resources: Resource[], subscription: Subscription): () => void {
         let allUnsubscribes: (()=>void)[] = [];
         for (let resource of resources) {
@@ -326,6 +375,7 @@ export class Graph {
         return bigUnsubscribe;
     }
 
+    /** @internal */
     _notifyJustUpdatedSubscribers(subscribers: Set<Subscription>) {
         subscribers.forEach(subscription => {
             this.justUpdatedCallbacks.add(subscription);
@@ -342,10 +392,16 @@ export class Graph {
         this.justUpdatedCallbacks.clear();
     }
 
+    /**
+     * Queues `block` to run after every activated behavior in the current event has run. Side
+     * effects run in the order queued and are the place to touch the outside world. Only valid
+     * inside a behavior or action. Prefer {@link Extent.sideEffect}, which passes the extent.
+     */
     sideEffect(block: () => void, debugName?: string) {
         this.sideEffectHelper({debugName: debugName, block: block, behavior: null, extent: null});
     }
 
+    /** @internal */
     sideEffectHelper(sideEffect: SideEffect) {
         if (this.currentEvent == null) {
             let err: any = new Error("Effects can only be added during an event.");
@@ -358,6 +414,7 @@ export class Graph {
         }
     }
 
+    /** Text describing the current event: its sequence, the resources its action updated, and the current behavior. */
     debugHere(): string {
         let text = ""
         if (this.currentEvent != null) {
@@ -657,6 +714,7 @@ export class Graph {
         }
     }
 
+    /** The resources on a dependency cycle through `behavior`, or an empty array if there is none. */
     debugCycleForBehavior(behavior: Behavior): Resource[] {
         let stack: Resource[] = [];
         let output: Resource[] = [];
@@ -685,10 +743,12 @@ export class Graph {
         return false;
     }
 
+    /** @internal */
     addBehavior(behavior: Behavior) {
         this.untrackedBehaviors.push(behavior)
     }
 
+    /** @internal */
     updateDemands(behavior: Behavior, newDemands: Demandable[] | null) {
         if (behavior.extent.addedToGraphWhen == null) {
             let err: any = new Error("Behavior must belong to graph before updating demands.");
@@ -703,6 +763,7 @@ export class Graph {
         this.modifiedDemandBehaviors.push(behavior);
     }
 
+    /** @internal */
     updateSupplies(behavior: Behavior, newSupplies: Resource[] | null) {
         if (behavior.extent.addedToGraphWhen == null) {
             let err: any = new Error("Behavior must belong to graph before updating supplies.");
@@ -718,6 +779,7 @@ export class Graph {
     }
 
 
+    /** @internal */
     removeBehavior(behavior: Behavior, sequence: number) {
         // If we demand a foreign resource then we should be
         // removed from its list of subsequents
@@ -758,6 +820,7 @@ export class Graph {
         behavior.removedWhen = sequence;
     }
 
+    /** @internal */
     addExtent(extent: Extent) {
         if (extent.addedToGraphWhen != null) {
             let err: any = new Error("Extent already belongs to a graph.");
@@ -798,6 +861,7 @@ export class Graph {
         }
     }
 
+    /** @internal */
     removeExtent(extent: Extent) {
         if (this.currentEvent == null) {
             let err: any = new Error("Extents can only be removed during an event.");
@@ -824,6 +888,7 @@ enum EventLoopPhase {
     sideEffects
 }
 
+/** @internal */
 export class EventLoopState {
     action: Action;
     actionUpdates: Resource[];

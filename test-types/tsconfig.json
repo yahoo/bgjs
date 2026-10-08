@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": false,
+    "lib": ["ES2020", "DOM"],
+    "types": [],
+    "paths": { "behavior-graph": ["../lib/mjs/index.d.ts"] }
+  },
+  "files": ["consumer.mts"]
+}
