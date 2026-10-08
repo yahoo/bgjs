@@ -356,3 +356,94 @@ describe('trace demands', () => {
         expect(runs).toBe(0);
     });
 });
+
+describe('builder and extent mistakes', () => {
+    test('a second .demands() call adds to the first', () => {
+        let g = new Graph();
+        let p = new Player(g);
+        let runs = 0;
+        p.behavior().demands(p.advance).supplies(p.loadReq).demands(p.engineAccepted).runs(() => { runs++; });
+        p.addToGraphWithAction();
+        p.advance.updateWithAction();
+        p.engineAccepted.updateWithAction();
+        expect(runs).toBe(2);
+    });
+
+    test('a second .supplies() call adds to the first', () => {
+        let g = new Graph();
+        let p = new Player(g);
+        p.behavior().demands(p.advance).supplies(p.seq).supplies(p.countdown).runs(ext => {
+            ext.seq.update(1);
+            ext.countdown.update(2);
+        });
+        p.addToGraphWithAction();
+        p.advance.updateWithAction();
+        expect(p.seq.value).toBe(1);
+        expect(p.countdown.value).toBe(2);
+    });
+
+    test('a second dynamicDemands call throws and says to combine them', () => {
+        let g = new Graph();
+        let p = new Player(g);
+        let msg = thrown(() => p.behavior()
+            .dynamicDemands([p.advance], () => [p.seq])
+            .dynamicDemands([p.loadReq], () => [p.countdown])).message;
+        expect(msg).toContain(".dynamicDemands(...) was called twice");
+        expect(msg).toContain("in Player");
+    });
+
+    test('a behavior whose demands are all .trace throws when built and names them', () => {
+        let g = new Graph();
+        let p = new Player(g);
+        let msg = thrown(() => p.behavior().demands(p.seq.trace, p.countdown.trace).supplies(p.input).runs(() => {})).message;
+        expect(msg).toContain("can never run");
+        expect(msg).toContain("[seq.trace, countdown.trace]");
+        expect(msg).toContain("supplies [input]");
+        expect(msg).toContain("in Player");
+    });
+
+    test('.trace next to a reactive or dynamic demand is fine', () => {
+        let g = new Graph();
+        let p = new Player(g);
+        p.behavior().demands(p.seq.trace, p.advance).supplies(p.input).runs(() => {});
+        p.behavior().demands(p.countdown.trace).dynamicDemands([p.loadReq], () => [p.engineAccepted]).runs(() => {});
+        p.addToGraphWithAction();
+    });
+
+    test('a field that hides an Extent method throws at addToGraph and names it', () => {
+        // As the last field, nothing after it calls this.state(...), so construction succeeds
+        class Panel extends Extent {
+            phase = this.state(0);
+            // @ts-ignore: the clash this check exists for
+            state = this.state(1);
+        }
+        let g = new Graph();
+        let panel = new Panel(g);
+        let msg = thrown(() => panel.addToGraphWithAction()).message;
+        expect(msg).toContain('Panel has a field named "state"');
+        expect(msg).toContain('rename the field (for example to "phase", "status" or "stateValue")');
+    });
+
+    test('a field that replaces an Extent field throws at addToGraph', () => {
+        class Panel extends Extent {
+            phase = this.state(0);
+        }
+        let g = new Graph();
+        let panel = new Panel(g);
+        (panel as any).addedToGraph = 3;
+        let msg = thrown(() => panel.addToGraphWithAction()).message;
+        expect(msg).toContain('field named "addedToGraph"');
+        expect(msg).toContain('(for example to "addedToGraphValue")');
+    });
+
+    test('a field that replaces graph with another Graph throws at addToGraph', () => {
+        let g = new Graph();
+        class Panel extends Extent {
+            phase = this.state(0);
+            graph = new Graph();
+        }
+        let panel = new Panel(g);
+        let msg = thrown(() => g.action(() => panel.addToGraph())).message;
+        expect(msg).toContain('field named "graph"');
+    });
+});

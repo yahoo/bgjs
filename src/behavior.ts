@@ -6,7 +6,8 @@
 import {Orderable} from "./bufferedqueue.js";
 import {Extent} from "./extent.js";
 import {Resource, Demandable} from "./resource.js";
-import {OrderingState, RelinkingOrder} from "./common";
+import {LinkType, OrderingState, RelinkingOrder} from "./common";
+import {repeatedDynamicMessage, traceOnlyMessage} from "./errors.js";
 
 
 export class Behavior implements Orderable {
@@ -84,17 +85,23 @@ export class BehaviorBuilder<T extends Extent> {
         this.extent = extent;
     }
 
+    // A second .demands() or .supplies() call adds to the first; it does not replace it.
     demands(...demands: Demandable[]): this {
-        this.untrackedDemands = demands;
+        this.untrackedDemands = [...(this.untrackedDemands ?? []), ...demands];
         return this;
     }
 
     supplies(...supplies: Resource[]): this {
-        this.untrackedSupplies = supplies;
+        this.untrackedSupplies = [...(this.untrackedSupplies ?? []), ...supplies];
         return this;
     }
 
     dynamicDemands(switches: Demandable[], links: ((ext: T) => (Demandable | undefined)[] | null), relinkingOrder?: RelinkingOrder): this {
+        if (this.dynamicDemandSwitches != null) {
+            let err: any = new Error(repeatedDynamicMessage("dynamicDemands", this.extent));
+            err.extent = this.extent;
+            throw err;
+        }
         this.dynamicDemandSwitches = switches;
         this.dynamicDemandLinks = links;
         if (relinkingOrder != undefined) {
@@ -104,6 +111,11 @@ export class BehaviorBuilder<T extends Extent> {
     }
 
     dynamicSupplies(switches: Demandable[], links: ((ext: T) => (Resource | undefined)[] | null), relinkingOrder?: RelinkingOrder): this {
+        if (this.dynamicSupplySwitches != null) {
+            let err: any = new Error(repeatedDynamicMessage("dynamicSupplies", this.extent));
+            err.extent = this.extent;
+            throw err;
+        }
         this.dynamicSupplySwitches = switches;
         this.dynamicSupplyLinks = links;
         if (relinkingOrder != undefined) {
@@ -116,6 +128,12 @@ export class BehaviorBuilder<T extends Extent> {
         let hasDynamicDemands = this.dynamicDemandSwitches != null;
         if (this.untrackedDemands == null) { this.untrackedDemands = []; }
         if (this.untrackedSupplies == null) { this.untrackedSupplies = []; }
+        // .trace links never activate a behavior, so one whose every demand is .trace never runs
+        if (!hasDynamicDemands && this.untrackedDemands.length > 0 && this.untrackedDemands.every(d => d.type == LinkType.trace)) {
+            let err: any = new Error(traceOnlyMessage(this.extent, this.untrackedDemands, this.untrackedSupplies));
+            err.extent = this.extent;
+            throw err;
+        }
         let dynamicDemandResource: Resource;
         if (hasDynamicDemands) {
             dynamicDemandResource = this.extent.resource('(BG Dynamic Demand Resource)')
