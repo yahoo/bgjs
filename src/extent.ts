@@ -119,6 +119,81 @@ class ExtentLifetime {
 const originalFields = new WeakMap<Extent, {[name: string]: unknown}>();
 let extentMethodNames: string[] | null = null;
 
+/**
+ * Registers `cleanup` to run when the extent is removed from the graph, and returns a function
+ * that runs it now instead. Calling the returned function more than once does nothing.
+ */
+export type OnRemove = (cleanup: () => void) => () => void;
+
+interface Cleanup {
+    run: () => void;
+    done: boolean;
+}
+
+// Kept off Extent so the bookkeeping takes no member names away from subclasses.
+class RemovalCleanups {
+    pending: Set<Cleanup> = new Set();
+    onRemove: OnRemove;
+
+    constructor(extent: Extent) {
+        this.onRemove = (run) => {
+            let cleanup: Cleanup = {run: run, done: false};
+            if (extent.addedToGraphWhen == null && extent.removedFromGraphWhen != null) {
+                // the extent is already gone, so nothing will run it later
+                runCleanup(cleanup);
+                return () => {};
+            }
+            this.pending.add(cleanup);
+            return () => {
+                this.pending.delete(cleanup);
+                runCleanup(cleanup);
+            };
+        };
+    }
+}
+
+function runCleanup(cleanup: Cleanup) {
+    if (!cleanup.done) {
+        cleanup.done = true;
+        cleanup.run();
+    }
+}
+
+const removalCleanups = new WeakMap<Extent, RemovalCleanups>();
+
+function cleanupsFor(extent: Extent): RemovalCleanups {
+    let cleanups = removalCleanups.get(extent);
+    if (cleanups === undefined) {
+        cleanups = new RemovalCleanups(extent);
+        removalCleanups.set(extent, cleanups);
+    }
+    return cleanups;
+}
+
+/** @internal */
+export function onRemoveFor(extent: Extent): OnRemove {
+    return cleanupsFor(extent).onRemove;
+}
+
+/**
+ * Takes the cleanups registered so far and returns a function that runs them, newest first, or
+ * null when there are none. Cleanups registered afterwards belong to the extent's next removal.
+ * @internal
+ */
+export function takeRemovalCleanups(extent: Extent): (() => void) | null {
+    let cleanups = removalCleanups.get(extent);
+    if (cleanups === undefined || cleanups.pending.size == 0) {
+        return null;
+    }
+    let taken = Array.from(cleanups.pending).reverse();
+    cleanups.pending.clear();
+    return () => {
+        for (let cleanup of taken) {
+            runCleanup(cleanup);
+        }
+    };
+}
+
 // A subclass field named like an Extent method or field (state, moment, action, graph, ...)
 // hides it, and code that calls it breaks far from the cause. Name the field instead.
 function checkShadowedMembers(extent: Extent) {
@@ -168,8 +243,6 @@ export class Extent {
     addedToGraph: State<boolean>;
     /** Internal: set by unifyLifetime and addChildLifetime. Do not assign. */
     lifetime: ExtentLifetime | null = null;
-    /** Internal: subscriptions to cancel on removal. Do not assign. */
-    unsubscribes: Set<() => void> = new Set();
     /** Shorthand for {@link ExtentRemoveStrategy.containedLifetimes}. */
     static readonly removeContainedLifetimes = ExtentRemoveStrategy.containedLifetimes;
     /** Shorthand for {@link RelinkingOrder.relinkingOrderSubsequent}. */
@@ -300,16 +373,7 @@ export class Extent {
      */
     subscribeToJustUpdated(resources: Resource[], callback: (ext: this) => void): () => void {
         let unsubscribe = this.graph._subscribeToJustUpdated(resources, {extent: this, callback:callback as ((arg0: Extent | null) => void)});
-        this.unsubscribes.add(unsubscribe);
-        return unsubscribe;
-    }
-
-    /** @internal */
-    unsubscribeAll() {
-        for (let unsubscribe of this.unsubscribes) {
-            unsubscribe();
-        }
-        this.unsubscribes.clear();
+        return onRemoveFor(this)(unsubscribe);
     }
 
     /** @internal */
@@ -355,13 +419,17 @@ export class Extent {
      * the current event has run. Side effects run in the order queued and are the only place to
      * touch the outside world (render, log, fetch, timers) or start another action. Only valid
      * inside a behavior or action.
+     *
+     * `onRemove` registers cleanup for what the side effect starts, next to the code that starts
+     * it: `onRemove(() => clearTimeout(t))`. Registered cleanups run, newest first, in a side
+     * effect of the event that removes this extent; if the extent is already removed, the cleanup
+     * runs at once. `onRemove` returns a function that runs the cleanup early, for something that
+     * ends before the extent does (a timer that restarts, a request a newer one replaces).
      */
-    sideEffect(block: (ext: this) => void, debugName?: string) {
-        // This requires a cast because we know the extent won't be null at runtime because this side effect
-        // was created with one
+    sideEffect(block: (ext: this, onRemove: OnRemove) => void, debugName?: string) {
         this.graph.sideEffectHelper({
             debugName: debugName,
-            block: (block as (arg0: Extent | null) => void),
+            block: () => block(this, onRemoveFor(this)),
             extent: this,
             behavior: this.graph.currentBehavior
         });

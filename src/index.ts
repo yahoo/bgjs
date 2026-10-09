@@ -16,7 +16,8 @@ export {
 
 export {
     Extent,
-    ExtentRemoveStrategy
+    ExtentRemoveStrategy,
+    type OnRemove
 } from "./extent.js"
 
 export {

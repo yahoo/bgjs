@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Cleanup on removal from a side effect.** `ext.sideEffect((ext, onRemove) => {...})`
+  passes a second argument. `onRemove(() => clearTimeout(t))` registers a cleanup next to the
+  code that starts the work; when the extent is removed, its cleanups run newest first in a
+  side effect of the removing event (for `containedLifetimes`, every removed extent's do).
+  `onRemove` returns a function that runs the cleanup early and unregisters it, for a timer
+  that restarts or a request that finishes. Registering on an extent that is already removed
+  runs the cleanup at once. Teardown no longer needs a `dispose()` method or a `disposed` flag;
+  AGENT_GUIDE.md shows the new pattern. The `OnRemove` type is exported.
+
+### Changed
+
+- **Extent subscriptions end through the same cleanups.** `extent.subscribeToJustUpdated`
+  now unsubscribes in the removing event's side effects rather than during removal. Callbacks
+  already stopped at removal, so nothing observable changes. Calling the returned unsubscribe
+  early now also drops it from the extent, and subscribing on a removed extent unsubscribes
+  at once.
+- **`Extent.unsubscribes` and `unsubscribeAll()` are gone.** Both were internal. Subclasses
+  may now use those names.
+
 ## 2.0.0 (2026-10-08)
 
 ### Breaking changes
