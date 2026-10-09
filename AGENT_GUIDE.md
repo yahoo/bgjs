@@ -136,7 +136,7 @@ class Extent {
   behavior(): BehaviorBuilder<this>;
 
   action(block: (ext: this) => void, debugName?: string): void;
-  sideEffect(block: (ext: this) => void, debugName?: string): void;
+  sideEffect(block: (ext: this, onRemove: OnRemove) => void, debugName?: string): void;
 
   addToGraph(): void;                    // only inside an event (action or behavior)
   addToGraphWithAction(debugName?: string): void;
@@ -148,11 +148,15 @@ class Extent {
   subscribeToJustUpdated(resources: Resource[], callback: (ext: this) => void): () => void;
 }
 enum ExtentRemoveStrategy { extentOnly, containedLifetimes }
+// registers cleanup to run when the extent is removed; returns a function that runs it early
+type OnRemove = (cleanup: () => void) => () => void;
 ```
 
 Resources declared as class fields get their field name as `debugName` automatically when
 the extent is added. The `runs`, `sideEffect`, and `action` callbacks receive the extent as
-their argument, typed as the subclass, so `ext.count` is fully typed.
+their argument, typed as the subclass, so `ext.count` is fully typed. A `sideEffect` callback
+also receives `onRemove`: register the cleanup for anything it starts (`onRemove(() =>
+clearTimeout(t))`) and removing the extent runs it (see Teardown in section 4).
 
 ### BehaviorBuilder
 
@@ -259,7 +263,7 @@ Behavior Graph owns the logic in the middle. Everything at the edges is ordinary
 | rendering, logging, commands to other systems | inside a side effect only |
 | reading state from UI code or tests | read `state.value` directly (allowed outside behaviors) |
 | a UI framework that wants change notifications | `extent.subscribeToJustUpdated([...], cb)` or a behavior whose side effect pushes into the framework |
-| teardown | cancel timers and requests, set a disposed flag, `removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes)` |
+| teardown | register each timer and request with `onRemove` in the side effect that starts it; then `removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes)` |
 
 **Ordering of outputs.** Side effects run after all behaviors, FIFO in the order queued.
 Two unrelated behaviors (neither supplies something the other demands) run in an
@@ -295,7 +299,7 @@ type View = { count: number; greeting: string | null; loading: boolean };
 
 // The outside world, injected so tests can replace it.
 interface Deps {
-  fetchGreeting(count: number): Promise<string>;
+  fetchGreeting(count: number, signal: AbortSignal): Promise<string>;
   render(view: View): void;
 }
 
@@ -309,9 +313,8 @@ class Counter extends Extent {
   activeRequest = this.state<number | null>(null);
   greeting = this.state<string | null>(null);
   // plain bookkeeping, not reactive
-  private timer: ReturnType<typeof setTimeout> | undefined;
+  private stopTimer: (() => void) | undefined;
   private nextToken = 1;
-  disposed = false;
 
   constructor(graph: Graph, private readonly deps: Deps) {
     super(graph);
@@ -325,16 +328,14 @@ class Counter extends Extent {
         else if (ext.pressed.justUpdated) ext.count.update(ext.count.value + 1);
       });
 
-    // timer tied to an input: restart on every press
+    // timer tied to an input: restart on every press; removing the extent clears it
     this.behavior()
       .demands(this.pressed)
       .runs((ext) => {
-        ext.sideEffect(() => {
-          clearTimeout(this.timer);
-          this.timer = setTimeout(() => {
-            this.timer = undefined;
-            if (!this.disposed) ext.resetFired.updateWithAction();
-          }, 1000);
+        ext.sideEffect((ext, onRemove) => {
+          this.stopTimer?.();
+          const timer = setTimeout(() => ext.resetFired.updateWithAction(), 1000);
+          this.stopTimer = onRemove(() => clearTimeout(timer));
         });
       });
 
@@ -347,11 +348,14 @@ class Counter extends Extent {
           const token = this.nextToken++;
           const count = ext.count.value;
           ext.activeRequest.update(token);
-          ext.sideEffect(() => {
+          ext.sideEffect((ext, onRemove) => {
+            const abort = new AbortController();
+            const stop = onRemove(() => abort.abort());
             const arrived = (text: string | null) => {
-              if (!this.disposed) ext.greetingArrived.updateWithAction({ token, text });
+              stop(); // finished: unregister (aborting a finished request does nothing)
+              ext.greetingArrived.updateWithAction({ token, text });
             };
-            deps.fetchGreeting(count).then(arrived, () => arrived(null));
+            deps.fetchGreeting(count, abort.signal).then(arrived, () => arrived(null));
           });
         }
         const reply = ext.greetingArrived.value;
@@ -369,22 +373,20 @@ class Counter extends Extent {
         ext.sideEffect(() => deps.render(view));
       });
   }
-
-  dispose(): void {
-    this.disposed = true;
-    clearTimeout(this.timer);
-    this.timer = undefined;
-    this.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes);
-  }
 }
 
 const graph = new Graph();
 const counter = new Counter(graph, {
-  fetchGreeting: (n) => fetch(`/greeting?n=${n}`).then((r) => r.text()),
+  fetchGreeting: (n, signal) => fetch(`/greeting?n=${n}`, { signal }).then((r) => r.text()),
   render: (view) => { /* update the DOM, or hand the view to your UI framework */ },
 });
 counter.addToGraphWithAction();
 button.addEventListener("click", () => counter.pressed.updateWithAction());
+
+// when the counter goes away: its behaviors stop and every onRemove cleanup runs
+function teardown() {
+  counter.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes);
+}
 ```
 
 A test drives the same class with a fake `fetchGreeting`, calls
@@ -517,12 +519,13 @@ this.behavior()
       const token = ++this.tokenCounter;
       const query = ext.searchRequested.value!;
       ext.searchToken.update(token);
-      ext.sideEffect(() => {
-        this.searchAbort?.abort();
-        this.searchAbort = new AbortController();
-        this.api.search(query, this.searchAbort.signal).then(
-          (r) => { if (!this.disposed) ext.searchReply.updateWithAction({ token, results: r }); },
-          () => { if (!this.disposed) ext.searchReply.updateWithAction({ token, results: [] }); },
+      ext.sideEffect((ext, onRemove) => {
+        this.stopSearch?.();
+        const abort = new AbortController();
+        this.stopSearch = onRemove(() => abort.abort());
+        this.api.search(query, abort.signal).then(
+          (r) => ext.searchReply.updateWithAction({ token, results: r }),
+          () => ext.searchReply.updateWithAction({ token, results: [] }),
         );
       });
     }
@@ -622,20 +625,18 @@ this.behavior()
   .demands(this.armed)
   .runs((ext) => {
     if (ext.armed.justUpdatedTo(true)) {
-      ext.sideEffect(() => {
-        this.timerId = setTimeout(() => {
-          this.timerId = undefined;
-          if (!this.disposed) ext.timeout.updateWithAction();
-        }, 5000);
+      ext.sideEffect((ext, onRemove) => {
+        const timer = setTimeout(() => ext.timeout.updateWithAction(), 5000);
+        this.stopTimer = onRemove(() => clearTimeout(timer));
       });
     } else if (ext.armed.justUpdatedTo(false)) {
-      ext.sideEffect(() => { clearTimeout(this.timerId); this.timerId = undefined; });
+      ext.sideEffect(() => { this.stopTimer?.(); this.stopTimer = undefined; });
     }
   });
 ```
 
 For a repeating tick, a behavior demanding `tick` re-arms in a side effect while the
-condition holds. Always clear timers in teardown.
+condition holds. Register every timer with `onRemove` so removing the extent clears it.
 
 When several rules can arm, disarm, or leave a timer alone in one event, let the deciding
 behavior supply a tri-state: `armFor: State<number | null | undefined>` where a number arms
@@ -704,13 +705,31 @@ rerunning, not just the edge the message lists first.
 
 ### Teardown
 
-After teardown there should be no more output, timers, or requests. Do these in order: set
-a `disposed` flag that every timer and network callback checks; clear every timer you hold;
-cancel every pending request; then
-`root.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes)`. Once an extent is
-removed its behaviors stop running and updates to its resources are ignored, so a late
-callback does nothing inside the graph. The flag and the cancellations keep a late callback
-from doing anything *outside* it, and keep timers from holding the extent in memory.
+After teardown there should be no more output, timers, or requests. Put the cleanup next to
+the code that starts the work: a side effect's second argument, `onRemove`, registers a
+cleanup that runs when the extent is removed.
+
+```ts
+ext.sideEffect((ext, onRemove) => {
+  const timer = setInterval(() => ext.tick.updateWithAction(), 1000);
+  onRemove(() => clearInterval(timer));
+});
+```
+
+Teardown is then one call: `root.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes)`.
+Removed extents' behaviors stop running and updates to their resources are ignored. Each
+removed extent's cleanups run newest first, in a side effect of the removing event. If a side
+effect registers a cleanup after its extent is already gone, the cleanup runs at once.
+
+For work that ends before the extent does (a timer that restarts, a request a newer one
+replaces, a reply that arrived), call the function `onRemove` returns. It runs the cleanup
+now and unregisters it; calling it again does nothing. Without that, every restart leaves one
+more cleanup registered until the extent is removed. The skeleton in section 3 shows both
+cases.
+
+A callback that still arrives after removal, from something you could not cancel, does nothing
+inside the graph, so no `disposed` flag is needed for graph updates. Guard only work the
+callback does outside the graph.
 
 ### Testing
 

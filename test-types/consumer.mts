@@ -4,7 +4,7 @@
 // `npm run build`.
 
 import { Graph, Extent, State, Moment, Resource, Behavior, GraphEvent, Demandable,
-         ExtentRemoveStrategy, RelinkingOrder, LinkType } from "behavior-graph";
+         ExtentRemoveStrategy, RelinkingOrder, LinkType, type OnRemove } from "behavior-graph";
 
 class Item extends Extent {
   done = this.state(false);
@@ -43,6 +43,15 @@ class List extends Extent {
         const before: number = ext.doneCount.traceValue;
         ext.doneCount.update(ext.items.value.filter((i) => i.done.value).length);
         ext.sideEffect((e) => { console.log(before, e.doneCount.value, e.doneCount.justUpdatedFrom(before)); });
+      });
+    this.behavior()
+      .demands(this.ticked)
+      .runs((ext) => {
+        ext.sideEffect((e, onRemove: OnRemove) => {
+          const timer = setTimeout(() => e.addRequested.updateWithAction("later"), 1000);
+          const stop: () => void = onRemove(() => clearTimeout(timer));
+          if (e.items.value.length == 0) stop();
+        });
       });
   }
 }

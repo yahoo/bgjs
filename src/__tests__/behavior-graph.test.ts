@@ -3,7 +3,7 @@
 //
 
 
-import {Behavior, Extent, Graph, GraphEvent, Moment, Resource, State} from '../index.js';
+import {Behavior, Extent, ExtentRemoveStrategy, Graph, GraphEvent, Moment, Resource, State} from '../index.js';
 
 let g: Graph;
 let setupExt: Extent;
@@ -1922,6 +1922,143 @@ describe('Extents', () => {
 
         // |> related subscription will be cancelled
         expect(subscriptionUpdateCount).toBe(0);
+    });
+
+    describe('onRemove cleanups', () => {
+
+        test('run newest first in a side effect of the removing event', () => {
+            // |> Given an extent whose side effect registers two cleanups
+            let ran: string[] = [];
+            let input = ext.moment();
+            ext.behavior()
+                .demands(input)
+                .runs(e => {
+                    e.sideEffect((e, onRemove) => {
+                        onRemove(() => ran.push('first'));
+                        onRemove(() => ran.push('second'));
+                    });
+                });
+            ext.addToGraphWithAction();
+            input.updateWithAction();
+            expect(ran).toEqual([]);
+
+            // |> When it is removed
+            g.action(() => {
+                ext.removeFromGraph();
+                // |> Then nothing runs during the action
+                expect(ran).toEqual([]);
+            });
+
+            // |> And they run newest first once the event reaches side effects
+            expect(ran).toEqual(['second', 'first']);
+        });
+
+        test('returned function runs the cleanup early and only once', () => {
+            let runCount = 0;
+            let stop: (() => void) | null = null;
+            g.action(() => {
+                ext.addToGraph();
+                ext.sideEffect((e, onRemove) => {
+                    stop = onRemove(() => runCount++);
+                });
+            });
+
+            stop!();
+            expect(runCount).toBe(1);
+            stop!();
+            ext.removeFromGraphWithAction();
+            expect(runCount).toBe(1);
+        });
+
+        test('registering on a removed extent runs the cleanup at once', () => {
+            // |> Given a side effect queued before the extent is removed in the same event
+            let ran = false;
+            g.action(() => {
+                ext.addToGraph();
+            });
+            g.action(() => {
+                ext.sideEffect((e, onRemove) => {
+                    // |> When it registers a cleanup after removal
+                    onRemove(() => { ran = true; });
+                    // |> Then the cleanup has already run
+                    expect(ran).toBe(true);
+                });
+                ext.removeFromGraph();
+            });
+            expect(ran).toBe(true);
+        });
+
+        test('contained lifetimes run their cleanups', () => {
+            let ext2 = new Extent(g);
+            ext.addChildLifetime(ext2);
+            let ran: string[] = [];
+            g.action(() => {
+                ext.addToGraph();
+                ext2.addToGraph();
+                ext.sideEffect((e, onRemove) => { onRemove(() => ran.push('parent')); });
+                ext2.sideEffect((e, onRemove) => { onRemove(() => ran.push('child')); });
+            });
+
+            ext.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes);
+
+            expect(ran.sort()).toEqual(['child', 'parent']);
+        });
+
+        test('cleanups registered after a re-add wait for the next removal', () => {
+            let solo = new Extent(g);
+            let ran: string[] = [];
+            g.action(() => {
+                solo.addToGraph();
+                solo.sideEffect((e, onRemove) => { onRemove(() => ran.push('before')); });
+            });
+
+            // |> When the extent is removed and added again in one event, then registers a cleanup
+            g.action(() => {
+                solo.removeFromGraph();
+                solo.addToGraph();
+                solo.sideEffect((e, onRemove) => { onRemove(() => ran.push('after')); });
+            });
+
+            // |> Then only the cleanup from before the removal has run
+            expect(ran).toEqual(['before']);
+            solo.removeFromGraphWithAction();
+            expect(ran).toEqual(['before', 'after']);
+        });
+
+        test('removing from inside a side effect still runs cleanups', () => {
+            let ran = false;
+            g.action(() => {
+                ext.addToGraph();
+                ext.sideEffect((e, onRemove) => { onRemove(() => { ran = true; }); });
+            });
+
+            g.action(() => {
+                ext.sideEffect(e => {
+                    e.removeFromGraph();
+                });
+            });
+
+            expect(ran).toBe(true);
+        });
+
+        test('extent subscriptions end through the same cleanups', () => {
+            let sr1 = ext.state<number>(0);
+            let ext2 = new Extent(g);
+            ext.addChildLifetime(ext2);
+            ext2.subscribeToJustUpdated([sr1], () => {});
+            let ran = false;
+            g.action(() => {
+                ext.addToGraph();
+                ext2.addToGraph();
+                ext2.sideEffect((e, onRemove) => { onRemove(() => { ran = true; }); });
+            });
+            expect(sr1.didUpdateSubscribers!.size).toBe(1);
+
+            ext2.removeFromGraphWithAction();
+
+            expect(sr1.didUpdateSubscribers!.size).toBe(0);
+            expect(ran).toBe(true);
+        });
     });
 
     describe('Checks', () => {

@@ -6,7 +6,7 @@
 import {cycleMessage, demandNotAddedMessage, lifetimeMessage, removedDemandMessage, removedSupplyMessage} from "./errors.js";
 import {BufferedPriorityQueue} from "./bufferedqueue.js";
 import {Behavior} from "./behavior.js";
-import {Extent} from "./extent.js";
+import {Extent, takeRemovalCleanups} from "./extent.js";
 import {Demandable, Resource} from "./resource.js";
 import {DateProvider, GraphEvent, LinkType, OrderingState, Subscription, Transient} from "./common.js";
 
@@ -872,7 +872,12 @@ export class Graph {
             for (let behavior of extent.behaviors) {
                 this.removeBehavior(behavior, this.currentEvent.sequence);
             }
-            extent.unsubscribeAll();
+            let cleanups = takeRemovalCleanups(extent);
+            if (cleanups != null) {
+                // pushed directly rather than through sideEffectHelper, which refuses
+                // while side effects are running
+                this.effects.push({block: cleanups, extent: extent, behavior: this.currentBehavior, debugName: "removal cleanups"});
+            }
             extent.addedToGraphWhen = null;
             extent.removedFromGraphWhen = this.currentEvent.sequence;
             // same private access hack as addExtent to skip integrity checks
