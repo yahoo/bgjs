@@ -111,7 +111,7 @@ class Graph {
   dateProvider: { now(): Date };     // stamps events; replace it to control time in tests
   validateLifetimes: boolean;        // default true; see lifetimes below
   validateTraceDemands: boolean;     // default true: traceValue needs a demand or .trace
-  validateMomentReads: boolean;      // default false; turn it on: moment.value throws when the moment did not update in this event
+  validateMomentReads: boolean;      // default true: moment.value throws unless the moment updated in this event
   debugHere(): string;               // text dump of current event/behavior
   subscribeToJustUpdated(resources: Resource[], callback: () => void): () => void;
 }
@@ -209,10 +209,10 @@ class Resource {
 }
 
 class Moment<T = undefined> extends Resource {
-  update(value?: T): void;                          // inside action or supplying behavior
-  updateWithAction(value?: T, debugName?: string): void;  // wraps update in graph.action
+  update(value: T): void;                           // inside action or supplying behavior; value optional only if T allows undefined
+  updateWithAction(value: T, debugName?: string): void;   // wraps update in graph.action
   get justUpdated(): boolean;                       // true only during the event it fired
-  get value(): T | undefined;                       // payload; check justUpdated first (undefined, or a throw with validateMomentReads)
+  get value(): T;                                   // payload; read only when justUpdated (throws otherwise)
   get event(): GraphEvent | null;                   // when it last fired
   justUpdatedTo(value: T): boolean;                 // justUpdated && payload === value
 }
@@ -381,7 +381,6 @@ class Counter extends Extent {
 }
 
 const graph = new Graph();
-graph.validateMomentReads = true;   // a stale moment.value read throws instead of returning undefined
 const counter = new Counter(graph, {
   fetchGreeting: (n) => fetch(`/greeting?n=${n}`).then((r) => r.text()),
   render: (view) => { /* update the DOM, or hand the view to your UI framework */ },
@@ -479,7 +478,7 @@ this.behavior()
   .supplies(this.count)
   .runs((ext) => {
     if (ext.resetRequested.justUpdated) ext.count.update(0);
-    else if (ext.setRequested.justUpdated) ext.count.update(ext.setRequested.value!);
+    else if (ext.setRequested.justUpdated) ext.count.update(ext.setRequested.value);
     else if (ext.incrementRequested.justUpdated) ext.count.update(ext.count.value + 1);
   });
 ```
@@ -518,7 +517,7 @@ this.behavior()
   .runs((ext) => {
     if (ext.searchRequested.justUpdated) {
       const token = ++this.tokenCounter;
-      const query = ext.searchRequested.value!;
+      const query = ext.searchRequested.value;
       ext.searchToken.update(token);
       ext.sideEffect(() => {
         this.searchAbort?.abort();
@@ -569,7 +568,7 @@ class List extends Extent {
       .supplies(this.items)
       .runs((ext) => {
         if (ext.addRequested.justUpdated) {
-          const item = new Item(ext.graph, ext.addRequested.value!);
+          const item = new Item(ext.graph, ext.addRequested.value);
           ext.addChildLifetime(item);
           item.addToGraph();
           ext.items.update([...ext.items.value, item]);
@@ -827,13 +826,14 @@ check `ext.addedToGraph.justUpdated`.
 
 **Reading a moment's value without checking `justUpdated`.**
 A behavior that demands a moment and something else also runs when only the other demand
-updates. The moment's `value` is then `undefined`, so `ext.reply.value!.text` throws a
-`TypeError`, and `ext.reply.value ?? 0` quietly uses the fallback. With
-`graph.validateMomentReads = true` the read throws `Error: Cannot read "reply.value" here:
+updates. Reading the moment's `value` then throws `Error: Cannot read "reply.value" here:
 reply did not update in this event, so it has no value (it last updated in event 2; this is
-event 3). ...` instead (`err.resource`). Wrong: `const reply = ext.reply.value!;`. Right:
-`if (ext.reply.justUpdated) { const reply = ext.reply.value!; ... }`, or copy the payload into
-a state if later events need it.
+event 3). ...` (`err.resource`). Reading it outside any event (after the action, in a promise
+callback) throws the same way. `value` is typed `T`, so tsc does not catch this. Wrong:
+`const reply = ext.reply.value;` or `ext.reply.value ?? 0`. Right: `if
+(ext.reply.justUpdated) { const reply = ext.reply.value; ... }`, or
+`ext.reply.justUpdated ? ext.reply.value : 0`, or copy the payload into a state if later
+events need it.
 
 **`State.update` with an equal value does nothing.** Repeating the same value produces no
 `justUpdated`, so no downstream behavior and no output. Use a `Moment` for "this happened

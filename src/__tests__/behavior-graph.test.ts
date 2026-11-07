@@ -545,8 +545,8 @@ describe('Moment Resource', () => {
         expect(afterUpdate).toBe(1);
         expect(updatedToOne).toBeTruthy();
 
-        // but is transient outside event
-        expect(mr1.value).toBeUndefined();
+        // but is transient: reading it outside the event throws
+        expect(() => mr1.value).toThrow(/mr1\.value/);
     });
 
     test('non-supplied moment can happen when adding', () => {
@@ -628,6 +628,8 @@ describe('Moment Resource', () => {
         });
 
         test('cannot access value inside behavior if not supply or demand', () => {
+            // only the demand/supply check: reads here are outside the moments' events on purpose
+            g.validateMomentReads = false;
             let mr1 = ext.moment();
             let mr2 = ext.moment();
             let mr3 = ext.moment();
@@ -1640,7 +1642,7 @@ describe('dynamic graph changes', () => {
                 this.children = this.state<Child[]>([], 'children');
                 // membership: activate the existing children, then add new ones and remove absent ones
                 this.behavior().demands(this.desired).supplies(this.children, this.assign).runs(e => {
-                    let want = e.desired.value!;
+                    let want = e.desired.value;
                     let current = e.children.value;
                     e.assign.update();
                     let fresh = want.filter(id => !current.some(c => c.id == id)).map(id => {

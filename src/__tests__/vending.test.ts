@@ -49,7 +49,7 @@ describe('Version 2: No Free Soda', () => {
                 let coins = extent.coinsTotal.value;
 
                 if (extent.insertCoinsAction.justUpdated) {
-                    coins += extent.insertCoinsAction.value!;
+                    coins += extent.insertCoinsAction.value;
                 }
 
                 if (extent.buttonAction.justUpdated) {
@@ -131,10 +131,10 @@ describe('Version 3: Cans', () => {
                 let cans = extent.cansTotal.value;
 
                 if (extent.insertCoinsAction.justUpdated) {
-                    coins += extent.insertCoinsAction.value!;
+                    coins += extent.insertCoinsAction.value;
                 }
                 if (extent.restockAction.justUpdated) {
-                    cans += extent.restockAction.value!;
+                    cans += extent.restockAction.value;
                 }
                 if (extent.buttonAction.justUpdated) {
                     if (coins >= extent.SODA_PRICE && cans > 0) {
@@ -244,8 +244,8 @@ describe('Version 4: Vending State', () => {
                     let coins = extent.coinsTotal.value;
                     let cans = extent.cansTotal.value;
 
-                    coins += extent.insertCoinsAction.value ?? 0;
-                    cans += extent.restockAction.value ?? 0;
+                    coins += extent.insertCoinsAction.justUpdated ? extent.insertCoinsAction.value : 0;
+                    cans += extent.restockAction.justUpdated ? extent.restockAction.value : 0;
 
                     if (extent.completeVendAction.justUpdated) {
                         coins -= extent.SODA_PRICE;
@@ -388,7 +388,7 @@ describe('Version 5: Jammed', () => {
                     let cans = extent.cansTotal.value;
 
                     if (extent.insertCoinsAction.justUpdated) {
-                        let inserted = extent.insertCoinsAction.value!;
+                        let inserted = extent.insertCoinsAction.value;
                         if (extent.jammed.traceValue) {
                             extent.sideEffect((extent) => {
                                 extent.coinsReturned = inserted;
@@ -399,7 +399,7 @@ describe('Version 5: Jammed', () => {
                     }
 
                     if (extent.restockAction.justUpdated) {
-                        cans += extent.restockAction.value!;
+                        cans += extent.restockAction.value;
                     }
 
                     if (extent.completeVendAction.justUpdated) {

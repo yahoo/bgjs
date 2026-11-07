@@ -29,7 +29,7 @@ class List extends Extent {
       .supplies(this.items, this.ticked)
       .runs((ext) => {
         if (ext.addRequested.justUpdated) {
-          const item = new Item(ext.graph, ext.addRequested.value!);
+          const item = new Item(ext.graph, ext.addRequested.value);
           ext.addChildLifetime(item);
           item.addToGraph();
           ext.items.update([...ext.items.value, item]);
@@ -67,3 +67,13 @@ const state: State<number> = list.doneCount;
 const unsubscribe: () => void = graph.subscribeToJustUpdated([list.items], () => {});
 const text: string = graph.debugHere() + behavior.toString() + RelinkingOrder.relinkingOrderSubsequent;
 list.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes);
+
+// Moment payloads: value is T, and update needs a value unless T allows undefined.
+graph.validateMomentReads = true;
+const payload: string = graph.lastEvent.sequence > 0 ? list.addRequested.value : "";
+const sendPayload = () => list.addRequested.updateWithAction("a", "add a");
+// @ts-expect-error a moment with a string payload needs a value
+const missingPayload = () => list.addRequested.updateWithAction();
+const optional = new Item(graph, "x").moment<number | undefined>();
+const sendOptional = () => optional.updateWithAction();
+const sendBare = () => new Item(graph, "y").toggle.updateWithAction();
