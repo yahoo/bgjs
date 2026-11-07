@@ -1664,15 +1664,19 @@ describe('dynamic graph changes', () => {
                     });
             }
         }
-        let parent = new Parent(g);
-        parent.addToGraphWithAction();
-        parent.desired.updateWithAction(['a', 'b']);
+        // the bug needs the removed child to pop after the kept one, and same-order pop order is
+        // a queue detail, so remove each child in turn
+        for (let kept of ['a', 'b']) {
+            let parent = new Parent(g);
+            parent.addToGraphWithAction();
+            parent.desired.updateWithAction(['a', 'b']);
 
-        // |> When an event removes an activated child and adds a new one
-        parent.desired.updateWithAction(['a', 'c']);
+            // |> When an event removes an activated child and adds a new one
+            parent.desired.updateWithAction([kept, 'c']);
 
-        // |> Then the aggregate runs with links to the new children
-        expect(parent.seen).toEqual(['g-a', 'g-c']);
+            // |> Then the aggregate runs with links to the new children
+            expect(parent.seen).toEqual(['g-' + kept, 'g-c']);
+        }
     });
 
     test('can relink dynamicSupplies after a behavior runs', () => {

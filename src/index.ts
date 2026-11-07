@@ -10,7 +10,8 @@ export {
 export {
     Resource,
     Moment,
-    State
+    State,
+    type Demandable
 } from "./resource.js"
 
 export {
@@ -19,7 +20,8 @@ export {
 } from "./extent.js"
 
 export {
-    Behavior
+    Behavior,
+    BehaviorBuilder
 } from "./behavior.js"
 
 export {
