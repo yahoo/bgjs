@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **`justUpdatedTo`, `justUpdatedFrom` and `justUpdatedToFrom` compare with `===`.** They
+  used `==` while `update` uses `===`, so `state.justUpdatedTo(null)` was true after an
+  update to `undefined`, and `justUpdatedTo(1)` was true after an update to `"1"`. To upgrade,
+  pass a value of the same type as the state or moment; code that relied on `null` matching
+  `undefined` should check for both.
+
+### Added
+
+- **`graph.validateMomentReads`** (default `false`). When on, reading `moment.value` during an
+  event in which the moment did not update throws an error that names the moment and says to
+  check `justUpdated` first, instead of returning `undefined` as if it were an empty payload.
+  Off by default because existing code reads the value before checking `justUpdated` (for
+  example `moment.value ?? 0`); turn it on in new code. Reads outside any event still return
+  `undefined`.
+
 ## 2.0.0 (2026-10-08)
 
 ### Breaking changes
