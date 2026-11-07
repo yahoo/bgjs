@@ -115,6 +115,22 @@ class ExtentLifetime {
     }
 }
 
+/**
+ * @internal
+ * Whether `target` lives inside `from`'s lifetime: a child, grandchild, ... added with
+ * addChildLifetime. Lifetime errors use it to tell a parent linking statically to its child.
+ */
+export function isChildLifetime(from: Extent, target: Extent): boolean {
+    let lifetime = target.lifetime?.parent ?? null;
+    while (from.lifetime != null && lifetime != null) {
+        if (lifetime === from.lifetime) {
+            return true;
+        }
+        lifetime = lifetime.parent;
+    }
+    return false;
+}
+
 // The values Extent's constructor gave its own fields, so addToGraph can tell when a subclass field replaced one.
 const originalFields = new WeakMap<Extent, {[name: string]: unknown}>();
 let extentMethodNames: string[] | null = null;

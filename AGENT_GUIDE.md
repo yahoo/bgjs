@@ -853,9 +853,12 @@ extent's resources throws `Error: All demands must be added to the graph.` Also
 action; use `addToGraphWithAction()` at setup, plain `addToGraph()` inside behaviors.
 
 **Static demand across extents without a lifetime relation.**
-`Error: Static demands can only be with extents with the unified or parent lifetimes.`
-(or the same with `supplies`). Right: parent calls `addChildLifetime(child)` before adding
-it, and the parent reaches child resources only through `dynamicDemands`.
+`Error: The behavior in Item that supplies [...] and demands [...] statically demands "filter"
+of List. ... Fix: before Item is added to the graph, call list.addChildLifetime(item) ...`
+(or `statically supplies`). The message names both extents and the call. Right: parent calls
+`addChildLifetime(child)` before adding it. When the parent is the one demanding, the error
+says the target is a child lifetime: a parent reaches child resources only through
+`dynamicDemands`.
 
 **Removing a child but leaving a demand on it.**
 `Error: Remaining behaviors must remove dynamicDemands to removed resources.` Right: update
