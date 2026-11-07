@@ -3,7 +3,7 @@
 //
 
 
-import {cycleMessage, demandNotAddedMessage, lifetimeMessage, removedDemandMessage, removedSupplyMessage} from "./errors.js";
+import {afterNestedActionWarning, cycleMessage, demandNotAddedMessage, droppedNestedActionMessage, lifetimeMessage, removedDemandMessage, removedSupplyMessage, sideEffectAfterNestedActionMessage} from "./errors.js";
 import {BufferedPriorityQueue} from "./bufferedqueue.js";
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
@@ -26,6 +26,23 @@ interface Action {
     extent: Extent | null;
     resolve: ((value: any) => void) | null;
     debugName?: string;
+    // set when the event loop opens this action's event
+    started?: boolean;
+}
+
+// One running side effect block. Side effects nest when one starts a synchronous action: the
+// nested event loop runs inside the block, so frames form a stack.
+/** @internal */
+export interface EffectFrame {
+    effect: SideEffect;
+    event: GraphEvent;
+    // true once a synchronous action started by this block has returned; the rest of the block
+    // then runs outside any event
+    resumed: boolean;
+    warned: boolean;
+    // an error from finishing this frame's event, raised inside an action this block started;
+    // rethrown by the loop that runs the block so the block cannot swallow it
+    pendingError: any;
 }
 
 const DefaultDateProvider = {
@@ -85,6 +102,15 @@ export class Graph {
     validateTraceDemands: boolean = true;
     /** @internal */
     justUpdatedCallbacks: Set<Subscription> = new Set();
+    /** @internal */
+    effectFrames: EffectFrame[] = [];
+    /**
+     * Receives each warning's text. Warnings report code that runs but is probably wrong, such as
+     * a side effect that keeps touching the graph after a synchronous action it started has
+     * returned. Defaults to `console.warn`; replace it to collect warnings, or set it to null to
+     * silence them.
+     */
+    onWarning: ((message: string) => void) | null = (message) => console.warn(message);
 
     constructor() {
        this.lastEvent = GraphEvent.initialEvent;
@@ -106,8 +132,33 @@ export class Graph {
             let err: any = new Error("Action cannot be created directly inside another action or behavior. Consider wrapping it in a side effect block.");
             throw err;
         }
+        this.noteAfterNestedAction("it started another action");
         this.actions.push(action);
-        this.eventLoop();
+        let frame = this.eventLoopState?.phase == EventLoopPhase.sideEffects ? this.effectFrames[this.effectFrames.length - 1] : undefined;
+        if (frame === undefined) {
+            this.eventLoop();
+            return;
+        }
+        // Started from a side effect. The nested loop first finishes the side effect's event
+        // (its remaining side effects), then any queued actions, then this one, and returns once
+        // all have completed, so the caller sees a synchronous action.
+        try {
+            this.eventLoop();
+        } catch (error) {
+            if (action.started) {
+                // this action's own event failed: the caller's error to handle
+                throw error;
+            }
+            // Something before this action failed, most often another side effect of the
+            // caller's event. Tell the caller its action was dropped, and keep the original for
+            // the loop running the caller's block, so catching this cannot hide it.
+            frame.pendingError = error;
+            let err: any = new Error(droppedNestedActionMessage(frame.effect, frame.event, error));
+            err.cause = error;
+            throw err;
+        } finally {
+            frame.resumed = true;
+        }
     }
 
     /**
@@ -128,6 +179,7 @@ export class Graph {
                     throw err;
                 }
                 action.resolve = resolve;
+                this.noteAfterNestedAction("it started another action");
                 this.actions.push(action);
                 if (this.currentEvent == null) {
                     this.eventLoop();
@@ -181,7 +233,19 @@ export class Graph {
                 if (effect) {
                     this.eventLoopState!.phase = EventLoopPhase.sideEffects;
                     this.eventLoopState!.currentSideEffect = effect;
-                    effect.block(effect.extent);
+                    let frame: EffectFrame = {effect: effect, event: this.currentEvent!, resumed: false, warned: false, pendingError: null};
+                    this.effectFrames.push(frame);
+                    try {
+                        effect.block(effect.extent);
+                    } catch (error) {
+                        throw frame.pendingError ?? error;
+                    } finally {
+                        this.effectFrames.pop();
+                    }
+                    if (frame.pendingError != null) {
+                        // the block caught the report that its action was dropped
+                        throw frame.pendingError;
+                    }
                     if (this.eventLoopState != null) {
                         // side effect could create a synchronous action which would create a nested event loop
                         // which would clear out any existing event loop states
@@ -207,6 +271,7 @@ export class Graph {
                     this.currentEvent = newEvent;
                     this.eventLoopState = new EventLoopState(action);
                     this.eventLoopState.phase = EventLoopPhase.action;
+                    action.started = true;
                     action.block(action.extent);
                     continue;
                 }
@@ -403,6 +468,11 @@ export class Graph {
 
     /** @internal */
     sideEffectHelper(sideEffect: SideEffect) {
+        let resumed = this.resumedEffectFrame();
+        if (resumed != null) {
+            let err: any = new Error(sideEffectAfterNestedActionMessage(resumed.effect, resumed.event));
+            throw err;
+        }
         if (this.currentEvent == null) {
             let err: any = new Error("Effects can only be added during an event.");
             throw err;
@@ -412,6 +482,26 @@ export class Graph {
         } else {
             this.effects.push(sideEffect);
         }
+    }
+
+    // The running side effect block, if a synchronous action it started has returned, so code
+    // running now is the rest of that block, outside any event.
+    private resumedEffectFrame(): EffectFrame | null {
+        if (this.currentEvent != null) {
+            return null;
+        }
+        let frame = this.effectFrames[this.effectFrames.length - 1];
+        return frame?.resumed ? frame : null;
+    }
+
+    /** @internal Warns, once per side effect run, about graph use after its nested action returned. */
+    noteAfterNestedAction(what: string) {
+        let frame = this.resumedEffectFrame();
+        if (frame == null || frame.warned) {
+            return;
+        }
+        frame.warned = true;
+        this.onWarning?.(afterNestedActionWarning(frame.effect, frame.event, this.lastEvent, what));
     }
 
     /** Text describing the current event: its sequence, the resources its action updated, and the current behavior. */

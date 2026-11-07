@@ -199,3 +199,42 @@ export function shadowedMemberMessage(extent: any, name: string, isMethod: boole
     return `${extentName(extent)} has a field named "${name}", which hides Extent's own ${isMethod ? "method" : "field"} "${name}", so ${use} no longer works on it. ` +
         `Fix: rename the field (for example to ${name == "state" ? `"phase", "status" or ` : ""}"${name}Value").`;
 }
+
+interface SideEffectLike {
+    debugName?: string;
+    extent: any;
+    behavior: Behavior | null;
+}
+
+/** `side effect "render" of Player (queued by the behavior in Player that supplies [...] ...)` */
+function describeSideEffect(effect: SideEffectLike): string {
+    let name = effect.debugName != null ? `side effect "${effect.debugName}"` : "a side effect";
+    let of = effect.extent != null ? ` of ${extentName(effect.extent)}` : "";
+    let by = effect.behavior != null ? ` (queued by ${describeBehavior(effect.behavior)})` : "";
+    return name + of + by;
+}
+
+function eventsAfter(event: {sequence: number}, last: {sequence: number}): string {
+    return last.sequence > event.sequence + 1 ? `events ${event.sequence + 1} to ${last.sequence}` : `event ${last.sequence}`;
+}
+
+export function droppedNestedActionMessage(effect: SideEffectLike, event: {sequence: number}, error: any): string {
+    let n = event.sequence;
+    let original = error?.message ?? String(error);
+    return `This action never ran. ${capitalize(describeSideEffect(effect))} started it synchronously during event ${n}, so the rest of event ${n} (its remaining side effects) and any queued actions had to finish first, and that failed: "${original}". ` +
+        `The graph discarded the rest of that work and every queued action. The action that opened event ${n} rethrows the original error (err.cause here) even if this one is caught. ` +
+        `Fix the original error; this one only reports that the action started here was dropped.`;
+}
+
+export function sideEffectAfterNestedActionMessage(effect: SideEffectLike, event: {sequence: number}): string {
+    let n = event.sequence;
+    return `Cannot queue a side effect here: ${describeSideEffect(effect)} started a synchronous action during event ${n}. That finished event ${n} and ran the new event to completion before the call returned, so the rest of the side effect runs outside any event. ` +
+        `Fix: queue the side effect from a behavior, or make the action the last thing the side effect does.`;
+}
+
+export function afterNestedActionWarning(effect: SideEffectLike, event: {sequence: number}, last: {sequence: number}, what: string): string {
+    let n = event.sequence;
+    return `Behavior Graph warning: ${describeSideEffect(effect)} started a synchronous action during event ${n}, and ${what} after that action returned. ` +
+        `A synchronous action completes before it returns, so event ${n} and ${eventsAfter(event, last)} had already finished, and the rest of the side effect runs outside any event: moments read undefined, justUpdated is false, and states hold their values after event ${last.sequence}. ` +
+        `Fix: make the action the last thing the side effect does (call client callbacks last), or read what you need before starting it.`;
+}

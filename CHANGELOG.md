@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- **An error from one side effect can no longer be swallowed by another.** When a side effect
+  started a synchronous action, the rest of its event ran inside that call, so an error from a
+  later side effect surfaced there: a `try`/`catch` around the call hid it, the rest of the event
+  was dropped, and the opening action returned normally. Now the call throws "This action never
+  ran ..." with the original error as `err.cause`, and the action that opened the event rethrows
+  the original even if that is caught. An error from the started action's own event still
+  reaches the caller unchanged.
+
+### Additions
+
+- **Warning when a side effect touches the graph after a synchronous action it started has
+  returned.** That code runs outside any event, after the new event has completed, so moments
+  read `undefined` and `justUpdated` is false. Reading a resource or starting another action there
+  calls `graph.onWarning` once per side effect run, naming the side effect and the events.
+  `onWarning` defaults to `console.warn`; set it to `null` to silence it. Queuing a side effect
+  there throws, as before, with a message that explains why. The order of events is unchanged:
+  the caller still sees a synchronous action.
+
 ## 2.0.0 (2026-10-08)
 
 ### Breaking changes

@@ -451,3 +451,63 @@ describe('builder and extent mistakes', () => {
         expect(msg).toContain('field named "graph"');
     });
 });
+
+describe('synchronous action inside a side effect', () => {
+    class Feed extends Extent {
+        go = this.moment();
+        ping = this.moment();
+        constructor(g: Graph, a: (ext: Feed) => void, b: (ext: Feed) => void) {
+            super(g);
+            this.behavior().demands(this.go).runs(ext => {
+                ext.sideEffect(a, 'notifyClient');
+                ext.sideEffect(b, 'render');
+            });
+        }
+    }
+
+    test('a dropped action names the side effect that started it and carries the cause', () => {
+        let g = new Graph();
+        let caught: any = null;
+        let feed = new Feed(g, ext => {
+            try { ext.ping.updateWithAction(); } catch (e) { caught = e; }
+        }, () => { throw new Error('render broke'); });
+        feed.addToGraphWithAction();
+        expect(() => feed.go.updateWithAction()).toThrow('render broke');
+        expectApisExist(caught.message);
+        expect(caught.message).toContain('Side effect "notifyClient" of Feed');
+        expect(caught.message).toContain('event 2');
+        expect(caught.message).toContain('"render broke"');
+        expect(caught.cause.message).toBe('render broke');
+    });
+
+    test('queuing a side effect after the action returned names the side effect', () => {
+        let g = new Graph();
+        let caught: any = null;
+        let feed = new Feed(g, ext => {
+            ext.ping.updateWithAction();
+            try { ext.sideEffect(() => {}); } catch (e) { caught = e; }
+        }, () => {});
+        feed.addToGraphWithAction();
+        feed.go.updateWithAction();
+        expectApisExist(caught.message);
+        expect(caught.message).toContain('side effect "notifyClient" of Feed');
+        expect(caught.message).toContain('event 2');
+    });
+
+    test('the warning names the side effect, the resource read and the events', () => {
+        let g = new Graph();
+        let warnings: string[] = [];
+        g.onWarning = m => warnings.push(m);
+        let feed = new Feed(g, ext => {
+            ext.ping.updateWithAction();
+            ext.go.justUpdated;
+        }, () => {});
+        feed.addToGraphWithAction();
+        feed.go.updateWithAction();
+        expect(warnings.length).toBe(1);
+        expectApisExist(warnings[0]);
+        expect(warnings[0]).toContain('side effect "notifyClient" of Feed');
+        expect(warnings[0]).toContain('read "go"');
+        expect(warnings[0]).toContain('event 2 and event 3');
+    });
+});
