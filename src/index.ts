@@ -32,3 +32,17 @@ export {
     ResourceType,
     type DateProvider
 } from "./common.js"
+export {
+    explore,
+    replayExplore,
+    exploreTouch,
+    type ExploreAction,
+    type ExploreCheck,
+    type ExploreOptions,
+    type ExploreResult,
+    type ExploreStats,
+    type ExploreStep,
+    type Counterexample,
+    type CheckContext,
+    type Provenance
+} from "./explore.js"

@@ -54,6 +54,17 @@ export class GraphEvent {
     }
 }
 
+/**
+ * @internal Watches a graph's reads, writes and structure changes. Set by `explore()` while it
+ * runs (`graph._observer`); null otherwise, so the hooks cost one null check.
+ */
+export interface GraphObserver {
+    read(resource: any): void;
+    write(resource: any): void;
+    behaviorRan(behavior: any): void;
+    structureChanged(): void;
+}
+
 /** Internal: resources that reset at the end of an event. */
 export interface Transient {
     clear(): void;

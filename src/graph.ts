@@ -8,7 +8,7 @@ import {BufferedPriorityQueue} from "./bufferedqueue.js";
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
 import {Demandable, Resource} from "./resource.js";
-import {DateProvider, GraphEvent, LinkType, OrderingState, Subscription, Transient} from "./common.js";
+import {DateProvider, GraphEvent, GraphObserver, LinkType, OrderingState, Subscription, Transient} from "./common.js";
 
 interface StateInternal<T> {
     _updateForce(newValue: T): void;
@@ -85,9 +85,16 @@ export class Graph {
     validateTraceDemands: boolean = true;
     /** @internal */
     justUpdatedCallbacks: Set<Subscription> = new Set();
+    /** @internal The extents currently in this graph, in the order they were added. Used by `explore()`. */
+    extents: Set<Extent> = new Set();
+    /** @internal Set by `explore()` while it runs a step; null otherwise. */
+    _observer: GraphObserver | null = null;
+    /** @internal Called with every new graph while `explore()` builds a system; null otherwise. */
+    static _onCreate: ((graph: Graph) => void) | null = null;
 
     constructor() {
        this.lastEvent = GraphEvent.initialEvent;
+       Graph._onCreate?.(this);
     }
 
     /**
@@ -310,6 +317,7 @@ export class Graph {
 
     /** @internal */
     resourceTouched(resource: Resource) {
+        this._observer?.write(resource);
         if (this.currentEvent != null) {
             if (this.eventLoopState != null && this.eventLoopState.phase == EventLoopPhase.action) {
                 this.eventLoopState.actionUpdates.push(resource);
@@ -346,6 +354,7 @@ export class Graph {
                 continue;
             }
             this.currentBehavior = nextBehavior;
+            this._observer?.behaviorRan(nextBehavior);
             nextBehavior.block(nextBehavior.extent);
             this.currentBehavior = null;
             ranOrder = nextBehavior.order;
@@ -761,6 +770,7 @@ export class Graph {
         }
         behavior.untrackedDynamicDemands = newDemands;
         this.modifiedDemandBehaviors.push(behavior);
+        this._observer?.structureChanged();
     }
 
     /** @internal */
@@ -776,6 +786,7 @@ export class Graph {
         }
         behavior.untrackedDynamicSupplies = newSupplies;
         this.modifiedSupplyBehaviors.push(behavior);
+        this._observer?.structureChanged();
     }
 
 
@@ -853,6 +864,8 @@ export class Graph {
         extent.addedToGraphWhen = this.currentEvent.sequence;
         extent.removedFromGraphWhen = null;
         this.extentsAdded.push(extent);
+        this.extents.add(extent);
+        this._observer?.structureChanged();
         // this casting below is a hack to get at the private method so we can skip integrity checks which
         // allow us to update addedToGraph from inside whatever behavior or action it is added
         (extent.addedToGraph as unknown as StateInternal<boolean>)._updateForce(true);
@@ -869,6 +882,8 @@ export class Graph {
             throw err;
         } else {
             this.extentsRemoved.push(extent);
+            this.extents.delete(extent);
+            this._observer?.structureChanged();
             for (let behavior of extent.behaviors) {
                 this.removeBehavior(behavior, this.currentEvent.sequence);
             }

@@ -106,6 +106,7 @@ export class Resource implements Demandable {
     /** @internal */
     assertValidAccessor() {
         let graph = this.graph;
+        graph._observer?.read(this);
         let currentBehavior = graph.currentBehavior;
 
         if (currentBehavior != null && currentBehavior != this.suppliedBy && !currentBehavior.demands?.has(this)) {
@@ -317,6 +318,7 @@ export class State<T> extends Resource implements Transient {
     // this state, or one that declares this.trace in its demands.
     /** @internal */
     assertValidTraceAccessor() {
+        this.graph._observer?.read(this);
         let currentBehavior = this.graph.currentBehavior;
         if (currentBehavior != null && this.graph.validateTraceDemands && currentBehavior != this.suppliedBy &&
             !currentBehavior.demands?.has(this) && !currentBehavior.traceDemands?.has(this)) {
