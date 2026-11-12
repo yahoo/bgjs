@@ -83,6 +83,13 @@ export class Graph {
      * set it to false to run 1.x code that reads traceValue without declaring it while migrating.
      */
     validateTraceDemands: boolean = true;
+    /**
+     * When true, reading `moment.value` during an event in which the moment did not update
+     * throws, instead of returning `undefined` as if it were an empty payload. Off by default
+     * because 1.x and 2.0 code may read the value before checking `justUpdated`; turn it on in
+     * new code.
+     */
+    validateMomentReads: boolean = false;
     /** @internal */
     justUpdatedCallbacks: Set<Subscription> = new Set();
 

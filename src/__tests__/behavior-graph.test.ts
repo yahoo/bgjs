@@ -3139,3 +3139,44 @@ describe('Effects, Actions, Events', () => {
     });
 });
 
+
+describe('justUpdatedTo and justUpdatedFrom compare with ===, like update', () => {
+    test('state', () => {
+        let g = new Graph();
+        let ext = new Extent(g);
+        let s = ext.state<number | null | undefined>(undefined);
+        ext.addToGraphWithAction();
+        let results: boolean[] = [];
+        g.action(() => {
+            s.update(null);
+            results.push(s.justUpdatedTo(undefined), s.justUpdatedFrom(null), s.justUpdatedTo(null), s.justUpdatedFrom(undefined));
+        });
+        expect(results).toEqual([false, false, true, true]);
+    });
+
+    test('state with values that are == but not ===', () => {
+        let g = new Graph();
+        let ext = new Extent(g);
+        let s = ext.state<any>(0);
+        ext.addToGraphWithAction();
+        let results: boolean[] = [];
+        g.action(() => {
+            s.update("1");
+            results.push(s.justUpdatedTo(1), s.justUpdatedFrom(""), s.justUpdatedTo("1"), s.justUpdatedFrom(0));
+        });
+        expect(results).toEqual([false, false, true, true]);
+    });
+
+    test('moment', () => {
+        let g = new Graph();
+        let ext = new Extent(g);
+        let m = ext.moment<number | null>();
+        ext.addToGraphWithAction();
+        let results: boolean[] = [];
+        g.action(() => {
+            m.update(null);
+            results.push(m.justUpdatedTo(undefined as any), m.justUpdatedTo(null));
+        });
+        expect(results).toEqual([false, true]);
+    });
+});

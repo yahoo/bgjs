@@ -4,7 +4,7 @@
 
 It suits code where user input, timers and async replies interact with shared state: UI controllers, media players, download managers, device and robot control, and agent harnesses. It works alongside existing UI frameworks; it is not a rendering library and not a stream-processing library. Mistakes such as undeclared reads, two writers for one value, dependency cycles and updates from the wrong place throw errors that name the resources involved and say what to change.
 
-Install with `npm install behavior-graph`. Coding agents should read the agent guide before writing code. Leave the graph's checks on (`validateLifetimes` and `validateTraceDemands` are on by default), keep effects inside `ext.sideEffect(...)`, and fix the cause of any error the library throws rather than catching it.
+Install with `npm install behavior-graph`. Coding agents should read the agent guide before writing code. Leave the graph's checks on (`validateLifetimes` and `validateTraceDemands` are on by default; also set `graph.validateMomentReads = true`), keep effects inside `ext.sideEffect(...)`, and fix the cause of any error the library throws rather than catching it.
 
 ## Docs
 
