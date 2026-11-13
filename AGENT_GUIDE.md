@@ -111,6 +111,7 @@ class Graph {
   dateProvider: { now(): Date };     // stamps events; replace it to control time in tests
   validateLifetimes: boolean;        // default true; see lifetimes below
   validateTraceDemands: boolean;     // default true: traceValue needs a demand or .trace
+  validateMomentReads: boolean;      // default false; turn it on: moment.value throws when the moment did not update in this event
   debugHere(): string;               // text dump of current event/behavior
   subscribeToJustUpdated(resources: Resource[], callback: () => void): () => void;
 }
@@ -220,9 +221,9 @@ class Moment<T = undefined> extends Resource {
   update(value?: T): void;                          // inside action or supplying behavior
   updateWithAction(value?: T, debugName?: string): void;  // wraps update in graph.action
   get justUpdated(): boolean;                       // true only during the event it fired
-  get value(): T | undefined;                       // payload; undefined after the event
+  get value(): T | undefined;                       // payload; check justUpdated first (undefined, or a throw with validateMomentReads)
   get event(): GraphEvent | null;                   // when it last fired
-  justUpdatedTo(value: T): boolean;                 // justUpdated && value == payload
+  justUpdatedTo(value: T): boolean;                 // justUpdated && payload === value
 }
 
 class State<T> extends Resource {
@@ -241,7 +242,8 @@ class State<T> extends Resource {
 }
 ```
 
-`State.update` compares with `===`. Mutating an array in place and calling `update` with
+`State.update` compares with `===`, and so do `justUpdatedTo`, `justUpdatedFrom` and
+`justUpdatedToFrom` on states and moments. Mutating an array in place and calling `update` with
 the same reference does nothing; build a new array, or use `updateForce`.
 
 `runs` returns the `Behavior` (fields `demands`, `supplies`, `order`; methods
@@ -362,8 +364,8 @@ class Counter extends Extent {
             deps.fetchGreeting(count, abort.signal).then(arrived, () => arrived(null));
           });
         }
-        const reply = ext.greetingArrived.value;
-        if (ext.greetingArrived.justUpdated && reply !== undefined && reply.token === ext.activeRequest.value) {
+        const reply = ext.greetingArrived.justUpdated ? ext.greetingArrived.value : undefined;
+        if (reply !== undefined && reply.token === ext.activeRequest.value) {
           ext.activeRequest.update(null);
           ext.greeting.update(reply.text);
         }
@@ -380,6 +382,7 @@ class Counter extends Extent {
 }
 
 const graph = new Graph();
+graph.validateMomentReads = true;   // a stale moment.value read throws instead of returning undefined
 const counter = new Counter(graph, {
   fetchGreeting: (n, signal) => fetch(`/greeting?n=${n}`, { signal }).then((r) => r.text()),
   render: (view) => { /* update the DOM, or hand the view to your UI framework */ },
@@ -532,8 +535,8 @@ this.behavior()
         );
       });
     }
-    const reply = ext.searchReply.value;
-    if (ext.searchReply.justUpdated && reply && reply.token === ext.searchToken.value) {
+    const reply = ext.searchReply.justUpdated ? ext.searchReply.value : undefined;
+    if (reply && reply.token === ext.searchToken.value) {
       ext.searchToken.update(null);
       ext.results.update(reply.results);
     }
@@ -861,6 +864,16 @@ the list that switches the dynamic demands in the same event as `removeFromGraph
 **Expecting a new behavior to run on add.** Behaviors run only when a demand updates. If
 something must happen when the extent enters the graph, demand `this.addedToGraph` and
 check `ext.addedToGraph.justUpdated`.
+
+**Reading a moment's value without checking `justUpdated`.**
+A behavior that demands a moment and something else also runs when only the other demand
+updates. The moment's `value` is then `undefined`, so `ext.reply.value!.text` throws a
+`TypeError`, and `ext.reply.value ?? 0` quietly uses the fallback. With
+`graph.validateMomentReads = true` the read throws `Error: Cannot read "reply.value" here:
+reply did not update in this event, so it has no value (it last updated in event 2; this is
+event 3). ...` instead (`err.resource`). Wrong: `const reply = ext.reply.value!;`. Right:
+`if (ext.reply.justUpdated) { const reply = ext.reply.value!; ... }`, or copy the payload into
+a state if later events need it.
 
 **`State.update` with an equal value does nothing.** Repeating the same value produces no
 `justUpdated`, so no downstream behavior and no output. Use a `Moment` for "this happened

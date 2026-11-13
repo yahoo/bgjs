@@ -30,7 +30,9 @@ little interaction between events, such as a form that posts once.
 ## Rules that matter most
 
 - Leave the graph's checks on. `validateLifetimes` and `validateTraceDemands` are on by
-  default; turning either off hides mistakes instead of fixing them.
+  default; turning either off hides mistakes instead of fixing them. Also turn on
+  `graph.validateMomentReads = true`, so a moment's value read in an event where the
+  moment did not update throws instead of returning `undefined`.
 - One relationship per behavior. A large behavior that does everything gives up most of
   what the runtime can check.
 - Render, log, fetch and set timers only inside `ext.sideEffect(...)`. Bring results back

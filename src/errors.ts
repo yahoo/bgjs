@@ -136,6 +136,19 @@ export function traceAccessMessage(resource: Resource, current: Behavior): strin
         `If it needs ${r} as updated in this event, demand ${r} and read ${r}.value.`;
 }
 
+export function staleMomentMessage(resource: Resource, current: Behavior | null, lastSequence: number | null, currentSequence: number): string {
+    let r = resourceName(resource);
+    let last = lastSequence != null
+        ? `it last updated in event ${lastSequence}; this is event ${currentSequence}`
+        : "it has never updated";
+    let where = current != null ? ` ${capitalize(describeBehavior(current))} is running in this event, but not because ${r} updated.` : "";
+    return `Cannot read "${r}.value" here: ${r} did not update in this event, so it has no value (${last}). ` +
+        `A moment's value lasts only for the event in which the moment updated.${where} ` +
+        `Fix: check ${r}.justUpdated first and read ${r}.value only when it is true, e.g. if (${r}.justUpdated) { const v = ${r}.value; ... } ` +
+        `or ${r}.justUpdated ? ${r}.value : fallback. If the value must outlast its event, copy it into a state while ${r}.justUpdated. ` +
+        `(This check is graph.validateMomentReads.)`;
+}
+
 export function updateOutsideMessage(resource: Resource): string {
     let r = resourceName(resource);
     return `Cannot update "${r}" here: updates must happen in a behavior's runs block or an action, and this one ran outside any event (e.g. in a timer or promise callback). ` +
