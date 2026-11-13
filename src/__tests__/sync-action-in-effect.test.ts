@@ -11,7 +11,7 @@
 //
 // The cost lands on the side effect that made the call: the rest of its block runs after its
 // event has closed. These tests pin that order, check that a failure is reported to the code
-// that owns it, and check the warning for code that touches the graph after the nested action.
+// that owns it, and check graph.reentrant, the optional marker that says the reentry is intended.
 
 import {Extent, Graph} from '../index.js';
 
@@ -22,6 +22,7 @@ class Player extends Extent {
     effectA: (ext: Player) => void = () => {};
     effectB: (ext: Player) => void = () => {};
     effectC: (ext: Player) => void = () => {};
+    onPlayed: (ext: Player) => void = () => {};
     log: string[] = [];
     failPlay = false;
 
@@ -37,7 +38,10 @@ class Player extends Extent {
                 throw new Error('play failed');
             }
             ext.position.update(ext.position.value + 1);
-            ext.sideEffect(ext => ext.log.push(`played effect (event ${ext.graph.currentEvent!.sequence})`), 'played');
+            ext.sideEffect(ext => {
+                ext.log.push(`played effect (event ${ext.graph.currentEvent!.sequence})`);
+                ext.onPlayed(ext);
+            }, 'played');
         });
     }
 
@@ -50,14 +54,18 @@ class Player extends Extent {
 describe('Sync action from a side effect (no Zalgo: the caller sees it completed)', () => {
     let g: Graph;
     let p: Player;
-    let warnings: string[];
+    let logs: string[];
 
     beforeEach(() => {
         g = new Graph();
-        warnings = [];
-        g.onWarning = (message) => warnings.push(message);
+        logs = [];
+        jest.spyOn(console, 'debug').mockImplementation((message) => { logs.push(message); });
         p = new Player(g);
         p.addToGraphWithAction();
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
     });
 
     test('remaining side effects of the event run first, then the new event, then the rest of the calling side effect', () => {
@@ -144,38 +152,7 @@ describe('Sync action from a side effect (no Zalgo: the caller sees it completed
         expect(() => p.go.updateWithAction(1)).toThrow(original);
     });
 
-    test('an action as the last statement of a side effect gives no warning', () => {
-        p.effectA = ext => {
-            ext.log.push(`position ${ext.position.value}`);
-            ext.play();
-        };
-
-        p.go.updateWithAction(1);
-
-        expect(warnings).toEqual([]);
-        expect(p.position.value).toBe(1);
-    });
-
-    test('reading the graph after the nested action returns warns once, naming the side effect and events', () => {
-        let readAfter: any[] = [];
-        p.effectA = ext => {
-            ext.play();
-            readAfter.push(ext.go.value, ext.go.justUpdated, ext.position.value);
-        };
-
-        p.go.updateWithAction(1);
-
-        // these reads answer for a closed event
-        expect(readAfter).toEqual([undefined, false, 1]);
-        expect(warnings.length).toBe(1);
-        expect(warnings[0]).toContain('"A"');
-        expect(warnings[0]).toContain('Player');
-        expect(warnings[0]).toContain('event 2');
-        expect(warnings[0]).toContain('"go"');
-        expect(warnings[0]).toContain('outside any event');
-    });
-
-    test('starting another action after the nested action returns warns', () => {
+    test('an unmarked action from a side effect logs one debug line naming the side effect and event', () => {
         p.effectA = ext => {
             ext.play();
             ext.play();
@@ -184,8 +161,65 @@ describe('Sync action from a side effect (no Zalgo: the caller sees it completed
         p.go.updateWithAction(1);
 
         expect(p.position.value).toBe(2);
-        expect(warnings.length).toBe(1);
-        expect(warnings[0]).toContain('started another action');
+        expect(logs.length).toBe(1);
+        expect(logs[0]).toContain('"A"');
+        expect(logs[0]).toContain('Player');
+        expect(logs[0]).toContain('event 2');
+        expect(logs[0]).toContain('graph.reentrant');
+    });
+
+    test('graph.reentrant marks the reentry: same order, no debug line, and it returns the result', () => {
+        let returned: any = null;
+        p.effectA = ext => {
+            ext.log.push('A start');
+            returned = g.reentrant(() => {
+                ext.play();
+                return 'done';
+            });
+            ext.log.push(`A resumes (currentEvent ${g.currentEvent?.sequence ?? null})`);
+        };
+        p.effectB = ext => ext.log.push('B');
+
+        p.go.updateWithAction(1);
+
+        expect(p.log).toEqual(['A start', 'B', 'played effect (event 3)', 'A resumes (currentEvent null)']);
+        expect(returned).toBe('done');
+        expect(logs).toEqual([]);
+    });
+
+    test('graph.reentrant covers an action started deep inside it', () => {
+        let client = {onGo: () => p.play()};
+        let library = {notify: () => client.onGo()};
+        p.effectA = () => g.reentrant(() => library.notify());
+
+        p.go.updateWithAction(1);
+
+        expect(p.position.value).toBe(1);
+        expect(logs).toEqual([]);
+    });
+
+    test('graph.reentrant does not cover side effects of the events it runs', () => {
+        p.effectA = () => g.reentrant(() => p.play());
+        // the nested event's own side effect starts an unmarked action
+        let first = true;
+        p.onPlayed = ext => {
+            if (first) {
+                first = false;
+                ext.play();
+            }
+        };
+
+        p.go.updateWithAction(1);
+
+        expect(p.position.value).toBe(2);
+        expect(logs.length).toBe(1);
+        expect(logs[0]).toContain('side effect "played"');
+    });
+
+    test('graph.reentrant outside a side effect just runs the block', () => {
+        expect(g.reentrant(() => 5)).toBe(5);
+        let e = new Error('boom');
+        expect(() => g.reentrant(() => { throw e; })).toThrow(e);
     });
 
     test('queuing a side effect after the nested action returns throws, saying why', () => {
@@ -206,10 +240,11 @@ describe('Sync action from a side effect (no Zalgo: the caller sees it completed
         expect(caught.message).toContain('event 2');
     });
 
-    test('code outside any side effect does not warn', () => {
+    test('actions outside any side effect, and actionAsync from one, log nothing', () => {
         p.play();
-        p.position.value;
-        p.go.justUpdated;
-        expect(warnings).toEqual([]);
+        p.effectA = ext => { ext.graph.actionAsync(() => ext.played.update()); };
+        p.go.updateWithAction(1);
+        expect(p.position.value).toBe(2);
+        expect(logs).toEqual([]);
     });
 });

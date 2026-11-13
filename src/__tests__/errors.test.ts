@@ -20,7 +20,7 @@ class Player extends Extent {
 // every `.name(` a message mentions must be a real method
 function expectApisExist(msg: string) {
     let p = new Player(new Graph());
-    let targets: any[] = [p, p.behavior(), p.seq, p.loadReq];
+    let targets: any[] = [p, p.behavior(), p.seq, p.loadReq, p.graph];
     for (let [, name] of msg.matchAll(/\.(\w+)\(/g)) {
         expect(targets.some(t => typeof t[name] == "function") ? name : `missing API ${name}`).toBe(name);
     }
@@ -508,7 +508,7 @@ describe('synchronous action inside a side effect', () => {
         let g = new Graph();
         let caught: any = null;
         let feed = new Feed(g, ext => {
-            try { ext.ping.updateWithAction(); } catch (e) { caught = e; }
+            try { g.reentrant(() => ext.ping.updateWithAction()); } catch (e) { caught = e; }
         }, () => { throw new Error('render broke'); });
         feed.addToGraphWithAction();
         expect(() => feed.go.updateWithAction()).toThrow('render broke');
@@ -523,7 +523,7 @@ describe('synchronous action inside a side effect', () => {
         let g = new Graph();
         let caught: any = null;
         let feed = new Feed(g, ext => {
-            ext.ping.updateWithAction();
+            g.reentrant(() => ext.ping.updateWithAction());
             try { ext.sideEffect(() => {}); } catch (e) { caught = e; }
         }, () => {});
         feed.addToGraphWithAction();
@@ -533,21 +533,22 @@ describe('synchronous action inside a side effect', () => {
         expect(caught.message).toContain('event 2');
     });
 
-    test('the warning names the side effect, the resource read and the events', () => {
+    test('the debug line for an unmarked action names the side effect, the event and graph.reentrant', () => {
         let g = new Graph();
-        let warnings: string[] = [];
-        g.onWarning = m => warnings.push(m);
-        let feed = new Feed(g, ext => {
-            ext.ping.updateWithAction();
-            ext.go.justUpdated;
-        }, () => {});
-        feed.addToGraphWithAction();
-        feed.go.updateWithAction();
-        expect(warnings.length).toBe(1);
-        expectApisExist(warnings[0]);
-        expect(warnings[0]).toContain('side effect "notifyClient" of Feed');
-        expect(warnings[0]).toContain('read "go"');
-        expect(warnings[0]).toContain('event 2 and event 3');
+        let logs: string[] = [];
+        let spy = jest.spyOn(console, 'debug').mockImplementation(m => { logs.push(m); });
+        try {
+            let feed = new Feed(g, ext => ext.ping.updateWithAction(), () => {});
+            feed.addToGraphWithAction();
+            feed.go.updateWithAction();
+        } finally {
+            spy.mockRestore();
+        }
+        expect(logs.length).toBe(1);
+        expectApisExist(logs[0]);
+        expect(logs[0]).toContain('side effect "notifyClient" of Feed');
+        expect(logs[0]).toContain('event 2');
+        expect(logs[0]).toContain('graph.reentrant(');
     });
 });
 

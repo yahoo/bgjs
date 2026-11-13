@@ -12,6 +12,9 @@ let r_a: State<number>;
 let r_b: State<number>;
 let r_c: State<number>;
 beforeEach(() => {
+    // several tests start unmarked synchronous actions from side effects on purpose, to pin the
+    // default; keep the graph's debug note about those (see graph.reentrant) out of the output
+    jest.spyOn(console, 'debug').mockImplementation(() => {});
     g = new Graph();
     setupExt = new Extent(g)
     r_a = setupExt.state<number>(0, 'r_a');
@@ -20,6 +23,10 @@ beforeEach(() => {
     setupExt.addToGraphWithAction();
     ext = new Extent(g);
     setupExt.addChildLifetime(ext);
+});
+
+afterEach(() => {
+    jest.restoreAllMocks();
 });
 
 describe('State Resource', () => {
