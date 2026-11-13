@@ -16,4 +16,4 @@ Then, in the example's folder, `npm install` and the command below.
 | [`browser`](browser) | A login form: field validation, enabling the login button, and the login request's states. Bundled with Rollup and served by a small Express server at http://localhost:8080. | `npm run build && node app.js` |
 | [`perftests`](perftests) | Timings for adding a large graph, updating it, adding many extents and removing them. | `npm run try` |
 
-To see what a graph does event by event (as text, a Mermaid diagram, or a step-through HTML replay), see [`tools/trace`](../tools/trace).
+To see what a graph does event by event (as text, a Mermaid diagram, or a step-through HTML replay), see [`tools/trace`](../tools/trace). To check a property over every input order up to a depth, see [`tools/explore`](../tools/explore).
