@@ -67,9 +67,11 @@
   started a synchronous action, the rest of its event ran inside that call, so an error from a
   later side effect surfaced there: a `try`/`catch` around the call hid it, the rest of the event
   was dropped, and the opening action returned normally. Now the call throws "This action never
-  ran ..." with the original error as `err.cause`, and the action that opened the event rethrows
-  the original even if that is caught. An error from the started action's own event still
-  reaches the caller unchanged.
+  ran ..." (or "This action ran, but other work in the same call failed ..." when the failure
+  came after it, such as another side effect's action or a queued action) with the original
+  error as `err.cause`, and the action that opened the event rethrows the original even if that
+  is caught. An error from the started action's own event, or from actions its side effects
+  start, still reaches the caller unchanged.
 
 ### Changed
 

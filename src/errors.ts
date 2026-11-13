@@ -248,12 +248,16 @@ function describeSideEffect(effect: SideEffectLike): string {
     return name + of + by;
 }
 
-export function droppedNestedActionMessage(effect: SideEffectLike, event: {sequence: number}, error: any): string {
+export function droppedNestedActionMessage(effect: SideEffectLike, event: {sequence: number}, error: any, ran: boolean): string {
     let n = event.sequence;
     let original = error?.message ?? String(error);
-    return `This action never ran. ${capitalize(describeSideEffect(effect))} started it synchronously during event ${n}, so the rest of event ${n} (its remaining side effects) and any queued actions had to finish first, and that failed: "${original}". ` +
+    let effectText = capitalize(describeSideEffect(effect));
+    let what = ran
+        ? `This action ran, but other work in the same call failed. ${effectText} started it synchronously during event ${n}, so the call also ran the rest of event ${n} (its remaining side effects) and the queued actions around this one, and one of them failed: "${original}". `
+        : `This action never ran. ${effectText} started it synchronously during event ${n}, so the rest of event ${n} (its remaining side effects) and any queued actions had to finish first, and that failed: "${original}". `;
+    return what +
         `The graph discarded the rest of that work and every queued action. The action that opened event ${n} rethrows the original error (err.cause here) even if this one is caught. ` +
-        `Fix the original error; this one only reports that the action started here was dropped.`;
+        `Fix the original error; this one only reports that it surfaced inside this call.`;
 }
 
 export function sideEffectAfterNestedActionMessage(effect: SideEffectLike, event: {sequence: number}): string {

@@ -28,6 +28,9 @@ interface Action {
     debugName?: string;
     // set when the event loop opens this action's event
     started?: boolean;
+    // set when an error escapes the event loop that opened this action's event before that loop
+    // opened another one: the error came from this action's event or from work it started
+    failed?: boolean;
 }
 
 // One running side effect block. Side effects nest when one starts a synchronous action: the
@@ -177,15 +180,16 @@ export class Graph {
             let err: any = new Error("Action cannot be created directly inside another action or behavior. Consider wrapping it in a side effect block.");
             throw err;
         }
-        this.actions.push(action);
         let frame = this.eventLoopState?.phase == EventLoopPhase.sideEffects ? this.effectFrames[this.effectFrames.length - 1] : undefined;
+        if (frame !== undefined && frame.reentrant == 0 && !frame.logged) {
+            // before queuing, so a throwing onWarning leaves nothing behind to run later
+            frame.logged = true;
+            this.onWarning?.(unmarkedNestedActionMessage(frame.effect, frame.event));
+        }
+        this.actions.push(action);
         if (frame === undefined) {
             this.eventLoop();
             return;
-        }
-        if (frame.reentrant == 0 && !frame.logged) {
-            frame.logged = true;
-            this.onWarning?.(unmarkedNestedActionMessage(frame.effect, frame.event));
         }
         // Started from a side effect. The nested loop first finishes the side effect's event
         // (its remaining side effects), then any queued actions, then this one, and returns once
@@ -193,15 +197,17 @@ export class Graph {
         try {
             this.eventLoop();
         } catch (error) {
-            if (action.started) {
-                // this action's own event failed: the caller's error to handle
+            if (action.failed) {
+                // this action's own event, or work it started, failed: the caller's error to handle
                 throw error;
             }
-            // Something before this action failed, most often another side effect of the
-            // caller's event. Tell the caller its action was dropped, and keep the original for
-            // the loop running the caller's block, so catching this cannot hide it.
+            // Other work this call ran failed: most often another side effect of the caller's
+            // event, before this action, or work after it (when this action ran inside another
+            // side effect's nested call, or a queued action ran after it). Tell the caller, and
+            // keep the original for the loop running the caller's block, so catching this cannot
+            // hide it.
             frame.pendingError = error;
-            let err: any = new Error(droppedNestedActionMessage(frame.effect, frame.event, error));
+            let err: any = new Error(droppedNestedActionMessage(frame.effect, frame.event, error, action.started == true));
             err.cause = error;
             throw err;
         } finally {
@@ -238,6 +244,8 @@ export class Graph {
     }
 
     private eventLoop() {
+        // the last action whose event this loop opened; an error escaping this loop is its
+        let opened: Action | null = null;
 
         while (true) {
 
@@ -325,11 +333,15 @@ export class Graph {
                     this.eventLoopState = new EventLoopState(action);
                     this.eventLoopState.phase = EventLoopPhase.action;
                     action.started = true;
+                    opened = action;
                     action.block(action.extent);
                     continue;
                 }
 
             } catch (error) {
+                if (opened != null) {
+                    opened.failed = true;
+                }
                 this.currentEvent = null;
                 this.eventLoopState = null;
                 this.actions.length = 0;

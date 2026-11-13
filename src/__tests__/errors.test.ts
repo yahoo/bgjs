@@ -519,6 +519,22 @@ describe('synchronous action inside a side effect', () => {
         expect(caught.cause.message).toBe('render broke');
     });
 
+    test('an action that ran before other work failed says so and carries the cause', () => {
+        let g = new Graph();
+        let caught: any = null;
+        let feed = new Feed(g, ext => {
+            try { g.reentrant(() => ext.ping.updateWithAction()); } catch (e) { caught = e; }
+        }, () => g.reentrant(() => g.action(() => { throw new Error('render broke'); })));
+        feed.addToGraphWithAction();
+        expect(() => feed.go.updateWithAction()).toThrow('render broke');
+        expectApisExist(caught.message);
+        expect(caught.message).toContain('This action ran');
+        expect(caught.message).toContain('Side effect "notifyClient" of Feed');
+        expect(caught.message).toContain('event 2');
+        expect(caught.message).toContain('"render broke"');
+        expect(caught.cause.message).toBe('render broke');
+    });
+
     test('queuing a side effect after the action returned names the side effect', () => {
         let g = new Graph();
         let caught: any = null;

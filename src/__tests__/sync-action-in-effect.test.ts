@@ -148,6 +148,113 @@ describe('Sync action from a side effect (no Zalgo: the caller sees it completed
         expect(() => p.go.updateWithAction(1)).toThrow(original);
     });
 
+    test('an error from work after the action is not swallowed when the action ran inside another side effect', () => {
+        // A queues play(); B's own action runs play() first (it was queued earlier), then fails
+        let caught: any = null;
+        let original = new Error('B action failed');
+        p.effectA = ext => {
+            try {
+                ext.play();
+            } catch (e) {
+                caught = e;
+            }
+        };
+        p.effectB = () => g.action(() => {
+            throw original;
+        });
+
+        expect(() => p.go.updateWithAction(1)).toThrow(original);
+
+        expect(caught.cause).toBe(original);
+        expect(caught.message).toContain('This action ran');
+        expect(p.position.value).toBe(1);
+    });
+
+    test('an error from an action queued after the started one is not swallowed', () => {
+        let caught: any = null;
+        let original = new Error('queued action failed');
+        p.effectA = ext => {
+            try {
+                ext.play();
+            } catch (e) {
+                caught = e;
+            }
+        };
+        p.onPlayed = ext => {
+            ext.graph.actionAsync(() => {
+                throw original;
+            });
+        };
+
+        expect(() => p.go.updateWithAction(1)).toThrow(original);
+
+        expect(caught.cause).toBe(original);
+        expect(caught.message).toContain('This action ran');
+    });
+
+    test('an error from an action queued before the started one is reported as dropping it', () => {
+        let caught: any = null;
+        let original = new Error('queued action failed');
+        p.effectA = ext => {
+            ext.graph.actionAsync(() => {
+                throw original;
+            });
+            try {
+                ext.play();
+            } catch (e) {
+                caught = e;
+            }
+        };
+
+        expect(() => p.go.updateWithAction(1)).toThrow(original);
+
+        expect(caught.cause).toBe(original);
+        expect(caught.message).toContain('never ran');
+        expect(p.position.value).toBe(0);
+    });
+
+    test('an error from an action that the started event\'s own side effect starts is the caller\'s', () => {
+        let caught: any = null;
+        let original = new Error('nested deeper failed');
+        p.effectA = ext => {
+            try {
+                ext.play();
+            } catch (e) {
+                caught = e;
+            }
+        };
+        p.onPlayed = ext => ext.graph.action(() => {
+            throw original;
+        });
+
+        // same as a top-level play(): the error belongs to whoever called play()
+        p.go.updateWithAction(1);
+
+        expect(caught).toBe(original);
+        expect(p.position.value).toBe(1);
+    });
+
+    test('a throwing onWarning leaves no action behind to run later', () => {
+        let caught: any = null;
+        g.onWarning = () => {
+            throw new Error('warned');
+        };
+        p.effectA = ext => {
+            try {
+                ext.play();
+            } catch (e) {
+                caught = e;
+            }
+        };
+        p.effectB = ext => ext.log.push('B');
+
+        p.go.updateWithAction(1);
+
+        expect(caught.message).toBe('warned');
+        expect(p.log).toEqual(['B']);
+        expect(p.position.value).toBe(0);
+    });
+
     test('an unmarked action from a side effect gives one warning naming the side effect and event', () => {
         p.effectA = ext => {
             ext.play();

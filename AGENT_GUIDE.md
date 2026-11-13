@@ -328,6 +328,9 @@ ext.sideEffect(ext => {
 });
 ```
 
+After such an action returns, the rest of the side effect runs outside any event, so an
+`actionAsync` there also runs at once, before the call returns, like `action`.
+
 **Reading values in side effects.** `graph.currentBehavior` is null during side effects,
 so reading any resource's `.value` there is allowed and sees the event's final values.
 Capturing values in local consts inside the behavior is still clearer.
@@ -943,9 +946,13 @@ when `onReady` may call an action. Right: read first, call the listener last.
 **Catching an error around a synchronous action in a side effect.** `Error: This action
 never ran. Side effect "A" of Player ... started it synchronously during event 2, so the
 rest of event 2 (its remaining side effects) and any queued actions had to finish first, and
-that failed: "..."` Another side effect of the same event threw. The original error is in
-`err.cause`, and the action that opened the event rethrows it even if this one is caught.
-Fix the original error.
+that failed: "..."` Another side effect of the same event threw. When the action did run
+but other work in the same call failed afterwards (another side effect's action, or an action
+queued after it), the message starts `Error: This action ran, but other work in the same call
+failed.` instead. Either way the original error is in `err.cause`, and the action that opened
+the event rethrows it even if this one is caught. Fix the original error. An error from the
+started action's own event, or from actions its side effects start, reaches the caller
+unchanged.
 
 **`exactOptionalPropertyTypes` and moment payloads.** Declare payload fields as
 `x: T | undefined` rather than `x?: T`, or assignments from optional inputs will not compile.
