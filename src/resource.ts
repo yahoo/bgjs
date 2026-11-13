@@ -3,7 +3,7 @@
 //
 
 
-import {accessMessage, resourceName, staleMomentMessage, traceAccessMessage, unsuppliedInBehaviorMessage, updateOutsideMessage, wrongSupplierMessage} from "./errors.js";
+import {accessMessage, staleMomentMessage, traceAccessMessage, unsuppliedInBehaviorMessage, updateOutsideMessage, wrongSupplierMessage} from "./errors.js";
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
 import {Graph} from "./graph.js";
@@ -107,10 +107,6 @@ export class Resource implements Demandable {
     assertValidAccessor() {
         let graph = this.graph;
         let currentBehavior = graph.currentBehavior;
-
-        if (currentBehavior == null && graph.currentEvent == null && graph.effectFrames.length > 0) {
-            graph.noteAfterNestedAction(`it read "${resourceName(this)}"`);
-        }
 
         if (currentBehavior != null && currentBehavior != this.suppliedBy && !currentBehavior.demands?.has(this)) {
             let err: any = new Error(accessMessage(this, currentBehavior));

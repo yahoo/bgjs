@@ -3,7 +3,7 @@
 //
 
 
-import {afterNestedActionWarning, cycleMessage, demandNotAddedMessage, droppedNestedActionMessage, lifetimeMessage, removedDemandMessage, removedSupplyMessage, sideEffectAfterNestedActionMessage} from "./errors.js";
+import {cycleMessage, demandNotAddedMessage, droppedNestedActionMessage, lifetimeMessage, removedDemandMessage, removedSupplyMessage, sideEffectAfterNestedActionMessage, unmarkedNestedActionMessage} from "./errors.js";
 import {BufferedPriorityQueue} from "./bufferedqueue.js";
 import {Behavior} from "./behavior.js";
 import {Extent, takeRemovalCleanups} from "./extent.js";
@@ -39,7 +39,10 @@ export interface EffectFrame {
     // true once a synchronous action started by this block has returned; the rest of the block
     // then runs outside any event
     resumed: boolean;
-    warned: boolean;
+    // depth of graph.reentrant calls open inside this block
+    reentrant: number;
+    // true once this block has logged an unmarked nested action
+    logged: boolean;
     // an error from finishing this frame's event, raised inside an action this block started;
     // rethrown by the loop that runs the block so the block cannot swallow it
     pendingError: any;
@@ -111,13 +114,6 @@ export class Graph {
     justUpdatedCallbacks: Set<Subscription> = new Set();
     /** @internal */
     effectFrames: EffectFrame[] = [];
-    /**
-     * Receives each warning's text. Warnings report code that runs but is probably wrong, such as
-     * a side effect that keeps touching the graph after a synchronous action it started has
-     * returned. Defaults to `console.warn`; replace it to collect warnings, or set it to null to
-     * silence them.
-     */
-    onWarning: ((message: string) => void) | null = (message) => console.warn(message);
 
     constructor() {
        this.lastEvent = GraphEvent.initialEvent;
@@ -139,12 +135,15 @@ export class Graph {
             let err: any = new Error("Action cannot be created directly inside another action or behavior. Consider wrapping it in a side effect block.");
             throw err;
         }
-        this.noteAfterNestedAction("it started another action");
         this.actions.push(action);
         let frame = this.eventLoopState?.phase == EventLoopPhase.sideEffects ? this.effectFrames[this.effectFrames.length - 1] : undefined;
         if (frame === undefined) {
             this.eventLoop();
             return;
+        }
+        if (frame.reentrant == 0 && !frame.logged) {
+            frame.logged = true;
+            console.debug(unmarkedNestedActionMessage(frame.effect, frame.event));
         }
         // Started from a side effect. The nested loop first finishes the side effect's event
         // (its remaining side effects), then any queued actions, then this one, and returns once
@@ -186,7 +185,6 @@ export class Graph {
                     throw err;
                 }
                 action.resolve = resolve;
-                this.noteAfterNestedAction("it started another action");
                 this.actions.push(action);
                 if (this.currentEvent == null) {
                     this.eventLoop();
@@ -240,7 +238,7 @@ export class Graph {
                 if (effect) {
                     this.eventLoopState!.phase = EventLoopPhase.sideEffects;
                     this.eventLoopState!.currentSideEffect = effect;
-                    let frame: EffectFrame = {effect: effect, event: this.currentEvent!, resumed: false, warned: false, pendingError: null};
+                    let frame: EffectFrame = {effect: effect, event: this.currentEvent!, resumed: false, reentrant: 0, logged: false, pendingError: null};
                     this.effectFrames.push(frame);
                     try {
                         effect.block(effect.extent);
@@ -501,14 +499,28 @@ export class Graph {
         return frame?.resumed ? frame : null;
     }
 
-    /** @internal Warns, once per side effect run, about graph use after its nested action returned. */
-    noteAfterNestedAction(what: string) {
-        let frame = this.resumedEffectFrame();
-        if (frame == null || frame.warned) {
-            return;
+    /**
+     * Runs `block` and returns its result. Call it from a side effect around code that may start a
+     * synchronous action, usually a call out to client code (a listener or callback), to say that
+     * this is intended. Such an action still runs the way it always does: the side effect's event
+     * finishes its remaining side effects, the new action runs to completion, then the call
+     * returns, so code after it runs outside any event. Without `reentrant`, the graph logs that
+     * through `console.debug`, once per side effect run. Not required; it only documents the
+     * reentry and silences that message. Covers actions started anywhere inside `block`, however
+     * deeply, but not those started by side effects of the events it runs. Outside a side effect
+     * it just runs `block`.
+     */
+    reentrant<T>(block: () => T): T {
+        let frame = this.eventLoopState?.phase == EventLoopPhase.sideEffects ? this.effectFrames[this.effectFrames.length - 1] : undefined;
+        if (frame === undefined) {
+            return block();
         }
-        frame.warned = true;
-        this.onWarning?.(afterNestedActionWarning(frame.effect, frame.event, this.lastEvent, what));
+        frame.reentrant += 1;
+        try {
+            return block();
+        } finally {
+            frame.reentrant -= 1;
+        }
     }
 
     /** Text describing the current event: its sequence, the resources its action updated, and the current behavior. */
