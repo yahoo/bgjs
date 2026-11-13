@@ -6,7 +6,7 @@
 import {cycleMessage, demandNotAddedMessage, lifetimeMessage, removedDemandMessage, removedSupplyMessage} from "./errors.js";
 import {BufferedPriorityQueue} from "./bufferedqueue.js";
 import {Behavior} from "./behavior.js";
-import {Extent, takeRemovalCleanups} from "./extent.js";
+import {Extent, isChildLifetime, takeRemovalCleanups} from "./extent.js";
 import {Demandable, Resource} from "./resource.js";
 import {DateProvider, GraphEvent, LinkType, OrderingState, Subscription, Transient} from "./common.js";
 
@@ -464,7 +464,7 @@ export class Graph {
                 if (behavior.untrackedSupplies != null) {
                     for (let supply of behavior.untrackedSupplies) {
                         if (this.validateLifetimes && !behavior.extent.hasCompatibleLifetime(supply.extent)) {
-                            let err: any = new Error(lifetimeMessage("supplies", supply, behavior));
+                            let err: any = new Error(lifetimeMessage("supplies", supply, behavior, isChildLifetime(behavior.extent, supply.extent)));
                             err.currentBehavior = behavior;
                             err.supply = supply;
                             throw err;
@@ -531,7 +531,7 @@ export class Graph {
                 if (behavior.untrackedDemands != null) {
                     for (let demand of behavior.untrackedDemands) {
                         if (this.validateLifetimes && !behavior.extent.hasCompatibleLifetime(demand.resource.extent)) {
-                            let err: any = new Error(lifetimeMessage("demands", demand.resource, behavior));
+                            let err: any = new Error(lifetimeMessage("demands", demand.resource, behavior, isChildLifetime(behavior.extent, demand.resource.extent)));
                             err.currentBehavior = behavior;
                             err.demand = demand.resource;
                             throw err;

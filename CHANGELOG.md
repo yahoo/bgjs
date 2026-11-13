@@ -42,6 +42,10 @@
   at once.
 - **`Extent.unsubscribes` and `unsubscribeAll()` are gone.** Both were internal. Subclasses
   may now use those names.
+- **The static lifetime error names both extents and the fix.** It names the demanding
+  behavior's extent and the target's, gives `target.addChildLifetime(owner)` and
+  `target.unifyLifetime(owner)` with those names, and when a parent statically links to its
+  own child, says to use `dynamicDemands` or `dynamicSupplies` instead.
 
 ## 2.0.0 (2026-10-08)
 

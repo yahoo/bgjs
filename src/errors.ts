@@ -187,13 +187,32 @@ export function removedSupplyMessage(resource: Resource, remaining: Behavior): s
         `Fix: make that behavior's dynamicSupplies stop returning ${r} in the same event as the removal, or remove the behavior's extent too.`;
 }
 
-export function lifetimeMessage(kind: "demands" | "supplies", resource: Resource, current: Behavior): string {
+// Lifetime messages name both extents in prose ("Turn", "Sub") and use stand-in variable names
+// in code ("turn.addChildLifetime(sub)"). Two extents of one class become "this X"/"the other X".
+function lifetimeNames(behaviorExtent: any, resourceExtent: any) {
+    let own = extentName(behaviorExtent);
+    let other = extentName(resourceExtent);
+    let variable = (name: string) => name.charAt(0).toLowerCase() + name.slice(1).replace(/\W/g, "");
+    if (own == other) {
+        return {own: `this ${own}`, other: `the other ${other}`, ownVar: `this${own.replace(/\W/g, "")}`, otherVar: `other${other.replace(/\W/g, "")}`};
+    }
+    return {own, other, ownVar: variable(own), otherVar: variable(other)};
+}
+
+export function lifetimeMessage(kind: "demands" | "supplies", resource: Resource, current: Behavior, targetIsChild: boolean): string {
     let r = resourceName(resource);
-    let ext = extentName(resource.extent);
+    let {own, other, ownVar, otherVar} = lifetimeNames(current.extent, resource.extent);
     let dynamic = kind == "demands" ? "dynamicDemands" : "dynamicSupplies";
-    return `${capitalize(describeBehavior(current))} statically ${kind} "${r}" of ${ext}, which may leave the graph first. ` +
-        `Static ${kind} must point at the behavior's own extent or one with the same or a longer lifetime. ` +
-        `Fix: before adding this behavior's extent, call ${ext}.addChildLifetime(thisExtent) or ${ext}.unifyLifetime(thisExtent), or use ${dynamic} instead.`;
+    let head = `${capitalize(describeBehavior(current))} statically ${kind} "${r}" of ${other}. `;
+    if (targetIsChild) {
+        return head +
+            `${capitalize(other)} is a child lifetime of ${own} (addChildLifetime), so it can leave the graph first, and a static link cannot follow it out. ` +
+            `Fix: a parent reaches a child's resources only through .${dynamic}(switches, links): switch on the state that holds the children and return ${otherVar}.${r} from links, so the link drops when the child is removed.`;
+    }
+    return head +
+        `A static link must point at the behavior's own extent or one with the same or a longer lifetime, and ${other} has no such relation to ${own}. ` +
+        `Fix: before ${own} is added to the graph, call ${otherVar}.addChildLifetime(${ownVar}) (${own} lives inside ${other}) or ${otherVar}.unifyLifetime(${ownVar}) (both are added and removed together). ` +
+        `If ${other} should instead be ${own}'s child, call ${ownVar}.addChildLifetime(${otherVar}) and link it with .${dynamic}(switches, links), not statically.`;
 }
 
 export function traceOnlyMessage(extent: any, demands: Demandable[], supplies: Resource[]): string {
