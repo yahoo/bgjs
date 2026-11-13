@@ -39,12 +39,15 @@
   - **A throwing cleanup does not stop the others.** Every cleanup of the extent runs, then
     the first error is rethrown out of the removing action.
 - **`graph.validateMomentReads`** (default `true`), the switch for the moment-read check above.
+- **`graph.onWarning`**, which receives the text of each warning: code that works but may not
+  do what was meant. Defaults to `console.log`. Replace it to collect warnings, throw, or stop
+  at a breakpoint; set it to `null` to skip them.
 - **`graph.reentrant(block)`** marks code in a side effect that may start a synchronous action,
   usually a call to a client callback. Such an action is still allowed and runs as before: the
   side effect's event finishes its remaining side effects, the new action runs to completion,
   then the call returns, so code after it runs outside any event. Without the marker, the graph
-  logs this once per side effect run through `console.debug`, naming the side effect and the
-  event; the marker documents that the reentry is intended and silences that message. It covers
+  reports this once per side effect run through `graph.onWarning`, naming the side effect and
+  the event; the marker documents that the reentry is intended and silences that message. It covers
   actions started anywhere inside `block`. Queuing a side effect after such an action returns
   still throws, now with a message that explains why.
 

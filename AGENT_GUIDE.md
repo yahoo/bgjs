@@ -113,6 +113,7 @@ class Graph {
   validateTraceDemands: boolean;     // default true: traceValue needs a demand or .trace
   validateMomentReads: boolean;      // default true: moment.value throws unless the moment updated in this event
   reentrant<T>(block: () => T): T;    // optional: marks a call from a side effect that may start a sync action
+  onWarning: ((message: string) => void) | null | undefined; // default console.log; null skips warnings
   debugHere(): string;               // text dump of current event/behavior
   subscribeToJustUpdated(resources: Resource[], callback: () => void): () => void;
 }
@@ -305,7 +306,8 @@ all run before the call returns, so the rest of that side effect runs after its 
 closed. Make the call the last thing the side effect does, and read anything you need
 before it; queuing a side effect after it throws. Wrap the call in `graph.reentrant(...)` to
 say the reentry is intended; it changes nothing about the order, and without it the graph
-logs a `console.debug` note the first time each side effect run starts such an action:
+gives a warning (`graph.onWarning`, `console.log` by default) the first time each side effect
+run starts such an action:
 
 ```ts
 ext.sideEffect(ext => {
@@ -911,9 +913,10 @@ event.` when it is called from plain code. Only behaviors and actions may queue 
 **Code after a synchronous action in a side effect.** `Error: Cannot queue a side effect
 here: side effect "A" ... started a synchronous action during event 2.` The action finished
 the current event and ran its own before returning, so `justUpdated` is false and
-`moment.value` throws. A `console.debug` line `Behavior Graph: side effect "A" of Player ...
-started a synchronous action during event 2. That is allowed: ...` points at the call; it
-is not an error, and wrapping the call in `graph.reentrant(...)` silences it. Wrong: `ext.sideEffect(ext => { listener.onReady(); render(ext.ready.value); })`
+`moment.value` throws. The warning `Behavior Graph warning: side effect "A" of Player ...
+started a synchronous action during event 2. That is allowed: ...` (through
+`graph.onWarning`) points at the call; it is not an error, and wrapping the call in
+`graph.reentrant(...)` silences it. Wrong: `ext.sideEffect(ext => { listener.onReady(); render(ext.ready.value); })`
 when `onReady` may call an action. Right: read first, call the listener last.
 
 **Catching an error around a synchronous action in a side effect.** `Error: This action

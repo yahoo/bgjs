@@ -533,17 +533,13 @@ describe('synchronous action inside a side effect', () => {
         expect(caught.message).toContain('event 2');
     });
 
-    test('the debug line for an unmarked action names the side effect, the event and graph.reentrant', () => {
+    test('the warning for an unmarked action names the side effect, the event and graph.reentrant', () => {
         let g = new Graph();
         let logs: string[] = [];
-        let spy = jest.spyOn(console, 'debug').mockImplementation(m => { logs.push(m); });
-        try {
-            let feed = new Feed(g, ext => ext.ping.updateWithAction(), () => {});
-            feed.addToGraphWithAction();
-            feed.go.updateWithAction();
-        } finally {
-            spy.mockRestore();
-        }
+        g.onWarning = m => logs.push(m);
+        let feed = new Feed(g, ext => ext.ping.updateWithAction(), () => {});
+        feed.addToGraphWithAction();
+        feed.go.updateWithAction();
         expect(logs.length).toBe(1);
         expectApisExist(logs[0]);
         expect(logs[0]).toContain('side effect "notifyClient" of Feed');

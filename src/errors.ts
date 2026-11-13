@@ -264,7 +264,7 @@ export function sideEffectAfterNestedActionMessage(effect: SideEffectLike, event
 
 export function unmarkedNestedActionMessage(effect: SideEffectLike, event: {sequence: number}): string {
     let n = event.sequence;
-    return `Behavior Graph: ${describeSideEffect(effect)} started a synchronous action during event ${n}. That is allowed: the rest of event ${n} (its remaining side effects) runs first, then the new action runs to completion before the call returns, so code after the call in this side effect runs outside any event (justUpdated is false and moment.value throws). ` +
+    return `Behavior Graph warning: ${describeSideEffect(effect)} started a synchronous action during event ${n}. That is allowed: the rest of event ${n} (its remaining side effects) runs first, then the new action runs to completion before the call returns, so code after the call in this side effect runs outside any event (justUpdated is false and moment.value throws). ` +
         `If this is intended, wrap the call that can start actions (often a client callback) in graph.reentrant(() => ...) to say so; this message then stops. Otherwise make that call the last thing the side effect does.`;
 }
 

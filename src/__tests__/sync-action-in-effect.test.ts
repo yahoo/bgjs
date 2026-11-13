@@ -54,18 +54,14 @@ class Player extends Extent {
 describe('Sync action from a side effect (no Zalgo: the caller sees it completed)', () => {
     let g: Graph;
     let p: Player;
-    let logs: string[];
+    let warnings: string[];
 
     beforeEach(() => {
         g = new Graph();
-        logs = [];
-        jest.spyOn(console, 'debug').mockImplementation((message) => { logs.push(message); });
+        warnings = [];
+        g.onWarning = (message) => warnings.push(message);
         p = new Player(g);
         p.addToGraphWithAction();
-    });
-
-    afterEach(() => {
-        jest.restoreAllMocks();
     });
 
     test('remaining side effects of the event run first, then the new event, then the rest of the calling side effect', () => {
@@ -152,7 +148,7 @@ describe('Sync action from a side effect (no Zalgo: the caller sees it completed
         expect(() => p.go.updateWithAction(1)).toThrow(original);
     });
 
-    test('an unmarked action from a side effect logs one debug line naming the side effect and event', () => {
+    test('an unmarked action from a side effect gives one warning naming the side effect and event', () => {
         p.effectA = ext => {
             ext.play();
             ext.play();
@@ -161,14 +157,14 @@ describe('Sync action from a side effect (no Zalgo: the caller sees it completed
         p.go.updateWithAction(1);
 
         expect(p.position.value).toBe(2);
-        expect(logs.length).toBe(1);
-        expect(logs[0]).toContain('"A"');
-        expect(logs[0]).toContain('Player');
-        expect(logs[0]).toContain('event 2');
-        expect(logs[0]).toContain('graph.reentrant');
+        expect(warnings.length).toBe(1);
+        expect(warnings[0]).toContain('"A"');
+        expect(warnings[0]).toContain('Player');
+        expect(warnings[0]).toContain('event 2');
+        expect(warnings[0]).toContain('graph.reentrant');
     });
 
-    test('graph.reentrant marks the reentry: same order, no debug line, and it returns the result', () => {
+    test('graph.reentrant marks the reentry: same order, no warning, and it returns the result', () => {
         let returned: any = null;
         p.effectA = ext => {
             ext.log.push('A start');
@@ -184,7 +180,7 @@ describe('Sync action from a side effect (no Zalgo: the caller sees it completed
 
         expect(p.log).toEqual(['A start', 'B', 'played effect (event 3)', 'A resumes (currentEvent null)']);
         expect(returned).toBe('done');
-        expect(logs).toEqual([]);
+        expect(warnings).toEqual([]);
     });
 
     test('graph.reentrant covers an action started deep inside it', () => {
@@ -195,7 +191,7 @@ describe('Sync action from a side effect (no Zalgo: the caller sees it completed
         p.go.updateWithAction(1);
 
         expect(p.position.value).toBe(1);
-        expect(logs).toEqual([]);
+        expect(warnings).toEqual([]);
     });
 
     test('graph.reentrant does not cover side effects of the events it runs', () => {
@@ -212,8 +208,8 @@ describe('Sync action from a side effect (no Zalgo: the caller sees it completed
         p.go.updateWithAction(1);
 
         expect(p.position.value).toBe(2);
-        expect(logs.length).toBe(1);
-        expect(logs[0]).toContain('side effect "played"');
+        expect(warnings.length).toBe(1);
+        expect(warnings[0]).toContain('side effect "played"');
     });
 
     test('graph.reentrant outside a side effect just runs the block', () => {
@@ -240,11 +236,31 @@ describe('Sync action from a side effect (no Zalgo: the caller sees it completed
         expect(caught.message).toContain('event 2');
     });
 
-    test('actions outside any side effect, and actionAsync from one, log nothing', () => {
+    test('onWarning defaults to console.log, and null skips warnings', () => {
+        let spy = jest.spyOn(console, 'log').mockImplementation(() => {});
+        try {
+            let g2 = new Graph();
+            let p2 = new Player(g2);
+            p2.addToGraphWithAction();
+            p2.effectA = ext => ext.play();
+            p2.go.updateWithAction(1);
+            expect(spy).toHaveBeenCalledTimes(1);
+            expect(spy.mock.calls[0][0]).toContain('Behavior Graph warning');
+
+            g2.onWarning = null;
+            p2.go.updateWithAction(2);
+            expect(spy).toHaveBeenCalledTimes(1);
+            expect(p2.position.value).toBe(2);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    test('actions outside any side effect, and actionAsync from one, give no warning', () => {
         p.play();
         p.effectA = ext => { ext.graph.actionAsync(() => ext.played.update()); };
         p.go.updateWithAction(1);
         expect(p.position.value).toBe(2);
-        expect(logs).toEqual([]);
+        expect(warnings).toEqual([]);
     });
 });

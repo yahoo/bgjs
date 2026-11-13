@@ -114,6 +114,13 @@ export class Graph {
     justUpdatedCallbacks: Set<Subscription> = new Set();
     /** @internal */
     effectFrames: EffectFrame[] = [];
+    /**
+     * Receives each warning's text. A warning reports code that works but may not do what was
+     * meant, such as a side effect that starts a synchronous action without
+     * {@link Graph.reentrant}. Defaults to `console.log`. Replace it to collect warnings, throw, or
+     * stop at a breakpoint; set it to null to skip them.
+     */
+    onWarning: ((message: string) => void) | null | undefined = (message) => console.log(message);
 
     constructor() {
        this.lastEvent = GraphEvent.initialEvent;
@@ -143,7 +150,7 @@ export class Graph {
         }
         if (frame.reentrant == 0 && !frame.logged) {
             frame.logged = true;
-            console.debug(unmarkedNestedActionMessage(frame.effect, frame.event));
+            this.onWarning?.(unmarkedNestedActionMessage(frame.effect, frame.event));
         }
         // Started from a side effect. The nested loop first finishes the side effect's event
         // (its remaining side effects), then any queued actions, then this one, and returns once
@@ -504,8 +511,8 @@ export class Graph {
      * synchronous action, usually a call out to client code (a listener or callback), to say that
      * this is intended. Such an action still runs the way it always does: the side effect's event
      * finishes its remaining side effects, the new action runs to completion, then the call
-     * returns, so code after it runs outside any event. Without `reentrant`, the graph logs that
-     * through `console.debug`, once per side effect run. Not required; it only documents the
+     * returns, so code after it runs outside any event. Without `reentrant`, the graph reports that
+     * through {@link Graph.onWarning}, once per side effect run. Not required; it only documents the
      * reentry and silences that message. Covers actions started anywhere inside `block`, however
      * deeply, but not those started by side effects of the events it runs. Outside a side effect
      * it just runs `block`.
