@@ -90,4 +90,7 @@ console.log(explain(data));      // or explain(data, { events: [3] })
 - `--json trace.json` saves the trace; `bg-trace --viewer viewer.html` writes a page that opens
   a dropped trace file.
 
+To find the input sequence that breaks a property, rather than tracing one you already
+have, use the `behavior-graph-explore` skill; it prints the trace of what it finds.
+
 The format and API are in `tools/trace/README.md`.
