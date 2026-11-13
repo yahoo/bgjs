@@ -575,3 +575,22 @@ describe('stale moment reads', () => {
         expect(read).toBeUndefined();
     });
 });
+
+describe('dropped actionAsync', () => {
+    test('names the dropped action and carries the original error as cause', async () => {
+        let g = new Graph();
+        let boom = new Error("boom in loadReq");
+        let dropped: Promise<any> | null = null;
+        expect(() => g.action(() => {
+            g.sideEffect(() => {
+                g.actionAsync(() => { throw boom; }).catch(() => {});
+                dropped = g.actionAsync(() => {}, 'saveDraft');
+            });
+        })).toThrow(boom);
+        let err: any = await dropped!.catch(e => e);
+        expectApisExist(err.message);
+        expect(err.message).toContain('"saveDraft"');
+        expect(err.message).toContain("boom in loadReq");
+        expect(err.cause).toBe(boom);
+    });
+});

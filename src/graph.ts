@@ -3,7 +3,7 @@
 //
 
 
-import {cycleMessage, demandNotAddedMessage, lifetimeMessage, removedDemandMessage, removedSupplyMessage} from "./errors.js";
+import {cycleMessage, demandNotAddedMessage, droppedActionMessage, lifetimeMessage, removedDemandMessage, removedSupplyMessage} from "./errors.js";
 import {BufferedPriorityQueue} from "./bufferedqueue.js";
 import {Behavior} from "./behavior.js";
 import {Extent, isChildLifetime, takeRemovalCleanups} from "./extent.js";
@@ -25,6 +25,7 @@ interface Action {
     block: (extent: Extent | null) => void;
     extent: Extent | null;
     resolve: ((value: any) => void) | null;
+    reject?: ((reason: any) => void) | null;
     debugName?: string;
 }
 
@@ -170,6 +171,7 @@ export class Graph {
                     throw err;
                 }
                 action.resolve = resolve;
+                action.reject = reject;
                 this.actions.push(action);
                 if (this.currentEvent == null) {
                     this.eventLoop();
@@ -260,9 +262,11 @@ export class Graph {
                 }
 
             } catch (error) {
+                // settle every actionAsync promise this failure ends, so none stays pending
+                let failed = this.eventLoopState?.action;
+                let dropped = this.actions.splice(0);
                 this.currentEvent = null;
                 this.eventLoopState = null;
-                this.actions.length = 0;
                 this.effects.length = 0;
                 this.currentBehavior = null;
                 this.activatedBehaviors.clear();
@@ -273,6 +277,14 @@ export class Graph {
                 this.untrackedBehaviors.length = 0;
                 this.extentsAdded.length = 0;
                 this.extentsRemoved.length = 0;
+                failed?.reject?.(error);
+                for (let action of dropped) {
+                    if (action.reject != null) {
+                        let err: any = new Error(droppedActionMessage(action.debugName, error));
+                        err.cause = error;
+                        action.reject(err);
+                    }
+                }
                 throw(error);
             }
             // no more tasks so we can exit the event loop

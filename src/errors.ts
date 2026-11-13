@@ -241,3 +241,10 @@ export function cleanupKeyOwnerMessage(key: string, extent: any, owner: Behavior
         + `cleanup and cancel its work. Fix: give this onRemove a different key, or start both pieces of work `
         + `from one behavior. To stop the work early from elsewhere, call onRemove.run("${key}") instead.`;
 }
+
+export function droppedActionMessage(debugName: string | undefined, cause: any): string {
+    let name = debugName != null ? `"${debugName}"` : "<unnamed action>";
+    return `actionAsync ${name} never ran: an earlier event failed before it started, and the graph drops queued actions when an event fails. `
+        + `The original error is err.cause: ${cause?.message ?? String(cause)}. `
+        + `Fix the original error; to retry, call actionAsync again.`;
+}
