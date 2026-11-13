@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as bg from 'behavior-graph';
-import { traceGraph, explain, describeModel, toMermaid } from '../src/index.js';
+import { traceGraph, explain, describeModel, toMermaid, timeline, valueTimeline } from '../src/index.js';
 import { toHTML } from '../src/html.js';
 import thermostat from '../examples/thermostat.mjs';
 import rooms from '../examples/rooms.mjs';
@@ -24,9 +24,9 @@ test('records each event: what ran, in order, and the effects', () => {
   assert.deepEqual(data.traces.map(t => t.source), ['start', '▲ pressed', 'sensor reads 69.5°', '▼ pressed while a reading arrives']);
   assert.deepEqual(runs(data.traces[1], data), ['Set the target', 'Decide whether to heat', 'Show the display']);
   assert.deepEqual(data.traces[2].steps.filter(s => s.t === 'effectRun').map(s => s.name), ['display', 'furnace']);
-  // the event's starting values are kept so a viewer can show any step
+  // a viewer can rebuild the values at the start of any event
   const desired = data.model.resources.find(r => r.name === 'desiredTemp').id;
-  assert.equal(data.traces[1].before.values[desired], '68');
+  assert.equal(valueTimeline(data)(1)[desired], '68');
 });
 
 test('explains a behavior that ran because several inputs changed together', () => {
@@ -40,7 +40,8 @@ test('records structure changes as extents come and go', () => {
   const data = record(rooms).toJSON();
   const add = data.traces.find(t => t.source === 'install bedroom sensor');
   assert.ok(add.steps.some(s => s.t === 'relink'));
-  const last = add.steps.filter(s => s.t === 'structure').at(-1).model;
+  const i = data.traces.indexOf(add);
+  const last = [...timeline(data).after[i].values()].at(-1);
   const coldest = last.behaviors.find(b => b.label === 'Find the coldest room');
   const labels = coldest.demands.map(d => last.resources.find(r => r.id === d.id)?.label);
   assert.ok(labels.includes('Bedroom.temp'), labels.join());

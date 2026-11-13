@@ -1,21 +1,36 @@
 // Steps through recorded events. Any step can be shown directly: the state at step k is the
-// event's starting snapshot plus steps 0..k, so moving backwards is as cheap as forwards.
+// event's starting state plus steps 0..k. Traces store only changes, so the starting structure
+// and values are rebuilt by replaying earlier events (BGTraceText.timeline / valueTimeline).
 // Classic script: needs BGTraceGraphView, BGTraceText (explain, describeModel, modelsByTrace)
 // and BGTraceMermaid (toMermaid); defines window.BGTracePlayer.
 (function () {
   const $ = (s, r) => (r || document).querySelector(s);
-  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   const SPEEDS = { slow: 1100, normal: 600, fast: 250 };
 
+  // One viewer per root: mounting again (a second dropped file) tears the first one down.
+  function unmount(root) {
+    if (root.__bgTraceViewer) root.__bgTraceViewer.destroy();
+    root.__bgTraceViewer = null;
+  }
+
   function mount(root, data) {
+    unmount(root);
     if (!data || !Array.isArray(data.traces)) return mountEmpty(root);
+    if (!data.traces.length) return mountEmpty(root, 'This trace has no events.');
+    if (!data.traces.every(t => t && Array.isArray(t.steps))) return mountEmpty(root, 'That file is not a bg-trace trace: an event has no steps.');
     const T = window.BGTraceText, M = window.BGTraceMermaid;
-    const models = T.modelsByTrace(data);
+    const controller = new AbortController();
+    const signal = controller.signal;
+    const lines = T.timeline(data);
+    const models = lines.start;
+    const valuesAt = T.valueTimeline(data);
     const names = new Map();
-    const allModels = [...models, data.model];
-    for (const t of data.traces) for (const s of t.steps) if (s.t === 'structure') allModels.push(s.model);
-    for (const m of allModels) if (m) { for (const r of m.resources) names.set(r.id, r.label); for (const b of m.behaviors) names.set(b.id, b.label); }
+    const addNames = (m) => { if (m) { for (const r of m.resources ?? []) names.set(r.id, r.label); for (const b of m.behaviors ?? []) names.set(b.id, b.label); } };
+    for (const t of data.traces) { addNames(t.before?.model); addNames(t.before?.structure?.set); for (const s of t.steps) if (s.t === 'structure') addNames(s.model ?? s.set); }
+    addNames(data.model);
     const N = (id) => names.get(id) ?? id;
+    const num = (t) => t.index ?? t.seq;
 
     root.innerHTML = `
       <div class="tv">
@@ -59,7 +74,7 @@
     function stateAt(i, upto) {
       const t = data.traces[i];
       let model = models[i] ?? data.model;
-      const values = Object.assign({}, t.before?.values ?? {});
+      const values = valuesAt(i);
       const st = { model, values, updated: new Set(), queued: new Set(), ran: new Map(), running: null, current: null,
         inputs: new Set(), fxQueued: new Set(), fxRunning: null, hotEdges: new Set(), errors: new Set(), phase: 'idle', error: null };
       let n = 0;
@@ -79,8 +94,9 @@
           case 'effect': if (s.beh) st.fxQueued.add(s.beh); break;
           case 'effectRun': st.phase = 'effects'; st.running = null; if (s.beh) { st.fxQueued.delete(s.beh); st.fxRunning = s.beh; st.current = s.beh; } break;
           case 'structure':
-            st.model = s.model;
-            for (const r of s.model.resources) if (!(r.id in values)) values[r.id] = r.value;
+            st.model = lines.after[i].get(j) ?? st.model;
+            for (const id of s.remove ?? []) delete values[id];
+            for (const r of st.model.resources) if (!(r.id in values)) values[r.id] = r.value;
             break;
           case 'error': st.error = s.message; break;
         }
@@ -96,11 +112,27 @@
           if (s.extent) return ['update', `${s.extent} ${s.value === 'true' ? 'added to' : 'removed from'} the graph`];
           return ['update', s.by ? `‘${N(s.by)}’ sets ${s.name} = ${s.value}` : (s.value === '(fired)' ? `${s.name} fires` : `${s.name} = ${s.value}`)];
         case 'activate': return ['activate', s.via ? `${N(s.via)} activates ‘${N(s.beh)}’` : `‘${N(s.beh)}’ is activated`];
-        case 'run': return ['run', `‘${N(s.beh)}’ runs`];
-        case 'relink': return ['structure', `‘${N(s.beh)}’ gets a new list of demands`];
-        case 'effect': return ['effect', `‘${N(s.beh)}’ queues a side effect${s.name ? ` “${s.name}”` : ''}`];
-        case 'effectRun': return ['effect', `Side effect${s.name ? ` “${s.name}”` : ''} runs`];
+        case 'run': {
+          const why = [...(s.why ?? []).map(N), ...(s.whyHidden ? [s.whyHidden === 1 ? 'a filtered-out demand' : `${s.whyHidden} filtered-out demands`] : [])];
+          return ['run', `‘${N(s.beh)}’ runs${why.length ? ` because ${why.join(' and ')} changed` : ''}`];
+        }
+        case 'relink': return ['structure', `${s.beh ? `‘${N(s.beh)}’` : 'A behavior'} gets a new list of demands`];
+        case 'effect': {
+          if (s.type === 'subscription') return ['effect', `A just-updated subscription is queued${s.extent ? ` (${s.extent})` : ''}`];
+          const what = s.type === 'cleanup' ? `removal cleanups for ${s.extent ?? 'an extent'}` : `a side effect${s.name ? ` “${s.name}”` : ''}`;
+          return ['effect', `${s.beh ? `‘${N(s.beh)}’` : 'The action'} queues ${what}`];
+        }
+        case 'effectRun': {
+          if (s.type === 'subscription') return ['effect', `Subscription callback runs${s.extent ? ` (${s.extent})` : ''}`];
+          if (s.type === 'cleanup') return ['effect', `Removal cleanups for ${s.extent ?? 'an extent'} run`];
+          return ['effect', `Side effect${s.name ? ` “${s.name}”` : ''} runs`];
+        }
         case 'structure': return ['structure', 'The graph changes shape'];
+        case 'hidden': {
+          const many = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+          const parts = [s.runs && many(s.runs, 'behavior run'), s.updates && many(s.updates, 'update'), s.effects && many(s.effects, 'side effect')].filter(Boolean);
+          return ['hidden', `Filtered out: ${parts.join(', ') || 'steps'}${s.in ? ` in ${Object.keys(s.in).slice(0, 4).join(', ')}` : ''}`];
+        }
         case 'error': return ['error', `Error: ${s.message}`];
       }
       return ['', s.t];
@@ -111,7 +143,7 @@
       $('.tv-events ol', root).innerHTML = data.traces.map((t, i) => {
         const runs = t.steps.filter(s => s.t === 'run').length;
         const err = t.steps.some(s => s.t === 'error');
-        return `<li><button data-ev="${i}" class="${i === ev ? 'on' : ''}${err ? ' err' : ''}"><span class="tv-seq">${t.seq ?? '·'}</span><span class="tv-src">${esc(t.source)}</span><span class="tv-n">${runs}</span></button></li>`;
+        return `<li><button data-ev="${i}" class="${i === ev ? 'on' : ''}${err ? ' err' : ''}"><span class="tv-seq">${esc(num(t) ?? '·')}</span><span class="tv-src">${esc(t.source)}</span><span class="tv-n">${runs}</span></button></li>`;
       }).join('');
       root.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => go(+b.dataset.ev, -1));
     }
@@ -137,7 +169,8 @@
         if (s.t === 'activate' && s.via) view.pulse(s.via, s.beh, ms);
       }
       const phase = { idle: 'Before', action: 'Action', behaviors: 'Behaviors', effects: 'Side effects', done: 'Done' }[st.phase];
-      const caption = k < 0 ? `Event ${t.seq}: ${esc(t.source)}. Step through to see what it does.` : esc(describe(s)[1]);
+      const skipped = t.before?.skipped ? ` (${t.before.skipped} earlier events not shown.)` : '';
+      const caption = k < 0 ? `Event ${esc(num(t))}: ${esc(t.source)}. Step through to see what it does.${esc(skipped)}` : esc(describe(s)[1]);
       $('.tv-caption', root).innerHTML = `<span class="tv-phase tv-ph-${st.phase}">${phase}</span> ${caption}${st.error ? ` <span class="tv-err">${esc(st.error)}</span>` : ''}`;
       const scrub = $('.tv-scrub', root);
       scrub.max = t.steps.length - 1;
@@ -147,15 +180,21 @@
       if (tab !== 'graph') renderText();
     }
 
+    // the structure at the end of this event, with the values replayed up to then
+    function endModel() {
+      const st = stateAt(ev, data.traces[ev].steps.length - 1);
+      return { ...st.model, resources: st.model.resources.map(r => (r.id in st.values ? { ...r, value: st.values[r.id] } : r)) };
+    }
+
     function renderText() {
       const t = data.traces[ev];
       let text;
       if (tab === 'text') {
         const all = $('.tv-allevents', root).checked;
-        text = all ? T.explain(data) : T.explain(data, { events: [t.seq] });
-        text += '\n\n— Structure at the end of this event —\n' + T.describeModel(stateAt(ev, t.steps.length - 1).model);
+        text = all ? T.explain(data) : T.explain(data, { events: [num(t)] });
+        text += '\n\n— Structure at the end of this event —\n' + T.describeModel(endModel());
       } else {
-        text = M.toMermaid(stateAt(ev, t.steps.length - 1).model, { trace: t });
+        text = M.toMermaid(endModel(), { trace: t });
       }
       $('.tv-pre', root).textContent = text;
     }
@@ -229,30 +268,43 @@
       const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
     }
     document.addEventListener('keydown', (e) => {
-      if (e.target.closest('input, select, textarea')) return;
+      if (e.target?.closest?.('input, select, textarea')) return;
       if (e.key === 'ArrowRight') { stop(); e.shiftKey ? go(ev + 1, -1) : next(); e.preventDefault(); }
       else if (e.key === 'ArrowLeft') { stop(); e.shiftKey ? go(ev - 1, -1) : prev(); e.preventDefault(); }
       else if (e.key === ' ') { play(); e.preventDefault(); }
-    });
-    window.addEventListener('resize', () => view.fit());
+    }, { signal });
+    window.addEventListener('resize', () => view.fit(), { signal });
+    acceptDrops(root);
+    root.__bgTraceViewer = {
+      destroy() { clearTimeout(timer); timer = null; controller.abort(); },
+    };
     go(0, -1);
   }
 
-  function mountEmpty(root) {
+  // dropping a trace file anywhere on the page opens it (replacing what is shown)
+  function acceptDrops(root, onError) {
+    const load = (text) => {
+      let data;
+      try { data = JSON.parse(text); } catch (e) { if (onError) onError(e); return; }
+      try { mount(root, data); } catch (e) { mountEmpty(root, 'Could not show that trace: ' + e.message); }
+    };
+    root.ondragover = (e) => e.preventDefault();
+    root.ondrop = (e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) f.text().then(load); };
+    return load;
+  }
+
+  function mountEmpty(root, note) {
     root.innerHTML = `<div class="tv-empty">
       <h1>Behavior Graph trace viewer</h1>
+      ${note ? `<p class="tv-note">${esc(note)}</p>` : ''}
       <p>Drop a trace file here (the JSON from <code>tracer.toJSON()</code> or <code>bg-trace --json</code>), choose one, or paste it.</p>
       <p><input type="file" accept=".json,application/json" class="tv-file"></p>
       <textarea class="tv-paste" rows="6" placeholder="…or paste trace JSON here" aria-label="Trace JSON"></textarea>
       <p class="tv-err" hidden></p>
     </div>`;
-    const load = (text) => {
-      try { mount(root, JSON.parse(text)); } catch (e) { const p = $('.tv-err', root); p.hidden = false; p.textContent = 'That is not trace JSON: ' + e.message; }
-    };
+    const load = acceptDrops(root, (e) => { const p = $('.tv-err', root); p.hidden = false; p.textContent = 'That is not trace JSON: ' + e.message; });
     $('.tv-file', root).onchange = (e) => { const f = e.target.files[0]; if (f) f.text().then(load); };
     $('.tv-paste', root).oninput = (e) => { if (e.target.value.trim().startsWith('{')) load(e.target.value); };
-    root.ondragover = (e) => e.preventDefault();
-    root.ondrop = (e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) f.text().then(load); };
   }
 
   window.BGTracePlayer = { mount };
