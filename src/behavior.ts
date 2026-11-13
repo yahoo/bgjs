@@ -36,6 +36,12 @@ export class Behavior implements Orderable {
     orderingState: OrderingState = OrderingState.Untracked;
     /** Topological rank: a behavior runs after every behavior with a lower order that it depends on. */
     order: number = 0;
+    /** @internal Rank in reverse-unordered mode: minus the longest path to a sink. */
+    priority: number = 0;
+    /** @internal When this behavior was last activated; breaks ties between equal ranks. */
+    activationSequence: number = 0;
+    /** @internal The graph's heightGeneration when `priority` was computed. */
+    priorityGeneration: number = -1;
 
     /** @internal */
     untrackedDemands: Demandable[] | null;
