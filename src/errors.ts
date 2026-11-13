@@ -199,3 +199,11 @@ export function shadowedMemberMessage(extent: any, name: string, isMethod: boole
     return `${extentName(extent)} has a field named "${name}", which hides Extent's own ${isMethod ? "method" : "field"} "${name}", so ${use} no longer works on it. ` +
         `Fix: rename the field (for example to ${name == "state" ? `"phase", "status" or ` : ""}"${name}Value").`;
 }
+
+export function cleanupKeyOwnerMessage(key: string, extent: any, owner: Behavior | null, current: Behavior | null): string {
+    let who = (b: Behavior | null) => b == null ? "a side effect queued from an action" : describeBehavior(b);
+    return `Cleanup key "${key}" on ${extentName(extent)} belongs to ${who(owner)}, and ${who(current)} `
+        + `registered it too. A key holds one cleanup, so the second registration would run the first one's `
+        + `cleanup and cancel its work. Fix: give this onRemove a different key, or start both pieces of work `
+        + `from one behavior. To stop the work early from elsewhere, call onRemove.run("${key}") instead.`;
+}

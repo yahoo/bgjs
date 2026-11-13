@@ -31,7 +31,6 @@ class Counter extends Extent {
     activeRequest = this.state<number | null>(null);
     greeting = this.state<string | null>(null);
     // plain bookkeeping, not reactive
-    private stopTimer: (() => void) | undefined;
     private nextToken = 1;
 
     constructor(graph: Graph, private readonly deps: Deps) {
@@ -51,9 +50,9 @@ class Counter extends Extent {
             .demands(this.pressed)
             .runs((ext) => {
                 ext.sideEffect((ext, onRemove) => {
-                    this.stopTimer?.();
                     const timer = setTimeout(() => ext.resetFired.updateWithAction(), 1000);
-                    this.stopTimer = onRemove(() => clearTimeout(timer));
+                    // one cleanup per key: registering 'resetTimer' again clears the previous timer
+                    onRemove('resetTimer', () => clearTimeout(timer));
                 });
             });
 
@@ -68,9 +67,9 @@ class Counter extends Extent {
                     ext.activeRequest.update(token);
                     ext.sideEffect((ext, onRemove) => {
                         const abort = new AbortController();
-                        const stop = onRemove(() => abort.abort());
+                        // a newer request aborts this one; aborting a finished request does nothing
+                        onRemove('greetingRequest', () => abort.abort());
                         const arrived = (text: string | null) => {
-                            stop(); // finished: unregister (aborting a finished request does nothing)
                             ext.greetingArrived.updateWithAction({ token, text });
                         };
                         deps.fetchGreeting(count, abort.signal).then(arrived, () => arrived(null));

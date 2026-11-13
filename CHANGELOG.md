@@ -5,19 +5,28 @@
 ### Added
 
 - **Cleanup on removal from a side effect.** `ext.sideEffect((ext, onRemove) => {...})`
-  passes a second argument. `onRemove(() => clearTimeout(t))` registers a cleanup next to the
-  code that starts the work; when the extent is removed, its cleanups run newest first in a
-  side effect of the removing event (for `containedLifetimes`, every removed extent's do).
-  `onRemove` returns a function that runs the cleanup early and unregisters it, for a timer
-  that restarts or a request that finishes. Registering on an extent that is already removed
-  runs the cleanup at once. Teardown no longer needs a `dispose()` method or a `disposed` flag;
-  AGENT_GUIDE.md shows the new pattern. The `OnRemove` type is exported.
+  passes a second argument. `onRemove('timer', () => clearTimeout(t))` registers a cleanup
+  under a key, next to the code that starts the work; when the extent is removed, its cleanups
+  run newest first in a side effect of the removing event (for `containedLifetimes`, every
+  removed extent's do). Registering on an extent that is already removed runs the cleanup at
+  once. Teardown no longer needs a `dispose()` method or a `disposed` flag; AGENT_GUIDE.md
+  shows the new pattern. The `OnRemove` type is exported.
+  - **A key holds one cleanup per extent.** Registering the same key again runs the cleanup it
+    held and keeps the new one, so a timer that restarts or a request a newer one replaces
+    needs no stored handle and cannot pile up. `onRemove.run(key)` runs a key's cleanup early.
+  - **A key belongs to one behavior.** Registering a key that another behavior's side effect
+    (or an action's) already registered on the same extent throws and names both, because the
+    second would silently cancel the first one's work.
+  - **A throwing cleanup does not stop the others.** Every cleanup of the extent runs, then
+    the first error is rethrown out of the removing action.
 
 ### Changed
 
 - **Extent subscriptions end through the same cleanups.** `extent.subscribeToJustUpdated`
   now unsubscribes in the removing event's side effects rather than during removal. Callbacks
-  already stopped at removal, so nothing observable changes. Calling the returned unsubscribe
+  already stopped at removal, so the only observable change is an extent removed and added
+  again in one event: a subscription made before the removal still fires once in that event.
+  Calling the returned unsubscribe
   early now also drops it from the extent, and subscribing on a removed extent unsubscribes
   at once.
 - **`Extent.unsubscribes` and `unsubscribeAll()` are gone.** Both were internal. Subclasses

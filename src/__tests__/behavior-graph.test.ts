@@ -1934,8 +1934,8 @@ describe('Extents', () => {
                 .demands(input)
                 .runs(e => {
                     e.sideEffect((e, onRemove) => {
-                        onRemove(() => ran.push('first'));
-                        onRemove(() => ran.push('second'));
+                        onRemove('first', () => ran.push('first'));
+                        onRemove('second', () => ran.push('second'));
                     });
                 });
             ext.addToGraphWithAction();
@@ -1953,21 +1953,185 @@ describe('Extents', () => {
             expect(ran).toEqual(['second', 'first']);
         });
 
-        test('returned function runs the cleanup early and only once', () => {
+        test('registering a key again runs the cleanup it held and keeps the new one', () => {
+            // |> Given a behavior that registers the same key every time it runs
+            let ran: number[] = [];
+            let input = ext.moment<number>();
+            ext.behavior()
+                .demands(input)
+                .runs(e => {
+                    let n = input.value!;
+                    e.sideEffect((e, onRemove) => {
+                        onRemove('timer', () => ran.push(n));
+                    });
+                });
+            ext.addToGraphWithAction();
+
+            // |> When it runs three times
+            input.updateWithAction(1);
+            expect(ran).toEqual([]);
+            input.updateWithAction(2);
+            input.updateWithAction(3);
+
+            // |> Then each registration cleaned up the one before
+            expect(ran).toEqual([1, 2]);
+
+            // |> And removal runs only the one still held
+            ext.removeFromGraphWithAction();
+            expect(ran).toEqual([1, 2, 3]);
+        });
+
+        test('a key that is registered many times holds one cleanup', () => {
+            let live = 0;
+            let tick = ext.moment();
+            ext.behavior()
+                .demands(tick)
+                .runs(e => {
+                    e.sideEffect((e, onRemove) => {
+                        live++;
+                        onRemove('tick', () => { live--; });
+                    });
+                });
+            ext.addToGraphWithAction();
+
+            for (let i = 0; i < 100; i++) {
+                tick.updateWithAction();
+            }
+
+            expect(live).toBe(1);
+            ext.removeFromGraphWithAction();
+            expect(live).toBe(0);
+        });
+
+        test('onRemove.run runs the cleanup early and only once', () => {
             let runCount = 0;
-            let stop: (() => void) | null = null;
             g.action(() => {
                 ext.addToGraph();
                 ext.sideEffect((e, onRemove) => {
-                    stop = onRemove(() => runCount++);
+                    onRemove('work', () => runCount++);
                 });
             });
 
-            stop!();
-            expect(runCount).toBe(1);
-            stop!();
+            g.action(() => {
+                ext.sideEffect((e, onRemove) => {
+                    onRemove.run('work');
+                    expect(runCount).toBe(1);
+                    onRemove.run('work');
+                    onRemove.run('never registered');
+                });
+            });
             ext.removeFromGraphWithAction();
             expect(runCount).toBe(1);
+        });
+
+        test('a key registered from a second behavior throws and names both', () => {
+            // |> Given two behaviors in one extent that use the same key
+            let retry = ext.moment('retry');
+            let timeout = ext.moment('timeout');
+            let retried = ext.state(0, 'retried');
+            let timedOut = ext.state(0, 'timedOut');
+            let ran: string[] = [];
+            ext.behavior()
+                .demands(retry)
+                .supplies(retried)
+                .runs(e => {
+                    e.sideEffect((e, onRemove) => { onRemove('timer', () => ran.push('retry')); });
+                });
+            ext.behavior()
+                .demands(timeout)
+                .supplies(timedOut)
+                .runs(e => {
+                    e.sideEffect((e, onRemove) => { onRemove('timer', () => ran.push('timeout')); });
+                });
+            ext.addToGraphWithAction();
+            retry.updateWithAction();
+
+            // |> When the second one registers
+            let caught: any = null;
+            try {
+                timeout.updateWithAction();
+            } catch (err) {
+                caught = err;
+            }
+
+            // |> Then it throws without touching the first one's cleanup
+            expect(caught).not.toBeNull();
+            expect(caught.message).toContain('"timer"');
+            expect(caught.message).toContain('retried');
+            expect(caught.message).toContain('timedOut');
+            expect(caught.message).toContain('onRemove.run("timer")');
+            expect(caught.key).toBe('timer');
+            expect(caught.extent).toBe(ext);
+            expect(ran).toEqual([]);
+
+            // |> And another behavior can still stop that work by key
+            g.action(() => {
+                ext.sideEffect((e, onRemove) => { onRemove.run('timer'); });
+            });
+            expect(ran).toEqual(['retry']);
+        });
+
+        test('a key owned by an action cannot be registered from a behavior', () => {
+            let input = ext.moment();
+            ext.behavior()
+                .demands(input)
+                .runs(e => {
+                    e.sideEffect((e, onRemove) => { onRemove('shared', () => {}); });
+                });
+            g.action(() => {
+                ext.addToGraph();
+                ext.sideEffect((e, onRemove) => { onRemove('shared', () => {}); });
+            });
+
+            expect(() => input.updateWithAction()).toThrow(/a side effect queued from an action/);
+        });
+
+        test('the same key on two extents does not collide', () => {
+            let ext2 = new Extent(g);
+            let ran: string[] = [];
+            g.action(() => {
+                ext.addToGraph();
+                ext2.addToGraph();
+                ext.sideEffect((e, onRemove) => { onRemove('timer', () => ran.push('one')); });
+                ext2.sideEffect((e, onRemove) => { onRemove('timer', () => ran.push('two')); });
+            });
+            expect(ran).toEqual([]);
+
+            ext2.removeFromGraphWithAction();
+            expect(ran).toEqual(['two']);
+        });
+
+        test('a throwing cleanup does not stop the others, and its error comes out of the action', () => {
+            let ran: string[] = [];
+            g.action(() => {
+                ext.addToGraph();
+                ext.sideEffect((e, onRemove) => {
+                    onRemove('a', () => ran.push('a'));
+                    onRemove('b', () => { throw new Error('boom'); });
+                    onRemove('c', () => { throw new Error('later'); });
+                    onRemove('d', () => ran.push('d'));
+                });
+            });
+
+            // |> The newest thrower runs first, so its error is the one rethrown
+            expect(() => ext.removeFromGraphWithAction()).toThrow('later');
+            expect(ran).toEqual(['d', 'a']);
+        });
+
+        test('a throwing cleanup on re-registration still keeps the new one', () => {
+            let ran: string[] = [];
+            g.action(() => {
+                ext.addToGraph();
+                ext.sideEffect((e, onRemove) => {
+                    onRemove('k', () => { throw new Error('old'); });
+                });
+            });
+            expect(() => g.action(() => {
+                ext.sideEffect((e, onRemove) => { onRemove('k', () => ran.push('new')); });
+            })).toThrow('old');
+
+            ext.removeFromGraphWithAction();
+            expect(ran).toEqual(['new']);
         });
 
         test('registering on a removed extent runs the cleanup at once', () => {
@@ -1979,7 +2143,7 @@ describe('Extents', () => {
             g.action(() => {
                 ext.sideEffect((e, onRemove) => {
                     // |> When it registers a cleanup after removal
-                    onRemove(() => { ran = true; });
+                    onRemove('late', () => { ran = true; });
                     // |> Then the cleanup has already run
                     expect(ran).toBe(true);
                 });
@@ -1995,8 +2159,8 @@ describe('Extents', () => {
             g.action(() => {
                 ext.addToGraph();
                 ext2.addToGraph();
-                ext.sideEffect((e, onRemove) => { onRemove(() => ran.push('parent')); });
-                ext2.sideEffect((e, onRemove) => { onRemove(() => ran.push('child')); });
+                ext.sideEffect((e, onRemove) => { onRemove('work', () => ran.push('parent')); });
+                ext2.sideEffect((e, onRemove) => { onRemove('work', () => ran.push('child')); });
             });
 
             ext.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes);
@@ -2009,14 +2173,14 @@ describe('Extents', () => {
             let ran: string[] = [];
             g.action(() => {
                 solo.addToGraph();
-                solo.sideEffect((e, onRemove) => { onRemove(() => ran.push('before')); });
+                solo.sideEffect((e, onRemove) => { onRemove('work', () => ran.push('before')); });
             });
 
             // |> When the extent is removed and added again in one event, then registers a cleanup
             g.action(() => {
                 solo.removeFromGraph();
                 solo.addToGraph();
-                solo.sideEffect((e, onRemove) => { onRemove(() => ran.push('after')); });
+                solo.sideEffect((e, onRemove) => { onRemove('work', () => ran.push('after')); });
             });
 
             // |> Then only the cleanup from before the removal has run
@@ -2029,7 +2193,7 @@ describe('Extents', () => {
             let ran = false;
             g.action(() => {
                 ext.addToGraph();
-                ext.sideEffect((e, onRemove) => { onRemove(() => { ran = true; }); });
+                ext.sideEffect((e, onRemove) => { onRemove('work', () => { ran = true; }); });
             });
 
             g.action(() => {
@@ -2050,7 +2214,7 @@ describe('Extents', () => {
             g.action(() => {
                 ext.addToGraph();
                 ext2.addToGraph();
-                ext2.sideEffect((e, onRemove) => { onRemove(() => { ran = true; }); });
+                ext2.sideEffect((e, onRemove) => { onRemove('work', () => { ran = true; }); });
             });
             expect(sr1.didUpdateSubscribers!.size).toBe(1);
 
@@ -2058,6 +2222,18 @@ describe('Extents', () => {
 
             expect(sr1.didUpdateSubscribers!.size).toBe(0);
             expect(ran).toBe(true);
+        });
+
+        test('an extent subscription can still be ended early by its returned function', () => {
+            let sr1 = ext.state<number>(0);
+            let unsubscribe = ext.subscribeToJustUpdated([sr1], () => {});
+            ext.addToGraphWithAction();
+            expect(sr1.didUpdateSubscribers!.size).toBe(1);
+
+            unsubscribe();
+            unsubscribe();
+
+            expect(sr1.didUpdateSubscribers!.size).toBe(0);
         });
     });
 

@@ -49,8 +49,8 @@ class List extends Extent {
       .runs((ext) => {
         ext.sideEffect((e, onRemove: OnRemove) => {
           const timer = setTimeout(() => e.addRequested.updateWithAction("later"), 1000);
-          const stop: () => void = onRemove(() => clearTimeout(timer));
-          if (e.items.value.length == 0) stop();
+          onRemove("later", () => clearTimeout(timer));
+          if (e.items.value.length == 0) onRemove.run("later");
         });
       });
   }
