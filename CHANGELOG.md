@@ -39,15 +39,16 @@
   - **A throwing cleanup does not stop the others.** Every cleanup of the extent runs, then
     the first error is rethrown out of the removing action.
 - **`graph.validateMomentReads`** (default `true`), the switch for the moment-read check above.
-- **`graph.reverseUnordered`, a test mode for output order nobody declared.** Behaviors with
+- **`graph.reverseUnordered`, a debugging mode for output order nobody declared.** Behaviors with
   no dependency path between them run in an order the graph does not promise, and so do
   their side effects, so a test can pass only because of the order the graph happened to
   pick. With `reverseUnordered` on, the graph runs such behaviors in a different valid order:
   every dependency still holds, unrelated behaviors run as late as their dependents allow,
-  and ties run in reverse activation order. Set the static `Graph.reverseUnorderedDefault =
-  true` in a test setup file to reverse every graph created afterwards, and run the suite
-  both ways (for example, two vitest or jest projects). A test that fails only in one order
-  depends on an order that was never declared.
+  and ties run in reverse activation order. A test that fails only in one order depends on
+  an order that was never declared. Use it when ordered output comes from several behaviors,
+  or when output order changes after an unrelated edit. The static
+  `Graph.reverseUnorderedDefault = true` reverses every graph created afterwards, for
+  example from a test setup file.
 
 ### Changed
 
@@ -67,8 +68,7 @@
 - **Behaviors at the same level now run in activation order.** The tie order used to be an
   artifact of the heap (a fan-out of five ran `0,4,3,2,1`). It was never specified and still
   is not, but it is now first-activated first, so the reversed mode can flip every tie. Code
-  that relied on the old order was relying on an accident; run its tests with
-  `reverseUnordered` to find it.
+  that relied on the old order was relying on an accident; `reverseUnordered` finds it.
 
 ## 2.0.0 (2026-10-08)
 

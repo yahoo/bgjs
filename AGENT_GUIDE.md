@@ -112,7 +112,7 @@ class Graph {
   validateLifetimes: boolean;        // default true; see lifetimes below
   validateTraceDemands: boolean;     // default true: traceValue needs a demand or .trace
   validateMomentReads: boolean;      // default true: moment.value throws unless the moment updated in this event
-  reverseUnordered: boolean;         // test mode: run unrelated behaviors in another valid order
+  reverseUnordered: boolean;         // debug aid: run unrelated behaviors in another valid order
   static reverseUnorderedDefault: boolean; // initial reverseUnordered for graphs created after
   debugHere(): string;               // text dump of current event/behavior
   subscribeToJustUpdated(resources: Resource[], callback: () => void): () => void;
@@ -289,26 +289,15 @@ unspecified relative order, and so do their side effects. So:
 Do not spread order-sensitive outputs across several behaviors and then try to fix the
 order with `.order` demands. That is the most common source of ordering bugs.
 
-**Run your tests in both orders.** The order the graph picks for unrelated behaviors is
-stable, so a test can pass for the wrong reason and break after an unrelated change.
-`graph.reverseUnordered = true` runs them in a different valid order: dependencies still
-hold, unrelated behaviors run as late as their dependents allow, and ties run in reverse.
-Set `Graph.reverseUnorderedDefault = true` in a test setup file to reverse every graph
-without changing app code. With vitest, two projects run every test both ways from one
-`vitest run`:
-
-```ts
-// vitest.workspace.ts (vitest 3.2+: the same entries under test.projects in the config)
-export default [
-  { extends: "./vitest.config.ts", test: { name: "normal" } },
-  { extends: "./vitest.config.ts", test: { name: "reversed", setupFiles: ["./reverse-unordered.setup.ts"] } },
-];
-// reverse-unordered.setup.ts
-import { Graph } from "behavior-graph";
-Graph.reverseUnorderedDefault = true;
-```
-
-With jest, use two entries in `projects`, one with the setup file in `setupFiles`.
+**Checking order you did not declare.** The order the graph picks for behaviors with no
+dependency path between them is stable but not promised, so a test can pass by accident and
+break after an unrelated change. `graph.reverseUnordered = true` runs them in a different
+valid order: dependencies still hold, unrelated behaviors run as late as their dependents
+allow, and ties run in reverse. It is a debugging aid, not something to leave on. Reach for
+it when ordered output (a log, a command stream) comes from more than one behavior, or when
+output order changed after an edit that should not have affected it. To reverse every graph
+in a test run without touching app code, set `Graph.reverseUnorderedDefault = true` in a
+test setup file.
 
 **Actions from callbacks.** Timer, promise and network callbacks run outside any event, so
 `updateWithAction` from them is correct. Starting an action inside a side effect is also
@@ -860,11 +849,11 @@ callbacks use `updateWithAction`.
 **Output order that holds only by accident.**
 No error. Two behaviors with no dependency path between them each emit from their own side
 effect, and the test passes because the graph happens to run them in that order. A later
-change that adds a link or a behavior can flip it. A test that passes normally and fails with
-`graph.reverseUnordered = true` (or in the `reversed` test project) has this bug. Wrong:
-reorder the behaviors or the code until the reversed run passes. Right: emit those outputs
-from one output behavior (section 3), or give the pair an order with a data or `.order`
-demand.
+change that adds a link or a behavior can flip it. If output order changed after an
+unrelated edit, run the test with `graph.reverseUnordered = true`; if the order flips, this
+is the cause. Wrong: reorder the behaviors or the code until both orders pass. Right: emit
+those outputs from one output behavior (section 3), or give the pair an order with a data or
+`.order` demand.
 
 **Output outside a side effect.** No graph error, but the output happens before other
 behaviors have run, so it can see stale values and ordering breaks. Always render, log and
