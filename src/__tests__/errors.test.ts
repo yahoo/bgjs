@@ -20,7 +20,7 @@ class Player extends Extent {
 // every `.name(` a message mentions must be a real method
 function expectApisExist(msg: string) {
     let p = new Player(new Graph());
-    let targets: any[] = [p, p.behavior(), p.seq, p.loadReq];
+    let targets: any[] = [p, p.behavior(), p.seq, p.loadReq, p.graph];
     for (let [, name] of msg.matchAll(/\.(\w+)\(/g)) {
         expect(targets.some(t => typeof t[name] == "function") ? name : `missing API ${name}`).toBe(name);
     }
@@ -488,6 +488,79 @@ describe('builder and extent mistakes', () => {
         let panel = new Panel(g);
         let msg = thrown(() => g.action(() => panel.addToGraph())).message;
         expect(msg).toContain('field named "graph"');
+    });
+});
+
+describe('synchronous action inside a side effect', () => {
+    class Feed extends Extent {
+        go = this.moment();
+        ping = this.moment();
+        constructor(g: Graph, a: (ext: Feed) => void, b: (ext: Feed) => void) {
+            super(g);
+            this.behavior().demands(this.go).runs(ext => {
+                ext.sideEffect(a, 'notifyClient');
+                ext.sideEffect(b, 'render');
+            });
+        }
+    }
+
+    test('a dropped action names the side effect that started it and carries the cause', () => {
+        let g = new Graph();
+        let caught: any = null;
+        let feed = new Feed(g, ext => {
+            try { g.reentrant(() => ext.ping.updateWithAction()); } catch (e) { caught = e; }
+        }, () => { throw new Error('render broke'); });
+        feed.addToGraphWithAction();
+        expect(() => feed.go.updateWithAction()).toThrow('render broke');
+        expectApisExist(caught.message);
+        expect(caught.message).toContain('Side effect "notifyClient" of Feed');
+        expect(caught.message).toContain('event 2');
+        expect(caught.message).toContain('"render broke"');
+        expect(caught.cause.message).toBe('render broke');
+    });
+
+    test('an action that ran before other work failed says so and carries the cause', () => {
+        let g = new Graph();
+        let caught: any = null;
+        let feed = new Feed(g, ext => {
+            try { g.reentrant(() => ext.ping.updateWithAction()); } catch (e) { caught = e; }
+        }, () => g.reentrant(() => g.action(() => { throw new Error('render broke'); })));
+        feed.addToGraphWithAction();
+        expect(() => feed.go.updateWithAction()).toThrow('render broke');
+        expectApisExist(caught.message);
+        expect(caught.message).toContain('This action ran');
+        expect(caught.message).toContain('Side effect "notifyClient" of Feed');
+        expect(caught.message).toContain('event 2');
+        expect(caught.message).toContain('"render broke"');
+        expect(caught.cause.message).toBe('render broke');
+    });
+
+    test('queuing a side effect after the action returned names the side effect', () => {
+        let g = new Graph();
+        let caught: any = null;
+        let feed = new Feed(g, ext => {
+            g.reentrant(() => ext.ping.updateWithAction());
+            try { ext.sideEffect(() => {}); } catch (e) { caught = e; }
+        }, () => {});
+        feed.addToGraphWithAction();
+        feed.go.updateWithAction();
+        expectApisExist(caught.message);
+        expect(caught.message).toContain('side effect "notifyClient" of Feed');
+        expect(caught.message).toContain('event 2');
+    });
+
+    test('the warning for an unmarked action names the side effect, the event and graph.reentrant', () => {
+        let g = new Graph();
+        let logs: string[] = [];
+        g.onWarning = m => logs.push(m);
+        let feed = new Feed(g, ext => ext.ping.updateWithAction(), () => {});
+        feed.addToGraphWithAction();
+        feed.go.updateWithAction();
+        expect(logs.length).toBe(1);
+        expectApisExist(logs[0]);
+        expect(logs[0]).toContain('side effect "notifyClient" of Feed');
+        expect(logs[0]).toContain('event 2');
+        expect(logs[0]).toContain('graph.reentrant(');
     });
 });
 

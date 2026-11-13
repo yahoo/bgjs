@@ -39,6 +39,17 @@
   - **A throwing cleanup does not stop the others.** Every cleanup of the extent runs, then
     the first error is rethrown out of the removing action.
 - **`graph.validateMomentReads`** (default `true`), the switch for the moment-read check above.
+- **`graph.onWarning`**, which receives the text of each warning: code that works but may not
+  do what was meant. Defaults to `console.warn`. Replace it to collect warnings, throw, or stop
+  at a breakpoint; set it to `null` to skip them.
+- **`graph.reentrant(block)`** marks code in a side effect that may start a synchronous action,
+  usually a call to a client callback. Such an action is still allowed and runs as before: the
+  side effect's event finishes its remaining side effects, the new action runs to completion,
+  then the call returns, so code after it runs outside any event. Without the marker, the graph
+  reports this once per side effect run through `graph.onWarning`, naming the side effect and
+  the event; the marker documents that the reentry is intended and silences that message. It covers
+  actions started anywhere inside `block`. Queuing a side effect after such an action returns
+  still throws, now with a message that explains why.
 - **`graph.reverseUnordered`, a debugging mode for output order nobody declared.** Behaviors with
   no dependency path between them run in an order the graph does not promise, and so do
   their side effects, so a test can pass only because of the order the graph happened to
@@ -49,6 +60,26 @@
   or when output order changes after an unrelated edit. The static
   `Graph.reverseUnorderedDefault = true` reverses every graph created afterwards, for
   example from a test setup file.
+
+### Fixed
+
+- **An error from one side effect can no longer be swallowed by another.** When a side effect
+  started a synchronous action, the rest of its event ran inside that call, so an error from a
+  later side effect surfaced there: a `try`/`catch` around the call hid it, the rest of the event
+  was dropped, and the opening action returned normally. Now the call throws "This action never
+  ran ..." (or "This action ran, but other work in the same call failed ..." when the failure
+  came after it, such as another side effect's action or a queued action) with the original
+  error as `err.cause`, and the action that opened the event rethrows the original even if that
+  is caught; starting another action after catching it rethrows the original instead of
+  running. An error from the started action's own event, or from actions it starts, still
+  reaches the caller unchanged.
+- **`actionAsync` promises settle when an event fails.** They used to stay pending forever
+  when the action's own event threw after it was queued from a side effect, or when an
+  earlier failure dropped the action from the queue. Now the failing action's promise
+  rejects with the original error, and each dropped action's rejects with an error naming it
+  (`actionAsync "name" never ran: ...`) whose `cause` is the original. The loop still throws
+  to its caller as before. A promise nobody handles now surfaces as an unhandled rejection;
+  to upgrade, `await` or `.catch` each `actionAsync` you start from a side effect.
 
 ### Changed
 
@@ -69,16 +100,6 @@
   artifact of the heap (a fan-out of five ran `0,4,3,2,1`). It was never specified and still
   is not, but it is now first-activated first, so the reversed mode can flip every tie. Code
   that relied on the old order was relying on an accident; `reverseUnordered` finds it.
-
-### Fixed
-
-- **`actionAsync` promises settle when an event fails.** They used to stay pending forever
-  when the action's own event threw after it was queued from a side effect, or when an
-  earlier failure dropped the action from the queue. Now the failing action's promise
-  rejects with the original error, and each dropped action's rejects with an error naming it
-  (`actionAsync "name" never ran: ...`) whose `cause` is the original. The loop still throws
-  to its caller as before. A promise nobody handles now surfaces as an unhandled rejection;
-  to upgrade, `await` or `.catch` each `actionAsync` you start from a side effect.
 
 ## 2.0.0 (2026-10-08)
 
