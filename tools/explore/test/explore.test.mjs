@@ -108,7 +108,10 @@ test('a shared environment key makes steps dependent', () => {
 });
 
 test('cone of influence merges states that differ only outside the cone', () => {
-  const r = explore({ ...options(null, false, 10), cone: (p) => [p.a.doubled] });
+  // incB would read b.count, outside the cone, which explore rejects; setB writes without reading
+  const base = options(null, false, 10);
+  const setB = { name: 'setB', inputs: [0, 1, 2], run: (p, v) => p.b.count.updateWithAction(v) };
+  const r = explore({ ...base, actions: [base.actions[0], setB], cone: (p) => [p.a.doubled] });
   assert.equal(r.ok, true);
   assert.equal(r.stats.states, 3);
 });
@@ -144,7 +147,7 @@ test('Date.now inside a behavior throws during explore', () => {
     actions: [{ name: 'tick', run: (c) => c.tick.updateWithAction() }],
     depth: 2,
   });
-  assert.match(r.counterexample.violations[0], /Date.now\(\) inside a behavior/);
+  assert.match(r.counterexample.violations[0], /Date.now\(\) is not replayable: inject a fixed graph.dateProvider/);
   assert.equal(typeof Date.now(), 'number');
 });
 
@@ -167,11 +170,26 @@ test('random walks', () => {
 // --- specific to the tool version (no hooks in the library)
 
 test('puts the library back when it returns, even after a violation', () => {
-  const methods = (proto) => Object.getOwnPropertyDescriptors(proto);
-  const before = [bg.Graph.prototype, bg.Resource.prototype, bg.State.prototype].map(methods);
+  // every own property of what explore wraps, by identity (deepEqual on Math's descriptors
+  // fails after a plain reassign-and-restore, so compare the functions themselves)
+  const wrapped = () => [bg.Graph.prototype, bg.Resource.prototype, bg.State.prototype, bg.Moment.prototype, bg.Extent.prototype,
+    Promise.prototype, Date, Math, { Date: globalThis.Date }].map((o) => new Map(Reflect.ownKeys(o).map((k) => {
+    const d = Object.getOwnPropertyDescriptor(o, k);
+    return [k, [d.value, d.get, d.set]];
+  })));
+  const changed = (a, b) => a.flatMap((m, i) => [...new Set([...m.keys(), ...b[i].keys()])]
+    .filter((k) => !m.has(k) || !b[i].has(k) || m.get(k).some((x, j) => !Object.is(x, b[i].get(k)[j]))).map((k) => `${i}:${String(k)}`));
+  const before = wrapped();
   explore(options(2, true, 4));
-  const after = [bg.Graph.prototype, bg.Resource.prototype, bg.State.prototype].map(methods);
-  assert.deepEqual(after, before);
+  assert.deepEqual(changed(wrapped(), before), []);
+  // and after the paths that stop the search with an error
+  assert.throws(() => explore({ ...options(null, false, 2), actions: [{ name: 'p', run: async () => {} }] }), /returned a promise/);
+  assert.throws(() => explore({ ...options(null, false, 2), setup: () => { Date.now(); } }), /not replayable/);
+  assert.throws(() => explore({ ...options(null, false, 2), cone: (p) => [p.a.doubled] }), /outside the cone/);
+  assert.deepEqual(changed(wrapped(), before), []);
+  // the graphs explore built get the default dateProvider back
+  const { sys } = replayExplore(options(null, false, 2), []);
+  assert.equal(sys.graph.dateProvider, new Graph().dateProvider);
   // and an ordinary graph runs untouched
   const g = new Graph();
   const p = new Pair(g, null, false);
