@@ -50,8 +50,18 @@
   the event; the marker documents that the reentry is intended and silences that message. It covers
   actions started anywhere inside `block`. Queuing a side effect after such an action returns
   still throws, now with a message that explains why.
+- **`graph.reverseUnordered`, a debugging mode for output order nobody declared.** Behaviors with
+  no dependency path between them run in an order the graph does not promise, and so do
+  their side effects, so a test can pass only because of the order the graph happened to
+  pick. With `reverseUnordered` on, the graph runs such behaviors in a different valid order:
+  every dependency still holds, unrelated behaviors run as late as their dependents allow,
+  and ties run in reverse activation order. A test that fails only in one order depends on
+  an order that was never declared. Use it when ordered output comes from several behaviors,
+  or when output order changes after an unrelated edit. The static
+  `Graph.reverseUnorderedDefault = true` reverses every graph created afterwards, for
+  example from a test setup file.
 
-### Fixes
+### Fixed
 
 - **An error from one side effect can no longer be swallowed by another.** When a side effect
   started a synchronous action, the rest of its event ran inside that call, so an error from a
@@ -76,6 +86,10 @@
   behavior's extent and the target's, gives `target.addChildLifetime(owner)` and
   `target.unifyLifetime(owner)` with those names, and when a parent statically links to its
   own child, says to use `dynamicDemands` or `dynamicSupplies` instead.
+- **Behaviors at the same level now run in activation order.** The tie order used to be an
+  artifact of the heap (a fan-out of five ran `0,4,3,2,1`). It was never specified and still
+  is not, but it is now first-activated first, so the reversed mode can flip every tie. Code
+  that relied on the old order was relying on an accident; `reverseUnordered` finds it.
 
 ## 2.0.0 (2026-10-08)
 

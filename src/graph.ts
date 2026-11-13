@@ -121,9 +121,44 @@ export class Graph {
      * stop at a breakpoint; set it to null to skip them.
      */
     onWarning: ((message: string) => void) | null | undefined = (message) => console.log(message);
+    /** @internal */
+    activationCount: number = 0;
+    /** @internal Bumped whenever links change, so reverse-mode priorities are recomputed. */
+    heightGeneration: number = 0;
+    /** @internal */
+    linksChanged: boolean = false;
+    private _reverseUnordered: boolean = false;
+
+    /**
+     * The initial value of {@link Graph.reverseUnordered} for graphs created afterwards. Set it
+     * in a test setup file to run a whole suite in reversed order without changing app code.
+     */
+    static reverseUnorderedDefault: boolean = false;
 
     constructor() {
        this.lastEvent = GraphEvent.initialEvent;
+       this.reverseUnordered = Graph.reverseUnorderedDefault;
+    }
+
+    /**
+     * Debug mode for tests. Behaviors with no dependency path between them run in an order the
+     * graph does not promise, and so do their side effects. When true, the graph runs such
+     * behaviors in a different valid order: as late as their dependents allow, with ties in
+     * reverse activation order. Run your tests both ways; a test that passes in only one order
+     * depends on an order nothing declared. Fix it with one output behavior or a `.order` demand.
+     * Defaults to {@link Graph.reverseUnorderedDefault}.
+     */
+    get reverseUnordered(): boolean {
+        return this._reverseUnordered;
+    }
+
+    set reverseUnordered(value: boolean) {
+        if (value != this._reverseUnordered) {
+            this._reverseUnordered = value;
+            this.activatedBehaviors.reversed = value;
+            this.linksChanged = true;
+            this.activatedBehaviors.unsort();
+        }
     }
 
     /**
@@ -215,10 +250,16 @@ export class Graph {
 
                     this.eventLoopState!.phase = EventLoopPhase.updates;
                     let sequence = this.currentEvent!.sequence;
+                    if (this.untrackedBehaviors.length > 0 || this.modifiedSupplyBehaviors.length > 0 || this.modifiedDemandBehaviors.length > 0) {
+                        this.linksChanged = true;
+                    }
                     this.addUntrackedBehaviors();
                     this.addUntrackedSupplies();
                     this.addUntrackedDemands(sequence);
                     this.orderBehaviors();
+                    if (this._reverseUnordered && this.linksChanged) {
+                        this.reprioritize();
+                    }
                     this.runNextBehavior(sequence);
 
                     continue;
@@ -403,6 +444,11 @@ export class Graph {
     private activateBehavior(behavior: Behavior, sequence: number) {
         if (behavior.enqueuedWhen == null || behavior.enqueuedWhen < sequence) {
             behavior.enqueuedWhen = sequence;
+            behavior.activationSequence = ++this.activationCount;
+            if (this._reverseUnordered && !this.linksChanged) {
+                // with links mid-change, reprioritize sets it once relinking is done
+                behavior.priority = -this.heightOf(behavior);
+            }
             this.activatedBehaviors.push(behavior);
         }
     }
@@ -414,7 +460,7 @@ export class Graph {
         let ranOrder: number | null = null;
         while (true) {
             let nextBehavior = this.activatedBehaviors.peek();
-            if (nextBehavior === undefined || (ranOrder !== null && nextBehavior.order != ranOrder)) {
+            if (nextBehavior === undefined || (ranOrder !== null && this.activatedBehaviors.rank(nextBehavior) != ranOrder)) {
                 break;
             }
             this.activatedBehaviors.pop();
@@ -425,7 +471,11 @@ export class Graph {
             this.currentBehavior = nextBehavior;
             nextBehavior.block(nextBehavior.extent);
             this.currentBehavior = null;
-            ranOrder = nextBehavior.order;
+            ranOrder = this.activatedBehaviors.rank(nextBehavior);
+            if (this._reverseUnordered && this.linksChanged) {
+                // a removal changed links; recompute priorities before running more
+                break;
+            }
         }
     }
 
@@ -830,6 +880,39 @@ export class Graph {
         }
     }
 
+    private reprioritize() {
+        // Links changed, so every cached height may be stale. Recompute lazily for activated
+        // behaviors now and for later activations as they happen.
+        this.linksChanged = false;
+        this.heightGeneration++;
+        this.activatedBehaviors.unsort();
+        for (let behavior of this.activatedBehaviors.buffer) {
+            behavior.priority = -this.heightOf(behavior);
+        }
+    }
+
+    // The longest path from `behavior` to a sink. Reverse mode ranks by its negative: for every
+    // edge A -> B, A's path is longer than B's, so A still runs first, and unrelated behaviors
+    // run as late as their dependents allow.
+    private heightOf(behavior: Behavior): number {
+        if (behavior.priorityGeneration == this.heightGeneration) {
+            return -behavior.priority;
+        }
+        // mark before descending; the graph is acyclic once ordered, this only guards recursion
+        behavior.priorityGeneration = this.heightGeneration;
+        behavior.priority = 0;
+        let height = 0;
+        if (behavior.supplies != null) {
+            for (let supply of behavior.supplies) {
+                for (let subsequent of supply.subsequents) {
+                    height = Math.max(height, this.heightOf(subsequent) + 1);
+                }
+            }
+        }
+        behavior.priority = -height;
+        return height;
+    }
+
     /** The resources on a dependency cycle through `behavior`, or an empty array if there is none. */
     debugCycleForBehavior(behavior: Behavior): Resource[] {
         let stack: Resource[] = [];
@@ -934,6 +1017,7 @@ export class Graph {
 
 
         behavior.removedWhen = sequence;
+        this.linksChanged = true;
     }
 
     /** @internal */

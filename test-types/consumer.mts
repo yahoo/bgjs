@@ -59,6 +59,8 @@ class List extends Extent {
 // Introspection and debugging members named in AGENT_GUIDE.md stay public.
 const graph = new Graph();
 graph.validateTraceDemands = true;
+Graph.reverseUnorderedDefault = false;
+graph.reverseUnordered = graph.reverseUnordered || false;
 graph.validateLifetimes = true;
 graph.dateProvider = { now: () => new Date(0) };
 const list = new List(graph);

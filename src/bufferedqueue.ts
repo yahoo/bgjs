@@ -6,6 +6,10 @@
 
 export interface Orderable {
     order: number;
+    /** Rank used instead of `order` when the queue is reversed. */
+    priority?: number;
+    /** Breaks ties between equal ranks: lower first, or higher first when reversed. */
+    activationSequence?: number;
 }
 
 export class BufferedPriorityQueue<T extends Orderable> {
@@ -17,6 +21,11 @@ export class BufferedPriorityQueue<T extends Orderable> {
      */
     queue: T[] = [];
     buffer: T[] = [];
+    /**
+     * When true, items are ranked by `priority` and ties pop in reverse `activationSequence`.
+     * Call `unsort` after changing it or any rank of a queued item.
+     */
+    reversed: boolean = false;
 
     constructor() {
 
@@ -82,12 +91,28 @@ export class BufferedPriorityQueue<T extends Orderable> {
         this.buffer.length = 0;
     }
 
+    private less(a: T, b: T): boolean {
+        let ra = this.reversed ? (a.priority ?? a.order) : a.order;
+        let rb = this.reversed ? (b.priority ?? b.order) : b.order;
+        if (ra != rb) {
+            return ra < rb;
+        }
+        let sa = a.activationSequence ?? 0;
+        let sb = b.activationSequence ?? 0;
+        return this.reversed ? sa > sb : sa < sb;
+    }
+
+    /** The rank the queue sorts `item` by: `order`, or `priority` when reversed. */
+    public rank(item: T): number {
+        return this.reversed ? (item.priority ?? item.order) : item.order;
+    }
+
     private up(pos: number) {
         let b_up = this.queue[pos];
         while (pos > 0) {
             let parent = (pos - 1) >> 1;
             let b_parent = this.queue[parent];
-            if (b_up.order >= b_parent.order) {
+            if (!this.less(b_up, b_parent)) {
                 break;
             }
             this.queue[pos] = b_parent;
@@ -105,11 +130,11 @@ export class BufferedPriorityQueue<T extends Orderable> {
             let best = this.queue[left];
             const right = left + 1;
 
-            if (right < this.queue.length && this.queue[right].order < best.order) {
+            if (right < this.queue.length && this.less(this.queue[right], best)) {
                 left = right;
                 best = this.queue[right];
             }
-            if (best.order >= b_down.order) {
+            if (!this.less(best, b_down)) {
                 break;
             }
             this.queue[pos] = best;
