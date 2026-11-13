@@ -47,3 +47,13 @@ After changing anything in `src/`, run all three; each catches what the others m
   (`tag-start: Name` ... `tag-end`) and `docs-code-example.test.js` (`tag::name[]` ...
   `end::name[]`) match snippets on the docs site (yahoo/bgdocs). Keep the tag names, and keep
   the code in step with the site.
+
+## Development tools
+
+`tools/` holds packages that are not part of the published library and read its internals.
+Each has its own `npm test`; run it after changing `src/`, since an internal rename breaks them
+without failing the library's checks.
+
+- **`tools/trace`** (`bg-trace`): records what a graph did event by event and explains it as
+  text. When a test fails or you need to know why a behavior did or did not run, trace a
+  scenario before reading code; `skills/behavior-graph-trace/SKILL.md` says how.
