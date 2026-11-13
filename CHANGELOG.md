@@ -73,6 +73,13 @@
   is caught; starting another action after catching it rethrows the original instead of
   running. An error from the started action's own event, or from actions it starts, still
   reaches the caller unchanged.
+- **`actionAsync` promises settle when an event fails.** They used to stay pending forever
+  when the action's own event threw after it was queued from a side effect, or when an
+  earlier failure dropped the action from the queue. Now the failing action's promise
+  rejects with the original error, and each dropped action's rejects with an error naming it
+  (`actionAsync "name" never ran: ...`) whose `cause` is the original. The loop still throws
+  to its caller as before. A promise nobody handles now surfaces as an unhandled rejection;
+  to upgrade, `await` or `.catch` each `actionAsync` you start from a side effect.
 
 ### Changed
 

@@ -3263,6 +3263,51 @@ describe('Effects, Actions, Events', () => {
         });
     });
 
+    test('queued actionAsync rejects when its own event fails, and the loop still throws', async () => {
+        // |> Given an actionAsync queued from a side effect
+        let g2 = new Graph();
+        let boom = new Error("boom");
+        let p: Promise<any> | null = null;
+        // |> When its event throws
+        expect(() => {
+            g2.action(() => {
+                g2.sideEffect(() => {
+                    p = g2.actionAsync(() => { throw boom; }, 'failing');
+                });
+            });
+        }).toThrow(boom);
+        // |> Then its promise rejects with that error
+        await expect(p).rejects.toBe(boom);
+    });
+
+    test('queued actionAsync dropped by an earlier failure rejects naming itself', async () => {
+        // |> Given two actionAsync calls queued from a side effect
+        let g2 = new Graph();
+        let boom = new Error("boom");
+        let first: Promise<any> | null = null;
+        let second: Promise<any> | null = null;
+        let secondRan = false;
+        // |> When the first one's event throws
+        expect(() => {
+            g2.action(() => {
+                g2.sideEffect(() => {
+                    first = g2.actionAsync(() => { throw boom; }, 'first');
+                    second = g2.actionAsync(() => { secondRan = true; }, 'second');
+                });
+            });
+        }).toThrow(boom);
+        await expect(first).rejects.toBe(boom);
+        // |> Then the dropped one never runs and rejects with an error naming it, caused by the original
+        let err: any = await second!.catch(e => e);
+        expect(secondRan).toBe(false);
+        expect(err.message).toContain('"second"');
+        expect(err.cause).toBe(boom);
+        // |> And the graph still runs later actions
+        let ran = false;
+        await g2.actionAsync(() => { ran = true; });
+        expect(ran).toBe(true);
+    });
+
     test('dateProvider gives an alternate time', () => {
         let t = new Date(1);
         let tp = {

@@ -104,6 +104,7 @@ Concretely:
 class Graph {
   constructor();
   action(block: () => void, debugName?: string): void;     // open an event, run block, drain
+  actionAsync(block: () => void, debugName?: string): Promise<unknown>; // runs now, or after the current event from a side effect; settles when its event ends or fails
   sideEffect(block: () => void, debugName?: string): void; // queue an effect (no extent arg)
   currentEvent: GraphEvent | null;   // non-null while an event is running
   lastEvent: GraphEvent;             // last completed event; starts at sequence 0
@@ -856,6 +857,15 @@ demand `this.b` and read `.value` if the rule needs this event's value.
 wrapping it in a side effect block.` Wrong: `runs(ext => ext.other.updateWithAction(1))`.
 Right: supply `other` and call `ext.other.update(1)`, or queue a side effect if a second
 event is really intended.
+
+**Not handling a rejected `actionAsync` promise.**
+When an event fails, the error is thrown to whoever ran the loop, and every `actionAsync`
+promise that failure ends rejects too: the failing action's own promise with the original
+error, and each action still queued behind it with `actionAsync "saveDraft" never ran: an
+earlier event failed before it started, ...` and the original as `err.cause`. Those queued
+actions never run. Wrong: `ext.sideEffect(() => { ext.graph.actionAsync(save) })` with the
+promise dropped, which turns a failure into an unhandled rejection. Right: `await` it or add
+`.catch(...)`.
 
 **Updating a supplied resource from an action, or an unsupplied one from a behavior.**
 `Error: Supplied resource can only be updated by its supplying behavior.` and
