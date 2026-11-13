@@ -105,7 +105,6 @@ describe("AGENT_GUIDE skeleton", () => {
     beforeEach(() => {
         jest.useFakeTimers();
         graph = new Graph();
-        graph.validateMomentReads = true;
         views = [];
         pending = new Map();
         signals = new Map();
@@ -200,7 +199,7 @@ class List extends Extent {
             .supplies(this.items)
             .runs((ext) => {
                 if (ext.addRequested.justUpdated) {
-                    const item = new Item(ext.graph, ext.addRequested.value!);
+                    const item = new Item(ext.graph, ext.addRequested.value);
                     ext.addChildLifetime(item);
                     item.addToGraph();
                     ext.items.update([...ext.items.value, item]);
@@ -228,7 +227,6 @@ class List extends Extent {
 describe("AGENT_GUIDE collection", () => {
     test("adds, toggles, aggregates and removes children", () => {
         const graph = new Graph();
-        graph.validateMomentReads = true;
         const list = new List(graph);
         list.addToGraphWithAction();
 
@@ -248,7 +246,6 @@ describe("AGENT_GUIDE collection", () => {
 
     test("a child's behavior runs in the event it is added when a demand is justUpdated", () => {
         const graph = new Graph();
-        graph.validateMomentReads = true;
         let ranIn: number | null = null;
         class Child extends Extent {
             constructor(graph: Graph) {

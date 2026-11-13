@@ -149,31 +149,69 @@ describe('access and update errors', () => {
 });
 
 describe('graph membership errors', () => {
-    test('static demand without a lifetime relationship names the extent and the lifetime APIs', () => {
+    test('static demand without a lifetime relationship names both extents and the lifetime APIs', () => {
         let g = new Graph();
         let other = new Player(g);
         other.debugName = "Other";
         other.addToGraphWithAction();
         let p = new Player(g);
         p.behavior().demands(other.seq).supplies(p.countdown).runs(() => {});
-        let msg: string = thrown(() => p.addToGraphWithAction()).message;
-        expect(msg).toMatch(/^The behavior in Player/);
-        expect(msg).toContain('"seq" of Other');
-        expect(msg).toContain("Other.addChildLifetime(");
-        expect(msg).toContain("Other.unifyLifetime(");
-        expect(msg).toContain("dynamicDemands");
+        let err = thrown(() => p.addToGraphWithAction());
+        let msg: string = err.message;
+        expect(msg).toMatch(/^The behavior in Player that supplies \[countdown\]/);
+        expect(msg).toContain('statically demands "seq" of Other');
+        expect(msg).toContain("before Player is added");
+        expect(msg).toContain("other.addChildLifetime(player)");
+        expect(msg).toContain("other.unifyLifetime(player)");
+        // the reverse relation, for a parent demanding its child
+        expect(msg).toContain("player.addChildLifetime(other)");
+        expect(msg).toContain(".dynamicDemands(");
+        expect(err.demand).toBe(other.seq);
     });
 
-    test('static supply without a lifetime relationship names the extent', () => {
+    test('static supply without a lifetime relationship names both extents', () => {
         let g = new Graph();
         let other = new Player(g);
         other.debugName = "Other";
         other.addToGraphWithAction();
         let p = new Player(g);
         p.behavior().demands(p.input).supplies(other.seq).runs(() => {});
+        let err = thrown(() => p.addToGraphWithAction());
+        let msg: string = err.message;
+        expect(msg).toContain('statically supplies "seq" of Other');
+        expect(msg).toContain("other.addChildLifetime(player)");
+        expect(msg).toContain(".dynamicSupplies(");
+        expect(err.supply).toBe(other.seq);
+    });
+
+    test('static demand from a parent on its child points at dynamicDemands only', () => {
+        let g = new Graph();
+        let parent = new Player(g);
+        parent.debugName = "Turn";
+        let child = new Player(g);
+        child.debugName = "Call";
+        parent.addChildLifetime(child);
+        parent.behavior().demands(child.seq).supplies(parent.countdown).runs(() => {});
+        let msg: string = thrown(() => g.action(() => {
+            parent.addToGraph();
+            child.addToGraph();
+        })).message;
+        expect(msg).toContain('statically demands "seq" of Call');
+        expect(msg).toContain("Call is a child lifetime of Turn");
+        expect(msg).toContain(".dynamicDemands(");
+        expect(msg).toContain("call.seq");
+        expect(msg).not.toContain("unifyLifetime");
+    });
+
+    test('two extents of one class are told apart', () => {
+        let g = new Graph();
+        let other = new Player(g);
+        other.addToGraphWithAction();
+        let p = new Player(g);
+        p.behavior().demands(other.seq).supplies(p.countdown).runs(() => {});
         let msg: string = thrown(() => p.addToGraphWithAction()).message;
-        expect(msg).toContain('"seq" of Other');
-        expect(msg).toContain("dynamicSupplies");
+        expect(msg).toContain('"seq" of the other Player');
+        expect(msg).toContain("otherPlayer.addChildLifetime(thisPlayer)");
     });
 
     test('demand on an extent never added names its resource', () => {
@@ -515,16 +553,14 @@ describe('synchronous action inside a side effect', () => {
 
 describe('stale moment reads', () => {
     function momentGraph(): Graph {
-        let g = new Graph();
-        g.validateMomentReads = true;
-        return g;
+        return new Graph();
     }
 
     test('reading a moment value in a behavior run by another demand names the moment and justUpdated', () => {
         let g = momentGraph();
         let p = new Player(g);
         p.behavior().demands(p.input, p.reply).supplies(p.countdown).runs(ext => {
-            ext.countdown.update(ext.reply.value!.text.length);
+            ext.countdown.update(ext.reply.value.text.length);
         });
         p.addToGraphWithAction();
         p.reply.updateWithAction({ text: "hi" });
@@ -558,27 +594,39 @@ describe('stale moment reads', () => {
         expect(msg).not.toContain("the behavior in");
     });
 
-    test('reads guarded by justUpdated, in the same event, and outside events are allowed', () => {
+    test('reads guarded by justUpdated and later in the same event are allowed', () => {
         let g = momentGraph();
         let p = new Player(g);
         let seen: (string | undefined)[] = [];
         p.behavior().demands(p.input, p.reply).supplies(p.countdown).runs(ext => {
-            seen.push(ext.reply.justUpdated ? ext.reply.value!.text : undefined);
+            seen.push(ext.reply.justUpdated ? ext.reply.value.text : undefined);
             if (ext.reply.justUpdated) {
-                ext.sideEffect(() => { seen.push(p.reply.value!.text + "!"); });
+                ext.sideEffect(() => { seen.push(p.reply.value.text + "!"); });
             }
         });
         p.addToGraphWithAction();
         p.reply.updateWithAction({ text: "a" });
         p.input.updateWithAction(1);
         expect(seen).toEqual(["a", "a!", undefined]);
-        // outside any event there is no event to be stale in: undefined, as before
-        expect(p.reply.value).toBeUndefined();
     });
 
-    test('off by default: a stale read returns undefined', () => {
+    test('outside any event the read throws and says so', () => {
+        let g = momentGraph();
+        let p = new Player(g);
+        p.addToGraphWithAction();
+        p.reply.updateWithAction({ text: "a" });
+        let msg: string = thrown(() => p.reply.value).message;
+        expect(msg).toContain('"reply.value"');
+        expect(msg).toContain("outside any event");
+    });
+
+    test('on by default', () => {
+        expect(new Graph().validateMomentReads).toBe(true);
+    });
+
+    test('turned off: a stale read returns undefined', () => {
         let g = new Graph();
-        expect(g.validateMomentReads).toBe(false);
+        g.validateMomentReads = false;
         let p = new Player(g);
         let read: any = "unset";
         p.behavior().demands(p.input, p.reply).supplies(p.countdown).runs(ext => { read = ext.reply.value; });

@@ -111,8 +111,8 @@ class Graph {
   dateProvider: { now(): Date };     // stamps events; replace it to control time in tests
   validateLifetimes: boolean;        // default true; see lifetimes below
   validateTraceDemands: boolean;     // default true: traceValue needs a demand or .trace
-  validateMomentReads: boolean;      // default false; turn it on: moment.value throws when the moment did not update in this event
-  onWarning: ((message: string) => void) | null; // default console.warn; null silences
+  validateMomentReads: boolean;      // default true: moment.value throws unless the moment updated in this event
+  reentrant<T>(block: () => T): T;    // optional: marks a call from a side effect that may start a sync action
   debugHere(): string;               // text dump of current event/behavior
   subscribeToJustUpdated(resources: Resource[], callback: () => void): () => void;
 }
@@ -219,10 +219,10 @@ class Resource {
 }
 
 class Moment<T = undefined> extends Resource {
-  update(value?: T): void;                          // inside action or supplying behavior
-  updateWithAction(value?: T, debugName?: string): void;  // wraps update in graph.action
+  update(value: T): void;                           // inside action or supplying behavior; value optional only if T allows undefined
+  updateWithAction(value: T, debugName?: string): void;   // wraps update in graph.action
   get justUpdated(): boolean;                       // true only during the event it fired
-  get value(): T | undefined;                       // payload; check justUpdated first (undefined, or a throw with validateMomentReads)
+  get value(): T;                                   // payload; read only when justUpdated (throws otherwise)
   get event(): GraphEvent | null;                   // when it last fired
   justUpdatedTo(value: T): boolean;                 // justUpdated && payload === value
 }
@@ -303,8 +303,16 @@ sometimes not), which breaks callers in ways they cannot see. The cost lands on 
 effect that made the call: the current event's remaining side effects, then the new event,
 all run before the call returns, so the rest of that side effect runs after its event has
 closed. Make the call the last thing the side effect does, and read anything you need
-before it. Touching the graph after it logs a warning (`graph.onWarning`), and queuing a
-side effect there throws.
+before it; queuing a side effect after it throws. Wrap the call in `graph.reentrant(...)` to
+say the reentry is intended; it changes nothing about the order, and without it the graph
+logs a `console.debug` note the first time each side effect run starts such an action:
+
+```ts
+ext.sideEffect(ext => {
+    let items = ext.items.value;       // read first
+    ext.graph.reentrant(() => listener.onChange(items)); // may call player.play()
+});
+```
 
 **Reading values in side effects.** `graph.currentBehavior` is null during side effects,
 so reading any resource's `.value` there is allowed and sees the event's final values.
@@ -395,7 +403,6 @@ class Counter extends Extent {
 }
 
 const graph = new Graph();
-graph.validateMomentReads = true;   // a stale moment.value read throws instead of returning undefined
 const counter = new Counter(graph, {
   fetchGreeting: (n, signal) => fetch(`/greeting?n=${n}`, { signal }).then((r) => r.text()),
   render: (view) => { /* update the DOM, or hand the view to your UI framework */ },
@@ -498,7 +505,7 @@ this.behavior()
   .supplies(this.count)
   .runs((ext) => {
     if (ext.resetRequested.justUpdated) ext.count.update(0);
-    else if (ext.setRequested.justUpdated) ext.count.update(ext.setRequested.value!);
+    else if (ext.setRequested.justUpdated) ext.count.update(ext.setRequested.value);
     else if (ext.incrementRequested.justUpdated) ext.count.update(ext.count.value + 1);
   });
 ```
@@ -537,7 +544,7 @@ this.behavior()
   .runs((ext) => {
     if (ext.searchRequested.justUpdated) {
       const token = ++this.tokenCounter;
-      const query = ext.searchRequested.value!;
+      const query = ext.searchRequested.value;
       ext.searchToken.update(token);
       ext.sideEffect((ext, onRemove) => {
         const abort = new AbortController();
@@ -588,7 +595,7 @@ class List extends Extent {
       .supplies(this.items)
       .runs((ext) => {
         if (ext.addRequested.justUpdated) {
-          const item = new Item(ext.graph, ext.addRequested.value!);
+          const item = new Item(ext.graph, ext.addRequested.value);
           ext.addChildLifetime(item);
           item.addToGraph();
           ext.items.update([...ext.items.value, item]);
@@ -866,9 +873,12 @@ extent's resources throws `Error: All demands must be added to the graph.` Also
 action; use `addToGraphWithAction()` at setup, plain `addToGraph()` inside behaviors.
 
 **Static demand across extents without a lifetime relation.**
-`Error: Static demands can only be with extents with the unified or parent lifetimes.`
-(or the same with `supplies`). Right: parent calls `addChildLifetime(child)` before adding
-it, and the parent reaches child resources only through `dynamicDemands`.
+`Error: The behavior in Item that supplies [...] and demands [...] statically demands "filter"
+of List. ... Fix: before Item is added to the graph, call list.addChildLifetime(item) ...`
+(or `statically supplies`). The message names both extents and the call. Right: parent calls
+`addChildLifetime(child)` before adding it. When the parent is the one demanding, the error
+says the target is a child lifetime: a parent reaches child resources only through
+`dynamicDemands`.
 
 **Removing a child but leaving a demand on it.**
 `Error: Remaining behaviors must remove dynamicDemands to removed resources.` Right: update
@@ -880,13 +890,14 @@ check `ext.addedToGraph.justUpdated`.
 
 **Reading a moment's value without checking `justUpdated`.**
 A behavior that demands a moment and something else also runs when only the other demand
-updates. The moment's `value` is then `undefined`, so `ext.reply.value!.text` throws a
-`TypeError`, and `ext.reply.value ?? 0` quietly uses the fallback. With
-`graph.validateMomentReads = true` the read throws `Error: Cannot read "reply.value" here:
+updates. Reading the moment's `value` then throws `Error: Cannot read "reply.value" here:
 reply did not update in this event, so it has no value (it last updated in event 2; this is
-event 3). ...` instead (`err.resource`). Wrong: `const reply = ext.reply.value!;`. Right:
-`if (ext.reply.justUpdated) { const reply = ext.reply.value!; ... }`, or copy the payload into
-a state if later events need it.
+event 3). ...` (`err.resource`). Reading it outside any event (after the action, in a promise
+callback) throws the same way. `value` is typed `T`, so tsc does not catch this. Wrong:
+`const reply = ext.reply.value;` or `ext.reply.value ?? 0`. Right: `if
+(ext.reply.justUpdated) { const reply = ext.reply.value; ... }`, or
+`ext.reply.justUpdated ? ext.reply.value : 0`, or copy the payload into a state if later
+events need it.
 
 **`State.update` with an equal value does nothing.** Repeating the same value produces no
 `justUpdated`, so no downstream behavior and no output. Use a `Moment` for "this happened
@@ -897,12 +908,12 @@ ones.
 `sideEffect` is called inside a side effect; `Error: Effects can only be added during an
 event.` when it is called from plain code. Only behaviors and actions may queue them.
 
-**Code after a synchronous action in a side effect.** `Behavior Graph warning: side effect
-"A" of Player ... started a synchronous action during event 2, and it read "go" after that
-action returned. ...` (through `graph.onWarning`), or `Error: Cannot queue a side effect
+**Code after a synchronous action in a side effect.** `Error: Cannot queue a side effect
 here: side effect "A" ... started a synchronous action during event 2.` The action finished
-the current event and ran its own before returning, so moments read `undefined` and
-`justUpdated` is false. Wrong: `ext.sideEffect(ext => { listener.onReady(); render(ext.ready.value); })`
+the current event and ran its own before returning, so `justUpdated` is false and
+`moment.value` throws. A `console.debug` line `Behavior Graph: side effect "A" of Player ...
+started a synchronous action during event 2. That is allowed: ...` points at the call; it
+is not an error, and wrapping the call in `graph.reentrant(...)` silences it. Wrong: `ext.sideEffect(ext => { listener.onReady(); render(ext.ready.value); })`
 when `onReady` may call an action. Right: read first, call the listener last.
 
 **Catching an error around a synchronous action in a side effect.** `Error: This action

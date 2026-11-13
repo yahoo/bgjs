@@ -1,6 +1,25 @@
 # Changelog
 
-## Unreleased
+## 3.0.0 (unreleased)
+
+### Breaking changes
+
+- **`graph.validateMomentReads` is on by default, and `Moment.value` is typed `T`.** Reading
+  `moment.value` when the moment did not update in the current event, or outside any event,
+  now throws an error naming the moment; it used to return `undefined`. The type is `T`
+  instead of `T | undefined`, so the `!` in `moment.value!` is no longer needed. To upgrade,
+  read the value only when `moment.justUpdated` is true: replace `moment.value ?? fallback`
+  with `moment.justUpdated ? moment.value : fallback`, and in tests assert on what the
+  behaviors did instead of reading the moment after the action. To run 2.x code unchanged
+  while migrating, set `graph.validateMomentReads = false` (the type is still `T`).
+- **`moment.update()` and `updateWithAction()` require a value when the payload type does
+  not include `undefined`.** `this.moment<number>().update()` is now a type error. Moments
+  without a payload (`this.moment()`) are unchanged.
+- **`justUpdatedTo`, `justUpdatedFrom` and `justUpdatedToFrom` compare with `===`.** They
+  used `==` while `update` uses `===`, so `state.justUpdatedTo(null)` was true after an
+  update to `undefined`, and `justUpdatedTo(1)` was true after an update to `"1"`. To upgrade,
+  pass a value of the same type as the state or moment; code that relied on `null` matching
+  `undefined` should check for both.
 
 ### Added
 
@@ -19,19 +38,15 @@
     second would silently cancel the first one's work.
   - **A throwing cleanup does not stop the others.** Every cleanup of the extent runs, then
     the first error is rethrown out of the removing action.
-- **`graph.validateMomentReads`** (default `false`). When on, reading `moment.value` during an
-  event in which the moment did not update throws an error that names the moment and says to
-  check `justUpdated` first, instead of returning `undefined` as if it were an empty payload.
-  Off by default because existing code reads the value before checking `justUpdated` (for
-  example `moment.value ?? 0`); turn it on in new code. Reads outside any event still return
-  `undefined`.
-- **Warning when a side effect touches the graph after a synchronous action it started has
-  returned.** That code runs outside any event, after the new event has completed, so moments
-  read `undefined` and `justUpdated` is false. Reading a resource or starting another action there
-  calls `graph.onWarning` once per side effect run, naming the side effect and the events.
-  `onWarning` defaults to `console.warn`; set it to `null` to silence it. Queuing a side effect
-  there throws, as before, with a message that explains why. The order of events is unchanged:
-  the caller still sees a synchronous action.
+- **`graph.validateMomentReads`** (default `true`), the switch for the moment-read check above.
+- **`graph.reentrant(block)`** marks code in a side effect that may start a synchronous action,
+  usually a call to a client callback. Such an action is still allowed and runs as before: the
+  side effect's event finishes its remaining side effects, the new action runs to completion,
+  then the call returns, so code after it runs outside any event. Without the marker, the graph
+  logs this once per side effect run through `console.debug`, naming the side effect and the
+  event; the marker documents that the reentry is intended and silences that message. It covers
+  actions started anywhere inside `block`. Queuing a side effect after such an action returns
+  still throws, now with a message that explains why.
 
 ### Fixes
 
@@ -45,11 +60,6 @@
 
 ### Changed
 
-- **`justUpdatedTo`, `justUpdatedFrom` and `justUpdatedToFrom` compare with `===`.** They
-  used `==` while `update` uses `===`, so `state.justUpdatedTo(null)` was true after an
-  update to `undefined`, and `justUpdatedTo(1)` was true after an update to `"1"`. To upgrade,
-  pass a value of the same type as the state or moment; code that relied on `null` matching
-  `undefined` should check for both.
 - **Extent subscriptions end through the same cleanups.** `extent.subscribeToJustUpdated`
   now unsubscribes in the removing event's side effects rather than during removal. Callbacks
   already stopped at removal, so the only observable change is an extent removed and added
@@ -59,6 +69,10 @@
   at once.
 - **`Extent.unsubscribes` and `unsubscribeAll()` are gone.** Both were internal. Subclasses
   may now use those names.
+- **The static lifetime error names both extents and the fix.** It names the demanding
+  behavior's extent and the target's, gives `target.addChildLifetime(owner)` and
+  `target.unifyLifetime(owner)` with those names, and when a parent statically links to its
+  own child, says to use `dynamicDemands` or `dynamicSupplies` instead.
 
 ## 2.0.0 (2026-10-08)
 

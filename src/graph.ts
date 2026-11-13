@@ -6,7 +6,7 @@
 import {cycleMessage, demandNotAddedMessage, droppedNestedActionMessage, lifetimeMessage, removedDemandMessage, removedSupplyMessage, sideEffectAfterNestedActionMessage, unmarkedNestedActionMessage} from "./errors.js";
 import {BufferedPriorityQueue} from "./bufferedqueue.js";
 import {Behavior} from "./behavior.js";
-import {Extent, takeRemovalCleanups} from "./extent.js";
+import {Extent, isChildLifetime, takeRemovalCleanups} from "./extent.js";
 import {Demandable, Resource} from "./resource.js";
 import {DateProvider, GraphEvent, LinkType, OrderingState, Subscription, Transient} from "./common.js";
 
@@ -104,12 +104,12 @@ export class Graph {
      */
     validateTraceDemands: boolean = true;
     /**
-     * When true, reading `moment.value` during an event in which the moment did not update
-     * throws, instead of returning `undefined` as if it were an empty payload. Off by default
-     * because 1.x and 2.0 code may read the value before checking `justUpdated`; turn it on in
-     * new code.
+     * When true (the default), reading `moment.value` when the moment did not update in the
+     * current event (or outside any event) throws, instead of returning `undefined` as if it
+     * were an empty payload. On by default since 3.0; set it to false to run 2.x code that reads
+     * the value before checking `justUpdated` while migrating.
      */
-    validateMomentReads: boolean = false;
+    validateMomentReads: boolean = true;
     /** @internal */
     justUpdatedCallbacks: Set<Subscription> = new Set();
     /** @internal */
@@ -566,7 +566,7 @@ export class Graph {
                 if (behavior.untrackedSupplies != null) {
                     for (let supply of behavior.untrackedSupplies) {
                         if (this.validateLifetimes && !behavior.extent.hasCompatibleLifetime(supply.extent)) {
-                            let err: any = new Error(lifetimeMessage("supplies", supply, behavior));
+                            let err: any = new Error(lifetimeMessage("supplies", supply, behavior, isChildLifetime(behavior.extent, supply.extent)));
                             err.currentBehavior = behavior;
                             err.supply = supply;
                             throw err;
@@ -633,7 +633,7 @@ export class Graph {
                 if (behavior.untrackedDemands != null) {
                     for (let demand of behavior.untrackedDemands) {
                         if (this.validateLifetimes && !behavior.extent.hasCompatibleLifetime(demand.resource.extent)) {
-                            let err: any = new Error(lifetimeMessage("demands", demand.resource, behavior));
+                            let err: any = new Error(lifetimeMessage("demands", demand.resource, behavior, isChildLifetime(behavior.extent, demand.resource.extent)));
                             err.currentBehavior = behavior;
                             err.demand = demand.resource;
                             throw err;
