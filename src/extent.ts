@@ -7,7 +7,7 @@ import {Graph} from "./graph.js";
 import {Behavior, BehaviorBuilder} from "./behavior.js";
 import {Moment, Resource, State} from "./resource.js";
 import {RelinkingOrder} from "./common.js";
-import {shadowedMemberMessage} from "./errors.js";
+import {cleanupKeyOwnerMessage, shadowedMemberMessage} from "./errors.js";
 
 /** How {@link Extent.removeFromGraph} treats extents whose lifetimes are tied to this one. */
 export enum ExtentRemoveStrategy {
@@ -119,6 +119,152 @@ class ExtentLifetime {
 const originalFields = new WeakMap<Extent, {[name: string]: unknown}>();
 let extentMethodNames: string[] | null = null;
 
+/**
+ * Registers `cleanup` under `key` to run when the extent is removed from the graph. A key holds
+ * one cleanup per extent: registering the same key again runs the cleanup it held and keeps the
+ * new one, so work that restarts (a timer, a request a newer one replaces) never piles up.
+ * `onRemove.run(key)` runs the cleanup a key holds now, for work that ends before the extent
+ * does. A key belongs to the behavior whose side effect first registered it; registering it
+ * from another behavior throws.
+ */
+export interface OnRemove {
+    (key: string, cleanup: () => void): void;
+    /** Runs the cleanup held under `key` now and empties the key. Does nothing if it is empty. */
+    run(key: string): void;
+}
+
+interface Cleanup {
+    run: () => void;
+    done: boolean;
+}
+
+// Kept off Extent so the bookkeeping takes no member names away from subclasses.
+class RemovalCleanups {
+    // every cleanup waiting for removal, oldest first: keyed ones and the extent's subscriptions
+    pending: Set<Cleanup> = new Set();
+    byKey: Map<string, Cleanup> = new Map();
+    // the behavior (null for an action) that first registered each key; kept for the extent's life
+    keyOwners: Map<string, Behavior | null> = new Map();
+
+    constructor(public extent: Extent) {}
+
+    get removed(): boolean {
+        return this.extent.addedToGraphWhen == null && this.extent.removedFromGraphWhen != null;
+    }
+
+    register(key: string, owner: Behavior | null, run: () => void) {
+        if (!this.keyOwners.has(key)) {
+            this.keyOwners.set(key, owner);
+        } else if (this.keyOwners.get(key) !== owner) {
+            let err: any = new Error(cleanupKeyOwnerMessage(key, this.extent, this.keyOwners.get(key)!, owner));
+            err.key = key;
+            err.extent = this.extent;
+            err.owner = this.keyOwners.get(key);
+            err.currentBehavior = owner;
+            throw err;
+        }
+        let cleanup: Cleanup = {run: run, done: false};
+        if (this.removed) {
+            // the extent is already gone, so nothing will run it later
+            runCleanup(cleanup);
+            return;
+        }
+        let previous = this.byKey.get(key);
+        // the new cleanup takes the key first, so it is kept even if the previous one throws
+        this.pending.add(cleanup);
+        this.byKey.set(key, cleanup);
+        if (previous !== undefined) {
+            this.pending.delete(previous);
+            runCleanup(previous);
+        }
+    }
+
+    runKey(key: string) {
+        let cleanup = this.byKey.get(key);
+        if (cleanup !== undefined) {
+            this.byKey.delete(key);
+            this.pending.delete(cleanup);
+            runCleanup(cleanup);
+        }
+    }
+
+    // for the library's own cleanups (subscriptions), which have a handle instead of a key
+    registerUnkeyed(run: () => void): () => void {
+        let cleanup: Cleanup = {run: run, done: false};
+        if (this.removed) {
+            runCleanup(cleanup);
+            return () => {};
+        }
+        this.pending.add(cleanup);
+        return () => {
+            this.pending.delete(cleanup);
+            runCleanup(cleanup);
+        };
+    }
+}
+
+function runCleanup(cleanup: Cleanup) {
+    if (!cleanup.done) {
+        cleanup.done = true;
+        cleanup.run();
+    }
+}
+
+const removalCleanups = new WeakMap<Extent, RemovalCleanups>();
+
+function cleanupsFor(extent: Extent): RemovalCleanups {
+    let cleanups = removalCleanups.get(extent);
+    if (cleanups === undefined) {
+        cleanups = new RemovalCleanups(extent);
+        removalCleanups.set(extent, cleanups);
+    }
+    return cleanups;
+}
+
+/**
+ * The `onRemove` passed to a side effect of `extent` queued by `owner` (null for an action).
+ * @internal
+ */
+export function onRemoveFor(extent: Extent, owner: Behavior | null): OnRemove {
+    let cleanups = cleanupsFor(extent);
+    let onRemove = ((key: string, cleanup: () => void) => cleanups.register(key, owner, cleanup)) as OnRemove;
+    onRemove.run = (key: string) => cleanups.runKey(key);
+    return onRemove;
+}
+
+/**
+ * Takes the cleanups registered so far and returns a function that runs them, newest first, or
+ * null when there are none. Every cleanup runs even if one throws; the first error is rethrown
+ * afterwards. Cleanups registered after this call belong to the extent's next removal.
+ * @internal
+ */
+export function takeRemovalCleanups(extent: Extent): (() => void) | null {
+    let cleanups = removalCleanups.get(extent);
+    if (cleanups === undefined || cleanups.pending.size == 0) {
+        return null;
+    }
+    let taken = Array.from(cleanups.pending).reverse();
+    cleanups.pending.clear();
+    cleanups.byKey.clear();
+    return () => {
+        let firstError: unknown = undefined;
+        let failed = false;
+        for (let cleanup of taken) {
+            try {
+                runCleanup(cleanup);
+            } catch (err) {
+                if (!failed) {
+                    failed = true;
+                    firstError = err;
+                }
+            }
+        }
+        if (failed) {
+            throw firstError;
+        }
+    };
+}
+
 // A subclass field named like an Extent method or field (state, moment, action, graph, ...)
 // hides it, and code that calls it breaks far from the cause. Name the field instead.
 function checkShadowedMembers(extent: Extent) {
@@ -168,8 +314,6 @@ export class Extent {
     addedToGraph: State<boolean>;
     /** Internal: set by unifyLifetime and addChildLifetime. Do not assign. */
     lifetime: ExtentLifetime | null = null;
-    /** Internal: subscriptions to cancel on removal. Do not assign. */
-    unsubscribes: Set<() => void> = new Set();
     /** Shorthand for {@link ExtentRemoveStrategy.containedLifetimes}. */
     static readonly removeContainedLifetimes = ExtentRemoveStrategy.containedLifetimes;
     /** Shorthand for {@link RelinkingOrder.relinkingOrderSubsequent}. */
@@ -300,16 +444,7 @@ export class Extent {
      */
     subscribeToJustUpdated(resources: Resource[], callback: (ext: this) => void): () => void {
         let unsubscribe = this.graph._subscribeToJustUpdated(resources, {extent: this, callback:callback as ((arg0: Extent | null) => void)});
-        this.unsubscribes.add(unsubscribe);
-        return unsubscribe;
-    }
-
-    /** @internal */
-    unsubscribeAll() {
-        for (let unsubscribe of this.unsubscribes) {
-            unsubscribe();
-        }
-        this.unsubscribes.clear();
+        return cleanupsFor(this).registerUnkeyed(unsubscribe);
     }
 
     /** @internal */
@@ -355,13 +490,19 @@ export class Extent {
      * the current event has run. Side effects run in the order queued and are the only place to
      * touch the outside world (render, log, fetch, timers) or start another action. Only valid
      * inside a behavior or action.
+     *
+     * `onRemove` registers cleanup for what the side effect starts, next to the code that starts
+     * it: `onRemove('timer', () => clearTimeout(t))`. Cleanups run, newest first, in a side effect
+     * of the event that removes this extent; if the extent is already removed, the cleanup runs
+     * at once. A key holds one cleanup: registering `'timer'` again clears the previous timer
+     * first, and `onRemove.run('timer')` clears it early. A key belongs to the behavior that
+     * first registered it; using it from another behavior throws.
      */
-    sideEffect(block: (ext: this) => void, debugName?: string) {
-        // This requires a cast because we know the extent won't be null at runtime because this side effect
-        // was created with one
+    sideEffect(block: (ext: this, onRemove: OnRemove) => void, debugName?: string) {
+        let behavior = this.graph.currentBehavior;
         this.graph.sideEffectHelper({
             debugName: debugName,
-            block: (block as (arg0: Extent | null) => void),
+            block: () => block(this, onRemoveFor(this, behavior)),
             extent: this,
             behavior: this.graph.currentBehavior
         });

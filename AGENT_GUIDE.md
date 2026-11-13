@@ -137,7 +137,7 @@ class Extent {
   behavior(): BehaviorBuilder<this>;
 
   action(block: (ext: this) => void, debugName?: string): void;
-  sideEffect(block: (ext: this) => void, debugName?: string): void;
+  sideEffect(block: (ext: this, onRemove: OnRemove) => void, debugName?: string): void;
 
   addToGraph(): void;                    // only inside an event (action or behavior)
   addToGraphWithAction(debugName?: string): void;
@@ -149,11 +149,20 @@ class Extent {
   subscribeToJustUpdated(resources: Resource[], callback: (ext: this) => void): () => void;
 }
 enum ExtentRemoveStrategy { extentOnly, containedLifetimes }
+// registers cleanup under a key, to run when the extent is removed. A key holds one cleanup:
+// registering it again runs the one it held first. onRemove.run(key) runs it early.
+interface OnRemove {
+  (key: string, cleanup: () => void): void;
+  run(key: string): void;
+}
 ```
 
 Resources declared as class fields get their field name as `debugName` automatically when
 the extent is added. The `runs`, `sideEffect`, and `action` callbacks receive the extent as
-their argument, typed as the subclass, so `ext.count` is fully typed.
+their argument, typed as the subclass, so `ext.count` is fully typed. A `sideEffect` callback
+also receives `onRemove`: register the cleanup for anything it starts under a key
+(`onRemove('timer', () => clearTimeout(t))`) and removing the extent runs it (see Teardown in
+section 4).
 
 ### BehaviorBuilder
 
@@ -261,7 +270,7 @@ Behavior Graph owns the logic in the middle. Everything at the edges is ordinary
 | rendering, logging, commands to other systems | inside a side effect only |
 | reading state from UI code or tests | read `state.value` directly (allowed outside behaviors) |
 | a UI framework that wants change notifications | `extent.subscribeToJustUpdated([...], cb)` or a behavior whose side effect pushes into the framework |
-| teardown | cancel timers and requests, set a disposed flag, `removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes)` |
+| teardown | register each timer and request with `onRemove(key, cleanup)` in the side effect that starts it; then `removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes)` |
 
 **Ordering of outputs.** Side effects run after all behaviors, FIFO in the order queued.
 Two unrelated behaviors (neither supplies something the other demands) run in an
@@ -297,7 +306,7 @@ type View = { count: number; greeting: string | null; loading: boolean };
 
 // The outside world, injected so tests can replace it.
 interface Deps {
-  fetchGreeting(count: number): Promise<string>;
+  fetchGreeting(count: number, signal: AbortSignal): Promise<string>;
   render(view: View): void;
 }
 
@@ -311,9 +320,7 @@ class Counter extends Extent {
   activeRequest = this.state<number | null>(null);
   greeting = this.state<string | null>(null);
   // plain bookkeeping, not reactive
-  private timer: ReturnType<typeof setTimeout> | undefined;
   private nextToken = 1;
-  disposed = false;
 
   constructor(graph: Graph, private readonly deps: Deps) {
     super(graph);
@@ -327,16 +334,14 @@ class Counter extends Extent {
         else if (ext.pressed.justUpdated) ext.count.update(ext.count.value + 1);
       });
 
-    // timer tied to an input: restart on every press
+    // timer tied to an input: restart on every press; removing the extent clears it
     this.behavior()
       .demands(this.pressed)
       .runs((ext) => {
-        ext.sideEffect(() => {
-          clearTimeout(this.timer);
-          this.timer = setTimeout(() => {
-            this.timer = undefined;
-            if (!this.disposed) ext.resetFired.updateWithAction();
-          }, 1000);
+        ext.sideEffect((ext, onRemove) => {
+          const timer = setTimeout(() => ext.resetFired.updateWithAction(), 1000);
+          // one cleanup per key: registering 'resetTimer' again clears the previous timer
+          onRemove('resetTimer', () => clearTimeout(timer));
         });
       });
 
@@ -349,11 +354,14 @@ class Counter extends Extent {
           const token = this.nextToken++;
           const count = ext.count.value;
           ext.activeRequest.update(token);
-          ext.sideEffect(() => {
+          ext.sideEffect((ext, onRemove) => {
+            const abort = new AbortController();
+            // a newer request aborts this one; aborting a finished request does nothing
+            onRemove('greetingRequest', () => abort.abort());
             const arrived = (text: string | null) => {
-              if (!this.disposed) ext.greetingArrived.updateWithAction({ token, text });
+              ext.greetingArrived.updateWithAction({ token, text });
             };
-            deps.fetchGreeting(count).then(arrived, () => arrived(null));
+            deps.fetchGreeting(count, abort.signal).then(arrived, () => arrived(null));
           });
         }
         const reply = ext.greetingArrived.justUpdated ? ext.greetingArrived.value : undefined;
@@ -371,23 +379,21 @@ class Counter extends Extent {
         ext.sideEffect(() => deps.render(view));
       });
   }
-
-  dispose(): void {
-    this.disposed = true;
-    clearTimeout(this.timer);
-    this.timer = undefined;
-    this.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes);
-  }
 }
 
 const graph = new Graph();
 graph.validateMomentReads = true;   // a stale moment.value read throws instead of returning undefined
 const counter = new Counter(graph, {
-  fetchGreeting: (n) => fetch(`/greeting?n=${n}`).then((r) => r.text()),
+  fetchGreeting: (n, signal) => fetch(`/greeting?n=${n}`, { signal }).then((r) => r.text()),
   render: (view) => { /* update the DOM, or hand the view to your UI framework */ },
 });
 counter.addToGraphWithAction();
 button.addEventListener("click", () => counter.pressed.updateWithAction());
+
+// when the counter goes away: its behaviors stop and every onRemove cleanup runs
+function teardown() {
+  counter.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes);
+}
 ```
 
 A test drives the same class with a fake `fetchGreeting`, calls
@@ -520,12 +526,12 @@ this.behavior()
       const token = ++this.tokenCounter;
       const query = ext.searchRequested.value!;
       ext.searchToken.update(token);
-      ext.sideEffect(() => {
-        this.searchAbort?.abort();
-        this.searchAbort = new AbortController();
-        this.api.search(query, this.searchAbort.signal).then(
-          (r) => { if (!this.disposed) ext.searchReply.updateWithAction({ token, results: r }); },
-          () => { if (!this.disposed) ext.searchReply.updateWithAction({ token, results: [] }); },
+      ext.sideEffect((ext, onRemove) => {
+        const abort = new AbortController();
+        onRemove('search', () => abort.abort());   // a newer search aborts this one
+        this.api.search(query, abort.signal).then(
+          (r) => ext.searchReply.updateWithAction({ token, results: r }),
+          () => ext.searchReply.updateWithAction({ token, results: [] }),
         );
       });
     }
@@ -625,20 +631,19 @@ this.behavior()
   .demands(this.armed)
   .runs((ext) => {
     if (ext.armed.justUpdatedTo(true)) {
-      ext.sideEffect(() => {
-        this.timerId = setTimeout(() => {
-          this.timerId = undefined;
-          if (!this.disposed) ext.timeout.updateWithAction();
-        }, 5000);
+      ext.sideEffect((ext, onRemove) => {
+        const timer = setTimeout(() => ext.timeout.updateWithAction(), 5000);
+        onRemove('timeout', () => clearTimeout(timer));
       });
     } else if (ext.armed.justUpdatedTo(false)) {
-      ext.sideEffect(() => { clearTimeout(this.timerId); this.timerId = undefined; });
+      ext.sideEffect((ext, onRemove) => onRemove.run('timeout'));
     }
   });
 ```
 
 For a repeating tick, a behavior demanding `tick` re-arms in a side effect while the
-condition holds. Always clear timers in teardown.
+condition holds. Register every timer with `onRemove` under one key, so re-arming clears the
+previous timer and removing the extent clears the last one.
 
 When several rules can arm, disarm, or leave a timer alone in one event, let the deciding
 behavior supply a tri-state: `armFor: State<number | null | undefined>` where a number arms
@@ -707,13 +712,38 @@ rerunning, not just the edge the message lists first.
 
 ### Teardown
 
-After teardown there should be no more output, timers, or requests. Do these in order: set
-a `disposed` flag that every timer and network callback checks; clear every timer you hold;
-cancel every pending request; then
-`root.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes)`. Once an extent is
-removed its behaviors stop running and updates to its resources are ignored, so a late
-callback does nothing inside the graph. The flag and the cancellations keep a late callback
-from doing anything *outside* it, and keep timers from holding the extent in memory.
+After teardown there should be no more output, timers, or requests. Put the cleanup next to
+the code that starts the work: a side effect's second argument, `onRemove`, registers a
+cleanup under a key, and it runs when the extent is removed.
+
+```ts
+ext.sideEffect((ext, onRemove) => {
+  const timer = setInterval(() => ext.tick.updateWithAction(), 1000);
+  onRemove('tick', () => clearInterval(timer));
+});
+```
+
+Teardown is then one call: `root.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes)`.
+Removed extents' behaviors stop running and updates to their resources are ignored. Each
+removed extent's cleanups run newest first, in a side effect of the removing event. If a side
+effect registers a cleanup after its extent is already gone, the cleanup runs at once.
+
+A key holds one cleanup per extent. Registering a key again runs the cleanup it held, then
+keeps the new one, so a timer that restarts or a request a newer one replaces needs no stored
+handle and never piles up. Use the same string literal every time, never a key built from an
+id. To stop work early (disarm a timer), call `onRemove.run('tick')` from any side effect of
+the extent; on an empty key it does nothing. The skeleton in section 3 shows both cases.
+
+A key belongs to the behavior whose side effect first registered it, and a second behavior
+that registers it throws (see Pitfalls). The same key on different extents, including two
+instances of one class, never collides.
+
+If a cleanup throws during removal, the extent's other cleanups still run and the first error
+comes out of the removing action.
+
+A callback that still arrives after removal, from something you could not cancel, does nothing
+inside the graph, so no `disposed` flag is needed for graph updates. Guard only work the
+callback does outside the graph.
 
 ### Testing
 
@@ -740,6 +770,16 @@ Untyped function calls may not accept type arguments`. At runtime the next field
 that far, `addToGraph` throws `<Extent> has a field named "state", which hides Extent's own
 method "state"`. Wrong: `state = this.state<Phase>("idle")`. Right: `phase =
 this.state<Phase>("idle")` (or `status`, `lifecycle`).
+
+**One cleanup key registered from two behaviors.**
+`Cleanup key "timer" on Player belongs to the behavior in Player that supplies [retried] and
+demands [retry], and the behavior in Player that supplies [timedOut] and demands [timeout]
+registered it too. ...` A key holds one cleanup per extent, so the second registration would
+run the first one's cleanup and silently cancel its work. Wrong: a retry timer and a timeout
+timer that both call `onRemove('timer', ...)`. Right: `onRemove('retryTimer', ...)` and
+`onRemove('timeoutTimer', ...)`. To stop another behavior's work, call
+`onRemove.run('retryTimer')`; only registering is owned. A side effect queued from an action
+counts as its own owner.
 
 **A behavior whose demands are all `.trace`.**
 `Error: The behavior in <Extent> that supplies [...] and demands [a.trace, b.trace] can never
