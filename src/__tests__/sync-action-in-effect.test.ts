@@ -289,6 +289,31 @@ describe('Sync action from a side effect (no Zalgo: the caller sees it completed
         expect(p.position.value).toBe(0);
     });
 
+    test('actionAsync promises queued around a failing nested action settle', async () => {
+        let original = new Error('queued action failed');
+        let failing: Promise<any> | null = null;
+        let later: Promise<any> | null = null;
+        p.effectA = ext => {
+            failing = ext.graph.actionAsync(() => {
+                throw original;
+            });
+            later = ext.graph.actionAsync(() => {}, 'later');
+            try {
+                ext.play();
+            } catch (e) {
+                // reported as dropping play(); the loop rethrows the original
+            }
+        };
+
+        expect(() => p.go.updateWithAction(1)).toThrow(original);
+
+        // the failing action's promise rejects with its own error, the dropped one's names it
+        await expect(failing).rejects.toBe(original);
+        let err: any = await later!.catch(e => e);
+        expect(err.message).toContain('"later"');
+        expect(err.cause).toBe(original);
+    });
+
     test('an error from an action that the started event\'s own side effect starts is the caller\'s', () => {
         let caught: any = null;
         let original = new Error('nested deeper failed');

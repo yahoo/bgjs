@@ -240,7 +240,9 @@ export class Graph {
     /**
      * Like {@link Graph.action}, but returns a promise that resolves when the action's event has
      * completed. Called during an event (from a side effect), the action is queued and runs after
-     * the current event rather than nested. Prefer `action` unless you need this.
+     * the current event rather than nested. The promise rejects if the action's event fails, or if
+     * an earlier failure drops the action before it runs (then `err.cause` is the original error).
+     * Prefer `action` unless you need this.
      */
     async actionAsync(block: () => void, debugName?: string) {
         return this.actionAsyncHelper({debugName: debugName, block: block, extent: null, resolve: null})

@@ -104,7 +104,7 @@ Concretely:
 class Graph {
   constructor();
   action(block: () => void, debugName?: string): void;     // open an event, run block, drain
-  actionAsync(block: () => void, debugName?: string): Promise<unknown>; // queued from a side effect; settles when its event ends
+  actionAsync(block: () => void, debugName?: string): Promise<unknown>; // runs now, or after the current event from a side effect; settles when its event ends or fails
   sideEffect(block: () => void, debugName?: string): void; // queue an effect (no extent arg)
   currentEvent: GraphEvent | null;   // non-null while an event is running
   lastEvent: GraphEvent;             // last completed event; starts at sequence 0
