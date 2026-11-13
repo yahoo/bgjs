@@ -6,7 +6,7 @@
 import {afterNestedActionWarning, cycleMessage, demandNotAddedMessage, droppedNestedActionMessage, lifetimeMessage, removedDemandMessage, removedSupplyMessage, sideEffectAfterNestedActionMessage} from "./errors.js";
 import {BufferedPriorityQueue} from "./bufferedqueue.js";
 import {Behavior} from "./behavior.js";
-import {Extent} from "./extent.js";
+import {Extent, takeRemovalCleanups} from "./extent.js";
 import {Demandable, Resource} from "./resource.js";
 import {DateProvider, GraphEvent, LinkType, OrderingState, Subscription, Transient} from "./common.js";
 
@@ -100,6 +100,13 @@ export class Graph {
      * set it to false to run 1.x code that reads traceValue without declaring it while migrating.
      */
     validateTraceDemands: boolean = true;
+    /**
+     * When true, reading `moment.value` during an event in which the moment did not update
+     * throws, instead of returning `undefined` as if it were an empty payload. Off by default
+     * because 1.x and 2.0 code may read the value before checking `justUpdated`; turn it on in
+     * new code.
+     */
+    validateMomentReads: boolean = false;
     /** @internal */
     justUpdatedCallbacks: Set<Subscription> = new Set();
     /** @internal */
@@ -962,7 +969,12 @@ export class Graph {
             for (let behavior of extent.behaviors) {
                 this.removeBehavior(behavior, this.currentEvent.sequence);
             }
-            extent.unsubscribeAll();
+            let cleanups = takeRemovalCleanups(extent);
+            if (cleanups != null) {
+                // pushed directly rather than through sideEffectHelper, which refuses
+                // while side effects are running
+                this.effects.push({block: cleanups, extent: extent, behavior: this.currentBehavior, debugName: "removal cleanups"});
+            }
             extent.addedToGraphWhen = null;
             extent.removedFromGraphWhen = this.currentEvent.sequence;
             // same private access hack as addExtent to skip integrity checks

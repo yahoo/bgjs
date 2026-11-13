@@ -14,6 +14,7 @@ class Player extends Extent {
     advance = this.moment();
     countdown = this.state(0);
     input = this.state(0);
+    reply = this.moment<{ text: string }>();
 }
 
 // every `.name(` a message mentions must be a real method
@@ -509,5 +510,80 @@ describe('synchronous action inside a side effect', () => {
         expect(warnings[0]).toContain('side effect "notifyClient" of Feed');
         expect(warnings[0]).toContain('read "go"');
         expect(warnings[0]).toContain('event 2 and event 3');
+    });
+});
+
+describe('stale moment reads', () => {
+    function momentGraph(): Graph {
+        let g = new Graph();
+        g.validateMomentReads = true;
+        return g;
+    }
+
+    test('reading a moment value in a behavior run by another demand names the moment and justUpdated', () => {
+        let g = momentGraph();
+        let p = new Player(g);
+        p.behavior().demands(p.input, p.reply).supplies(p.countdown).runs(ext => {
+            ext.countdown.update(ext.reply.value!.text.length);
+        });
+        p.addToGraphWithAction();
+        p.reply.updateWithAction({ text: "hi" });
+        expect(p.countdown.value).toBe(2);
+        let err = thrown(() => p.input.updateWithAction(1));
+        let msg: string = err.message;
+        expect(msg).toContain('"reply.value"');
+        expect(msg).toContain("reply.justUpdated");
+        expect(msg).toContain("supplies [countdown] and demands [input, reply]");
+        expect(msg).toMatch(/last updated in event \d+; this is event \d+/);
+        expect(msg).toContain("validateMomentReads");
+        expect(err.resource).toBe(p.reply);
+    });
+
+    test('a moment that never updated says so', () => {
+        let g = momentGraph();
+        let p = new Player(g);
+        p.behavior().demands(p.input, p.reply).supplies(p.countdown).runs(ext => {
+            ext.reply.value;
+        });
+        p.addToGraphWithAction();
+        expect(thrown(() => p.input.updateWithAction(1)).message).toContain("it has never updated");
+    });
+
+    test('in an action the message does not describe a behavior', () => {
+        let g = momentGraph();
+        let p = new Player(g);
+        p.addToGraphWithAction();
+        let msg: string = thrown(() => g.action(() => { p.reply.value; })).message;
+        expect(msg).toContain('"reply.value"');
+        expect(msg).not.toContain("the behavior in");
+    });
+
+    test('reads guarded by justUpdated, in the same event, and outside events are allowed', () => {
+        let g = momentGraph();
+        let p = new Player(g);
+        let seen: (string | undefined)[] = [];
+        p.behavior().demands(p.input, p.reply).supplies(p.countdown).runs(ext => {
+            seen.push(ext.reply.justUpdated ? ext.reply.value!.text : undefined);
+            if (ext.reply.justUpdated) {
+                ext.sideEffect(() => { seen.push(p.reply.value!.text + "!"); });
+            }
+        });
+        p.addToGraphWithAction();
+        p.reply.updateWithAction({ text: "a" });
+        p.input.updateWithAction(1);
+        expect(seen).toEqual(["a", "a!", undefined]);
+        // outside any event there is no event to be stale in: undefined, as before
+        expect(p.reply.value).toBeUndefined();
+    });
+
+    test('off by default: a stale read returns undefined', () => {
+        let g = new Graph();
+        expect(g.validateMomentReads).toBe(false);
+        let p = new Player(g);
+        let read: any = "unset";
+        p.behavior().demands(p.input, p.reply).supplies(p.countdown).runs(ext => { read = ext.reply.value; });
+        p.addToGraphWithAction();
+        p.input.updateWithAction(1);
+        expect(read).toBeUndefined();
     });
 });

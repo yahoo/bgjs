@@ -17,7 +17,7 @@ type View = { count: number; greeting: string | null; loading: boolean };
 
 // The outside world, injected so tests can replace it.
 interface Deps {
-    fetchGreeting(count: number): Promise<string>;
+    fetchGreeting(count: number, signal: AbortSignal): Promise<string>;
     render(view: View): void;
 }
 
@@ -31,9 +31,7 @@ class Counter extends Extent {
     activeRequest = this.state<number | null>(null);
     greeting = this.state<string | null>(null);
     // plain bookkeeping, not reactive
-    private timer: ReturnType<typeof setTimeout> | undefined;
     private nextToken = 1;
-    disposed = false;
 
     constructor(graph: Graph, private readonly deps: Deps) {
         super(graph);
@@ -47,16 +45,14 @@ class Counter extends Extent {
                 else if (ext.pressed.justUpdated) ext.count.update(ext.count.value + 1);
             });
 
-        // timer tied to an input: restart on every press
+        // timer tied to an input: restart on every press; removing the extent clears it
         this.behavior()
             .demands(this.pressed)
             .runs((ext) => {
-                ext.sideEffect(() => {
-                    clearTimeout(this.timer);
-                    this.timer = setTimeout(() => {
-                        this.timer = undefined;
-                        if (!this.disposed) ext.resetFired.updateWithAction();
-                    }, 1000);
+                ext.sideEffect((ext, onRemove) => {
+                    const timer = setTimeout(() => ext.resetFired.updateWithAction(), 1000);
+                    // one cleanup per key: registering 'resetTimer' again clears the previous timer
+                    onRemove('resetTimer', () => clearTimeout(timer));
                 });
             });
 
@@ -69,15 +65,18 @@ class Counter extends Extent {
                     const token = this.nextToken++;
                     const count = ext.count.value;
                     ext.activeRequest.update(token);
-                    ext.sideEffect(() => {
+                    ext.sideEffect((ext, onRemove) => {
+                        const abort = new AbortController();
+                        // a newer request aborts this one; aborting a finished request does nothing
+                        onRemove('greetingRequest', () => abort.abort());
                         const arrived = (text: string | null) => {
-                            if (!this.disposed) ext.greetingArrived.updateWithAction({ token, text });
+                            ext.greetingArrived.updateWithAction({ token, text });
                         };
-                        deps.fetchGreeting(count).then(arrived, () => arrived(null));
+                        deps.fetchGreeting(count, abort.signal).then(arrived, () => arrived(null));
                     });
                 }
-                const reply = ext.greetingArrived.value;
-                if (ext.greetingArrived.justUpdated && reply !== undefined && reply.token === ext.activeRequest.value) {
+                const reply = ext.greetingArrived.justUpdated ? ext.greetingArrived.value : undefined;
+                if (reply !== undefined && reply.token === ext.activeRequest.value) {
                     ext.activeRequest.update(null);
                     ext.greeting.update(reply.text);
                 }
@@ -91,13 +90,6 @@ class Counter extends Extent {
                 ext.sideEffect(() => deps.render(view));
             });
     }
-
-    dispose(): void {
-        this.disposed = true;
-        clearTimeout(this.timer);
-        this.timer = undefined;
-        this.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes);
-    }
 }
 // end guide-example
 
@@ -105,6 +97,7 @@ describe("AGENT_GUIDE skeleton", () => {
     let graph: Graph;
     let views: View[];
     let pending: Map<number, (text: string) => void>;
+    let signals: Map<number, AbortSignal>;
     let counter: Counter;
 
     const flush = () => new Promise((resolve) => jest.requireActual("timers").setImmediate(resolve));
@@ -112,10 +105,12 @@ describe("AGENT_GUIDE skeleton", () => {
     beforeEach(() => {
         jest.useFakeTimers();
         graph = new Graph();
+        graph.validateMomentReads = true;
         views = [];
         pending = new Map();
+        signals = new Map();
         counter = new Counter(graph, {
-            fetchGreeting: (n) => new Promise((resolve) => { pending.set(n, resolve); }),
+            fetchGreeting: (n, signal) => new Promise((resolve) => { pending.set(n, resolve); signals.set(n, signal); }),
             render: (view) => { views.push(view); },
         });
         counter.addToGraphWithAction();
@@ -162,11 +157,14 @@ describe("AGENT_GUIDE skeleton", () => {
         expect(counter.count.value).toBe(0);
     });
 
-    test("nothing happens after dispose", async () => {
+    test("removal clears the timer and aborts the request, and nothing happens after", async () => {
         counter.pressed.updateWithAction();
-        counter.dispose();
+        counter.removeFromGraphWithAction(ExtentRemoveStrategy.containedLifetimes);
+        expect(jest.getTimerCount()).toBe(0);
+        expect(signals.get(1)!.aborted).toBe(true);
+
+        // a fake that ignores the abort still replies; the removed extent ignores it
         const rendered = views.length;
-        jest.advanceTimersByTime(2000);
         pending.get(1)!("late");
         await flush();
         expect(views.length).toBe(rendered);
@@ -230,6 +228,7 @@ class List extends Extent {
 describe("AGENT_GUIDE collection", () => {
     test("adds, toggles, aggregates and removes children", () => {
         const graph = new Graph();
+        graph.validateMomentReads = true;
         const list = new List(graph);
         list.addToGraphWithAction();
 
@@ -249,6 +248,7 @@ describe("AGENT_GUIDE collection", () => {
 
     test("a child's behavior runs in the event it is added when a demand is justUpdated", () => {
         const graph = new Graph();
+        graph.validateMomentReads = true;
         let ranIn: number | null = null;
         class Child extends Extent {
             constructor(graph: Graph) {

@@ -136,6 +136,19 @@ export function traceAccessMessage(resource: Resource, current: Behavior): strin
         `If it needs ${r} as updated in this event, demand ${r} and read ${r}.value.`;
 }
 
+export function staleMomentMessage(resource: Resource, current: Behavior | null, lastSequence: number | null, currentSequence: number): string {
+    let r = resourceName(resource);
+    let last = lastSequence != null
+        ? `it last updated in event ${lastSequence}; this is event ${currentSequence}`
+        : "it has never updated";
+    let where = current != null ? ` ${capitalize(describeBehavior(current))} is running in this event, but not because ${r} updated.` : "";
+    return `Cannot read "${r}.value" here: ${r} did not update in this event, so it has no value (${last}). ` +
+        `A moment's value lasts only for the event in which the moment updated.${where} ` +
+        `Fix: check ${r}.justUpdated first and read ${r}.value only when it is true, e.g. if (${r}.justUpdated) { const v = ${r}.value; ... } ` +
+        `or ${r}.justUpdated ? ${r}.value : fallback. If the value must outlast its event, copy it into a state while ${r}.justUpdated. ` +
+        `(This check is graph.validateMomentReads.)`;
+}
+
 export function updateOutsideMessage(resource: Resource): string {
     let r = resourceName(resource);
     return `Cannot update "${r}" here: updates must happen in a behavior's runs block or an action, and this one ran outside any event (e.g. in a timer or promise callback). ` +
@@ -237,4 +250,12 @@ export function afterNestedActionWarning(effect: SideEffectLike, event: {sequenc
     return `Behavior Graph warning: ${describeSideEffect(effect)} started a synchronous action during event ${n}, and ${what} after that action returned. ` +
         `A synchronous action completes before it returns, so event ${n} and ${eventsAfter(event, last)} had already finished, and the rest of the side effect runs outside any event: moments read undefined, justUpdated is false, and states hold their values after event ${last.sequence}. ` +
         `Fix: make the action the last thing the side effect does (call client callbacks last), or read what you need before starting it.`;
+}
+
+export function cleanupKeyOwnerMessage(key: string, extent: any, owner: Behavior | null, current: Behavior | null): string {
+    let who = (b: Behavior | null) => b == null ? "a side effect queued from an action" : describeBehavior(b);
+    return `Cleanup key "${key}" on ${extentName(extent)} belongs to ${who(owner)}, and ${who(current)} `
+        + `registered it too. A key holds one cleanup, so the second registration would run the first one's `
+        + `cleanup and cancel its work. Fix: give this onRemove a different key, or start both pieces of work `
+        + `from one behavior. To stop the work early from elsewhere, call onRemove.run("${key}") instead.`;
 }

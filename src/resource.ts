@@ -3,7 +3,7 @@
 //
 
 
-import {accessMessage, resourceName, traceAccessMessage, unsuppliedInBehaviorMessage, updateOutsideMessage, wrongSupplierMessage} from "./errors.js";
+import {accessMessage, resourceName, staleMomentMessage, traceAccessMessage, unsuppliedInBehaviorMessage, updateOutsideMessage, wrongSupplierMessage} from "./errors.js";
 import {Behavior} from "./behavior.js";
 import {Extent} from "./extent.js";
 import {Graph} from "./graph.js";
@@ -166,9 +166,20 @@ export class Moment<T = undefined> extends Resource implements Transient {
         return this._happened;
     }
 
-    /** The payload during the event it was updated; undefined afterwards. */
+    /**
+     * The payload during the event it was updated; undefined afterwards. Check `justUpdated`
+     * first: with `graph.validateMomentReads` on, reading it during an event in which this
+     * moment did not update throws.
+     */
     get value(): T | undefined {
         this.assertValidAccessor();
+        let currentEvent = this.graph.currentEvent;
+        if (!this._happened && currentEvent != null && this.graph.validateMomentReads) {
+            let err: any = new Error(staleMomentMessage(this, this.graph.currentBehavior, this._happenedWhen?.sequence ?? null, currentEvent.sequence));
+            err.resource = this;
+            err.currentBehavior = this.graph.currentBehavior;
+            throw err;
+        }
         return this._happenedValue;
     }
 
@@ -192,9 +203,9 @@ export class Moment<T = undefined> extends Resource implements Transient {
         return name;
     }
 
-    /** True if this moment was updated in this event with a payload `==` to `value`. */
+    /** True if this moment was updated in this event with a payload `===` to `value`. */
     justUpdatedTo(value: T): boolean {
-        return this.justUpdated && this._happenedValue == value;
+        return this.justUpdated && this._happenedValue === value;
     }
 
     /** Updates this moment in a new action. Use it from outside code, timers and callbacks. */
@@ -349,14 +360,14 @@ export class State<T> extends Resource implements Transient {
         return this.currentState.event === this.graph.currentEvent
     }
 
-    /** True if the value changed in this event to `toState`. */
+    /** True if the value changed in this event to `toState` (compared with `===`, like `update`). */
     justUpdatedTo(toState: T): boolean {
-        return this.justUpdated && this.currentState.value == toState;
+        return this.justUpdated && this.currentState.value === toState;
     }
 
-    /** True if the value changed in this event from `fromState`. */
+    /** True if the value changed in this event from `fromState` (compared with `===`, like `update`). */
     justUpdatedFrom(fromState: T): boolean {
-        return this.justUpdated && this.history.value == fromState;
+        return this.justUpdated && this.history.value === fromState;
     }
 
     /** True if the value changed in this event from `fromState` to `toState`. */
