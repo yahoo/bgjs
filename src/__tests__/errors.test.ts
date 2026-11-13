@@ -493,16 +493,14 @@ describe('builder and extent mistakes', () => {
 
 describe('stale moment reads', () => {
     function momentGraph(): Graph {
-        let g = new Graph();
-        g.validateMomentReads = true;
-        return g;
+        return new Graph();
     }
 
     test('reading a moment value in a behavior run by another demand names the moment and justUpdated', () => {
         let g = momentGraph();
         let p = new Player(g);
         p.behavior().demands(p.input, p.reply).supplies(p.countdown).runs(ext => {
-            ext.countdown.update(ext.reply.value!.text.length);
+            ext.countdown.update(ext.reply.value.text.length);
         });
         p.addToGraphWithAction();
         p.reply.updateWithAction({ text: "hi" });
@@ -536,27 +534,39 @@ describe('stale moment reads', () => {
         expect(msg).not.toContain("the behavior in");
     });
 
-    test('reads guarded by justUpdated, in the same event, and outside events are allowed', () => {
+    test('reads guarded by justUpdated and later in the same event are allowed', () => {
         let g = momentGraph();
         let p = new Player(g);
         let seen: (string | undefined)[] = [];
         p.behavior().demands(p.input, p.reply).supplies(p.countdown).runs(ext => {
-            seen.push(ext.reply.justUpdated ? ext.reply.value!.text : undefined);
+            seen.push(ext.reply.justUpdated ? ext.reply.value.text : undefined);
             if (ext.reply.justUpdated) {
-                ext.sideEffect(() => { seen.push(p.reply.value!.text + "!"); });
+                ext.sideEffect(() => { seen.push(p.reply.value.text + "!"); });
             }
         });
         p.addToGraphWithAction();
         p.reply.updateWithAction({ text: "a" });
         p.input.updateWithAction(1);
         expect(seen).toEqual(["a", "a!", undefined]);
-        // outside any event there is no event to be stale in: undefined, as before
-        expect(p.reply.value).toBeUndefined();
     });
 
-    test('off by default: a stale read returns undefined', () => {
+    test('outside any event the read throws and says so', () => {
+        let g = momentGraph();
+        let p = new Player(g);
+        p.addToGraphWithAction();
+        p.reply.updateWithAction({ text: "a" });
+        let msg: string = thrown(() => p.reply.value).message;
+        expect(msg).toContain('"reply.value"');
+        expect(msg).toContain("outside any event");
+    });
+
+    test('on by default', () => {
+        expect(new Graph().validateMomentReads).toBe(true);
+    });
+
+    test('turned off: a stale read returns undefined', () => {
         let g = new Graph();
-        expect(g.validateMomentReads).toBe(false);
+        g.validateMomentReads = false;
         let p = new Player(g);
         let read: any = "unset";
         p.behavior().demands(p.input, p.reply).supplies(p.countdown).runs(ext => { read = ext.reply.value; });

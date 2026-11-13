@@ -163,20 +163,20 @@ export class Moment<T = undefined> extends Resource implements Transient {
     }
 
     /**
-     * The payload during the event it was updated; undefined afterwards. Check `justUpdated`
-     * first: with `graph.validateMomentReads` on, reading it during an event in which this
-     * moment did not update throws.
+     * The payload, readable only during the event in which this moment updated: check
+     * `justUpdated` first. Reading it at any other time throws (with `graph.validateMomentReads`
+     * off it returns undefined instead).
      */
-    get value(): T | undefined {
+    get value(): T {
         this.assertValidAccessor();
-        let currentEvent = this.graph.currentEvent;
-        if (!this._happened && currentEvent != null && this.graph.validateMomentReads) {
-            let err: any = new Error(staleMomentMessage(this, this.graph.currentBehavior, this._happenedWhen?.sequence ?? null, currentEvent.sequence));
+        if (!this._happened && this.graph.validateMomentReads) {
+            let currentEvent = this.graph.currentEvent;
+            let err: any = new Error(staleMomentMessage(this, this.graph.currentBehavior, this._happenedWhen?.sequence ?? null, currentEvent?.sequence ?? null));
             err.resource = this;
             err.currentBehavior = this.graph.currentBehavior;
             throw err;
         }
-        return this._happenedValue;
+        return this._happenedValue as T;
     }
 
     /** The event in which this moment was last updated, or null if never. */
@@ -205,15 +205,20 @@ export class Moment<T = undefined> extends Resource implements Transient {
     }
 
     /** Updates this moment in a new action. Use it from outside code, timers and callbacks. */
-    updateWithAction(value: T | undefined = undefined, debugName?: string) {
+    updateWithAction(...args: undefined extends T ? [value?: T, debugName?: string] : [value: T, debugName?: string]) {
+        let [value, debugName] = args;
         this.graph.action(() => {
-            this.update(value);
+            this._update(value);
         }, debugName);
         return;
     }
 
     /** Marks this moment as happened in this event. Only in an action (if no behavior supplies it) or in its supplying behavior. */
-    update(value: T | undefined = undefined) {
+    update(...args: undefined extends T ? [value?: T] : [value: T]) {
+        this._update(args[0]);
+    }
+
+    private _update(value: T | undefined) {
         if (this.isExtentRemoved) { return; }
         this.assertValidUpdater();
         this._happened = true;

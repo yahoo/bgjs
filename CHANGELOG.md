@@ -1,6 +1,25 @@
 # Changelog
 
-## Unreleased
+## 3.0.0 (unreleased)
+
+### Breaking changes
+
+- **`graph.validateMomentReads` is on by default, and `Moment.value` is typed `T`.** Reading
+  `moment.value` when the moment did not update in the current event, or outside any event,
+  now throws an error naming the moment; it used to return `undefined`. The type is `T`
+  instead of `T | undefined`, so the `!` in `moment.value!` is no longer needed. To upgrade,
+  read the value only when `moment.justUpdated` is true: replace `moment.value ?? fallback`
+  with `moment.justUpdated ? moment.value : fallback`, and in tests assert on what the
+  behaviors did instead of reading the moment after the action. To run 2.x code unchanged
+  while migrating, set `graph.validateMomentReads = false` (the type is still `T`).
+- **`moment.update()` and `updateWithAction()` require a value when the payload type does
+  not include `undefined`.** `this.moment<number>().update()` is now a type error. Moments
+  without a payload (`this.moment()`) are unchanged.
+- **`justUpdatedTo`, `justUpdatedFrom` and `justUpdatedToFrom` compare with `===`.** They
+  used `==` while `update` uses `===`, so `state.justUpdatedTo(null)` was true after an
+  update to `undefined`, and `justUpdatedTo(1)` was true after an update to `"1"`. To upgrade,
+  pass a value of the same type as the state or moment; code that relied on `null` matching
+  `undefined` should check for both.
 
 ### Added
 
@@ -19,20 +38,10 @@
     second would silently cancel the first one's work.
   - **A throwing cleanup does not stop the others.** Every cleanup of the extent runs, then
     the first error is rethrown out of the removing action.
-- **`graph.validateMomentReads`** (default `false`). When on, reading `moment.value` during an
-  event in which the moment did not update throws an error that names the moment and says to
-  check `justUpdated` first, instead of returning `undefined` as if it were an empty payload.
-  Off by default because existing code reads the value before checking `justUpdated` (for
-  example `moment.value ?? 0`); turn it on in new code. Reads outside any event still return
-  `undefined`.
+- **`graph.validateMomentReads`** (default `true`), the switch for the moment-read check above.
 
 ### Changed
 
-- **`justUpdatedTo`, `justUpdatedFrom` and `justUpdatedToFrom` compare with `===`.** They
-  used `==` while `update` uses `===`, so `state.justUpdatedTo(null)` was true after an
-  update to `undefined`, and `justUpdatedTo(1)` was true after an update to `"1"`. To upgrade,
-  pass a value of the same type as the state or moment; code that relied on `null` matching
-  `undefined` should check for both.
 - **Extent subscriptions end through the same cleanups.** `extent.subscribeToJustUpdated`
   now unsubscribes in the removing event's side effects rather than during removal. Callbacks
   already stopped at removal, so the only observable change is an extent removed and added

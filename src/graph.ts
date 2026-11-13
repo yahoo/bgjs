@@ -84,12 +84,12 @@ export class Graph {
      */
     validateTraceDemands: boolean = true;
     /**
-     * When true, reading `moment.value` during an event in which the moment did not update
-     * throws, instead of returning `undefined` as if it were an empty payload. Off by default
-     * because 1.x and 2.0 code may read the value before checking `justUpdated`; turn it on in
-     * new code.
+     * When true (the default), reading `moment.value` when the moment did not update in the
+     * current event (or outside any event) throws, instead of returning `undefined` as if it
+     * were an empty payload. On by default since 3.0; set it to false to run 2.x code that reads
+     * the value before checking `justUpdated` while migrating.
      */
-    validateMomentReads: boolean = false;
+    validateMomentReads: boolean = true;
     /** @internal */
     justUpdatedCallbacks: Set<Subscription> = new Set();
 

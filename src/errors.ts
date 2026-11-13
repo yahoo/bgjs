@@ -136,13 +136,15 @@ export function traceAccessMessage(resource: Resource, current: Behavior): strin
         `If it needs ${r} as updated in this event, demand ${r} and read ${r}.value.`;
 }
 
-export function staleMomentMessage(resource: Resource, current: Behavior | null, lastSequence: number | null, currentSequence: number): string {
+export function staleMomentMessage(resource: Resource, current: Behavior | null, lastSequence: number | null, currentSequence: number | null): string {
     let r = resourceName(resource);
+    let now = currentSequence != null ? `this is event ${currentSequence}` : "this read is outside any event";
     let last = lastSequence != null
-        ? `it last updated in event ${lastSequence}; this is event ${currentSequence}`
-        : "it has never updated";
+        ? `it last updated in event ${lastSequence}; ${now}`
+        : `it has never updated; ${now}`;
     let where = current != null ? ` ${capitalize(describeBehavior(current))} is running in this event, but not because ${r} updated.` : "";
-    return `Cannot read "${r}.value" here: ${r} did not update in this event, so it has no value (${last}). ` +
+    let did = currentSequence != null ? "did not update in this event" : "is not updating now";
+    return `Cannot read "${r}.value" here: ${r} ${did}, so it has no value (${last}). ` +
         `A moment's value lasts only for the event in which the moment updated.${where} ` +
         `Fix: check ${r}.justUpdated first and read ${r}.value only when it is true, e.g. if (${r}.justUpdated) { const v = ${r}.value; ... } ` +
         `or ${r}.justUpdated ? ${r}.value : fallback. If the value must outlast its event, copy it into a state while ${r}.justUpdated. ` +
