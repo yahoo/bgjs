@@ -50,6 +50,7 @@ code { font-family: var(--mono); font-size: .9em; }
 .tv-st-effect { color: var(--fx); }
 .tv-st-structure { color: var(--moment); }
 .tv-st-error { color: var(--err); }
+.tv-st-hidden { color: var(--muted); font-style: italic; }
 .tv-st-start, .tv-st-activate, .tv-st-update { color: var(--muted); }
 .tv-steps button.on .tv-st { color: var(--ink); }
 

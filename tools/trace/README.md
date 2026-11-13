@@ -56,11 +56,60 @@ export default function scenario({ trace }) {
 
 ```
 bg-trace <scenario.mjs> [--html out.html] [--json out.json] [--mermaid] [--model] [--title "..."] [--quiet]
+         [--only <extents>] [--events <actions>] [--touching <resources>] [--no-startup]
 bg-trace --viewer viewer.html        an empty viewer that opens a dropped trace .json
 ```
 
+The filter flags take comma-separated patterns: exact names, `*` wildcards, or `/regex/flags`.
+They combine with any filter the scenario passes to `trace(graph, { filter })`.
+
 If the scenario throws (a cycle, a second supplier, an undeclared read), the events up to the
 failure are still reported, and the failing event ends with the library's error message.
+
+## Filtering
+
+On a big graph, or when you are looking for one thing, record only part of it. Left-out things
+cost close to nothing: they are not formatted, snapshotted or put in the model, only counted.
+The output says where something was left out, so a missing line never means "did not run":
+
+```
+Event 4: bedroom reads 61°
+  … filtered out here: 1 update in Bedroom
+  1. Find the coldest room  (because a filtered-out demand changed)
+      updates coldest = 61
+```
+
+```js
+import { traceGraph, filters } from 'behavior-graph-trace';
+
+traceGraph(graph, { filter: filters.extents('House', 'Room*') });            // by debugName or class
+traceGraph(graph, { filter: filters.events(/bedroom/i) });                    // by action name
+traceGraph(graph, { filter: filters.touching('coldest', 'Bedroom.temp') });   // behaviors linked to these
+traceGraph(graph, { filter: [filters.extents('House'), filters.noStartup()] });   // all must keep it
+
+// or your own predicate, per kind (return falsy to leave something out)
+traceGraph(graph, { filter: {
+  extent: (d) => d.className !== 'Cell' || d.name === 'Cell7',
+  effect: (d) => d.name !== 'log',
+} });
+```
+
+A filter is a function (called for every kind), an object of per-kind predicates, or an array of
+filters that must all keep a thing. Each predicate gets a descriptor:
+
+| kind | descriptor | what leaving it out does |
+| --- | --- | --- |
+| `event` | `name` (action debugName or `withSource` label), `seq` | records nothing of that event; the next event shown says how many were skipped |
+| `extent` | `name` (debugName, or class with `#2`), `className`, `extent` | leaves out its resources and behaviors |
+| `resource` | `name`, `label` (`Extent.name`), `type` (`state`/`moment`), `extentName`, `className` | no updates or values; links to it are counted on the behavior |
+| `behavior` | `label` (`tracer.name()`, or "sets x"), `named`, `extentName`, `className`, `demands`, `supplies` (resource descriptors) | leaves out its runs, and the updates and side effects it makes |
+| `update` | a resource descriptor plus `by` (behavior descriptor or null) and `value` | leaves out that one update |
+| `effect` | `name` (debugName), `type` (`effect`/`subscription`/`cleanup`), `behavior`, `extentName` | leaves out the effect and its run |
+
+Name things and filters get easy: give extents a `debugName`, actions a name, behaviors a
+`tracer.name()`, side effects a name. Resources are named after their field once the extent is
+added. An event in which a filter left out everything is dropped too (pass
+`keepEmptyEvents: true` to keep it). Errors are always recorded, even in a filtered-out event.
 
 ## In your own code
 
@@ -72,7 +121,7 @@ const tracer = traceGraph(graph, { onTrace: (t) => console.log(explain({ traces:
 // ...run actions...
 const data = tracer.toJSON();         // { model, traces } — plain JSON
 explain(data);                        // all events as text
-explain(data, { events: [3] });       // one event
+explain(data, { events: [3] });       // one event (the number after "Event")
 describeModel(data.model);            // each behavior with its demands and supplies
 toMermaid(data.model, { trace: data.traces[1] });
 writeFileSync('trace.html', toHTML(data, { title: 'Login form' }));
@@ -92,27 +141,46 @@ How to write a scenario, read the output, and use it to check a change or answer
 
 ## Trace format
 
-`tracer.toJSON()` returns `{ format: 'behavior-graph-trace', version: 1, model, traces }`.
+`tracer.toJSON()` returns `{ format: 'behavior-graph-trace', version: 2, model, traces }`.
+Traces store only changes, so their size follows what each event touched, not the size of the
+graph; `timeline(data)` and `valueTimeline(data)` (exported from `text.js`) rebuild the structure
+and values at any point, which is what the viewer does.
 
-- `model`: `{ extents, resources, behaviors }`. Resources have `id, name, label, kind`
-  (`state`/`moment`), `extent, value, supplied`. Behaviors have `id, label, extent,
-  demands: [{ id, type: 'demand' | 'order' | 'trace' }], supplies: [id]`.
-- each trace: `{ seq, source, before: { values, model? }, steps }`. `before.model` is present when
-  the structure differs from the previous event.
+- `model`: the structure at the end, with current values: `{ extents, resources, behaviors,
+  hidden? }`. Resources have `id, name, label, kind` (`state`/`moment`), `extent, value,
+  supplied`. Behaviors have `id, label, extent, demands: [{ id, type: 'demand' | 'order' |
+  'trace' }], supplies: [id]`, and `hiddenDemands`/`hiddenSupplies` counts when filtered.
+  `hidden.extents` counts filtered-out extents by class.
+- each trace: `{ index, seq, source, before, steps, filtered? }`. `index` is unique (1, 2, 3...);
+  `seq` is the graph's event sequence, which a failed event reuses. `before` has `values` (only
+  those that differ from the replayed state), `structure` (a change made between events) and
+  `skipped` (events not recorded since the previous trace).
+- a structure change is `{ set: { extents?, resources?, behaviors? }, remove?: [id],
+  hiddenExtents?: { added, removed } }`: entries added or replaced, and ids removed.
 - steps, in the order they happened: `action`, `update {res, value, by}` (`by` is null inside the
-  action), `activate {beh, via}`, `run {beh}`, `relink {beh}`, `effect {id, beh, name}` (queued),
-  `effectRun {id, beh, name}`, `structure {model}`, `error {message}`.
+  action), `activate {beh, via}` (`via`: the demand that activated it), `run {beh, why,
+  whyHidden?}` (`why`: the demands that had updated), `relink {beh}`, `effect {id, beh, name,
+  type?, extent?}` (queued; `type` is `subscription` or `cleanup` for those), `effectRun` (same
+  fields), `structure {set, remove}`, `hidden {runs?, updates?, effects?, in}` (what a filter
+  left out here, by extent), `error {message}`.
 
-Values are short display strings, not the values themselves.
+Values are short display strings, not the values themselves. They are read without calling
+getters (an accessor shows as `(getter)`) and a value that cannot be read shows as
+`(unreadable)`, so tracing never changes what the program does.
+
+Version 1 traces (whole models in `before.model` and `structure.model`, full `before.values`)
+still open in the viewer and `explain`.
 
 ## Files
 
 | Path | What it is |
 | --- | --- |
 | `src/tracer.js` | `traceGraph(graph)`: the recorder |
-| `src/text.js` | `explain`, `describeModel` |
+| `src/filter.js` | `filters` (ready-made filters), `matches`, `compileFilter` |
+| `src/text.js` | `explain`, `describeModel`, `timeline`, `valueTimeline` |
 | `src/mermaid.js` | `toMermaid` |
 | `src/html.js` | `toHTML`: inlines the viewer and data into one file |
 | `viewer/` | the replay page: graph layout (`graphview.js`), player (`player.js`), styles |
 | `bin/bg-trace.js` | the CLI |
+| `bench/large-graph.mjs` | tracing cost on a 5,000-extent graph, unfiltered and filtered |
 | `examples/` | `thermostat.mjs` (several inputs in one event, side effects), `rooms.mjs` (extents added and removed, dynamic demands) |

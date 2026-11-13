@@ -176,10 +176,10 @@
       const g = el('g', { class: 'gv-node', 'data-id': id }, this.gNodes);
       const n = { id, g, x: 0, y: 0 };
       if (res) {
-        n.kind = res.kind;
-        g.classList.add('gv-res', 'gv-' + res.kind);
+        n.kind = res.kind === 'moment' ? 'moment' : 'state';
+        g.classList.add('gv-res', 'gv-' + n.kind);
         if (isStartup(res)) g.classList.add('gv-startup');
-        el('rect', { class: 'gv-shape', rx: res.kind === 'moment' ? 21 : 6 }, g);
+        el('rect', { class: 'gv-shape', rx: n.kind === 'moment' ? 21 : 6 }, g);
         el('text', { class: 'gv-name', 'text-anchor': 'middle' }, g).textContent = res.label;
         n.valueEl = el('text', { class: 'gv-value', 'text-anchor': 'middle' }, g);
         if (!res.supplied && !isStartup(res)) {

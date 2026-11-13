@@ -27,6 +27,7 @@ export function toMermaid(model, { trace = null, direction = 'LR', hideAddedToGr
     const text = esc(r.value !== '' && r.kind === 'state' ? `${r.name}<br/>${r.value}` : r.name);
     return r.kind === 'moment' ? `${r.id}(["${text}"])` : `${r.id}["${text}"]`;
   };
+  const behIds = new Set(model.behaviors.map(b => b.id));
   for (const ext of model.extents) {
     const rs = model.resources.filter(r => r.extent === ext.id && !hidden.has(r.id));
     const bs = model.behaviors.filter(b => b.extent === ext.id);
@@ -39,13 +40,24 @@ export function toMermaid(model, { trace = null, direction = 'LR', hideAddedToGr
     }
     if (multi) lines.push('  end');
   }
+  // only draw edges between nodes in this model: a filtered trace, or a demand on a resource
+  // whose extent was just removed, can name ids that are not here
+  const present = new Set(model.resources.filter(r => !hidden.has(r.id)).map(r => r.id));
+  const missing = [];
   for (const b of model.behaviors) {
     for (const d of b.demands) {
       if (hidden.has(d.id)) continue;
+      if (!present.has(d.id)) { missing.push(d.id); continue; }
       lines.push(d.type === 'demand' ? `  ${d.id} --> ${b.id}` : `  ${d.id} -. ${d.type} .-> ${b.id}`);
     }
-    for (const s of b.supplies) lines.push(`  ${b.id} ==> ${s}`);
+    for (const s of b.supplies) {
+      if (present.has(s)) lines.push(`  ${b.id} ==> ${s}`); else missing.push(s);
+    }
+    if (b.hiddenDemands || b.hiddenSupplies) lines.push(`  %% ${b.id}: ${b.hiddenDemands ?? 0} demands and ${b.hiddenSupplies ?? 0} supplies filtered out`);
   }
+  if (missing.length) lines.push(`  %% ${missing.length} links to resources not in this model left out`);
+  const hiddenExt = model.hidden?.extents ? Object.values(model.hidden.extents).reduce((a, b) => a + b, 0) : (model.hiddenExtents ?? 0);
+  if (hiddenExt) lines.push(`  filtered_note["${hiddenExt} extent${hiddenExt === 1 ? '' : 's'} filtered out"]`);
   lines.push('  classDef state fill:#eef4fb,stroke:#2b67ad,color:#16202a');
   lines.push('  classDef moment fill:#f5effc,stroke:#7a4bbf,color:#16202a,stroke-dasharray:4 3');
   lines.push('  classDef behavior fill:#1c2733,stroke:#1c2733,color:#f3f6f8');
@@ -56,7 +68,7 @@ export function toMermaid(model, { trace = null, direction = 'LR', hideAddedToGr
   cls(byKind('state'), 'state');
   cls(byKind('moment'), 'moment');
   cls(model.behaviors.filter(b => !order.has(b.id)).map(b => b.id), 'behavior');
-  cls([...order.keys()], 'ran');
+  cls([...order.keys()].filter(id => behIds.has(id)), 'ran');
   cls([...updated].filter(id => !hidden.has(id) && model.resources.some(r => r.id === id)), 'changed');
   return lines.join('\n');
 }

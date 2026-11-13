@@ -55,10 +55,28 @@ scenario uses whatever `behavior-graph` its own folder resolves.
    - `then side effects ran:` lists effects in the order they ran, after every behavior.
    - `graph changed:` lines report extents added or removed and dynamic demands relinked.
    - If the scenario threw, the failing event ends with `ERROR:` and the library's message.
+   - With a filter, `… filtered out here: ...` marks where left-out runs, updates or effects
+     happened, and `(N earlier events not shown ...)` counts skipped events. Something missing
+     from a filtered trace may have run; check for these lines before concluding it did not.
 
    Done when you can point at the event and line that answers the question, and the answer
    cites it ("in event 3, *Decide playback* ran because `play` and `seek` changed, and updated
    `state = playing` before *Render* queued its effect").
+
+## Filtering big graphs
+
+Filter when the graph is big (hundreds of extents) or you are after one thing; the trace is
+then faster to record and shorter to read. Add flags to the same command:
+
+- `--only House,Room*`: only these extents (debugName or class name);
+- `--events "/login/i"`: only events whose action name matches;
+- `--touching cart.total`: only behaviors that demand or supply these resources;
+- `--no-startup`: drop the "adds X to the graph" lines.
+
+Patterns are comma-separated, with `*` wildcards or `/regex/flags`. Name what you will filter
+on: a `debugName` on extents and actions, `tracer.name()` on behaviors. For anything else pass
+`trace(graph, { filter })` in the scenario (see `tools/trace/README.md`, "Filtering"). Start
+unfiltered on a small scenario; filter once you know which part you are looking for.
 
 ## Checking output
 
