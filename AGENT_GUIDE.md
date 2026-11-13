@@ -989,7 +989,19 @@ What the graph exposes at runtime:
   and the current behavior. Call it from inside a `runs` block when something looks wrong.
 - `extent.addedToGraphWhen`: null when the extent is not in the graph.
 
-To see event by event what changed, add a tracing behavior in the root extent that demands
+**Event-by-event trace.** The bgjs repository has a tracer in `tools/trace` (not in the npm
+package). Given a script that builds the graph and runs the inputs, it prints every event:
+each behavior that ran, in order, with the demands that had changed before it ran, what it
+updated, and the side effects in the order they ran. It answers "why did this run?" and "did
+both inputs arrive in one event?" without editing the extents. How to use it:
+`skills/behavior-graph-trace/SKILL.md` in the repository.
+
+**Every input order.** `tools/explore` in the same repository runs the real graph over every
+sequence of the inputs you list, up to a depth, checks properties after each step, and traces
+the shortest sequence that breaks one. It finds interleavings (a late reply, a timer firing
+mid-request) that tests did not try. How to use it: `skills/behavior-graph-explore/SKILL.md`.
+
+Without the tool, to see event by event what changed, add a tracing behavior in the root extent that demands
 everything of interest and logs from a side effect. It supplies nothing, so it does not
 perturb ordering.
 

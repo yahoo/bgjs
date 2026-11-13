@@ -38,3 +38,8 @@ little interaction between events, such as a form that posts once.
 - Render, log, fetch and set timers only inside `ext.sideEffect(...)`. Bring results back
   with `updateWithAction`.
 - When the library throws, read the message and fix the cause. Do not catch and suppress it.
+- When the graph does something you did not expect, trace the inputs that cause it (the
+  `behavior-graph-trace` skill, in this repository at `skills/behavior-graph-trace`) and read
+  which behaviors ran and why, before changing code.
+- When inputs, replies or timers can interleave, check a property over every order up to a
+  depth (the `behavior-graph-explore` skill, at `skills/behavior-graph-explore`).

@@ -1,0 +1,22 @@
+{
+  "name": "behavior-graph-trace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Record what a Behavior Graph does, event by event, then explain it as text, draw it as Mermaid, or replay it in a standalone HTML viewer.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./html": "./src/html.js"
+  },
+  "bin": {
+    "bg-trace": "./bin/bg-trace.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "demo": "node bin/bg-trace.js examples/thermostat.mjs --html thermostat.html && node bin/bg-trace.js examples/rooms.mjs --html rooms.html"
+  },
+  "devDependencies": {
+    "behavior-graph": "file:../.."
+  },
+  "license": "Apache-2.0"
+}

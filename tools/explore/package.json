@@ -1,0 +1,23 @@
+{
+  "name": "behavior-graph-explore",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A bounded model checker for Behavior Graph: run the real graph over every input sequence up to a depth, check properties after each step, and replay counterexamples as traces.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "bin": {
+    "bg-explore": "./bin/bg-explore.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "peerDependencies": {
+    "behavior-graph": ">=2"
+  },
+  "devDependencies": {
+    "behavior-graph": "file:../.."
+  },
+  "license": "Apache-2.0"
+}
