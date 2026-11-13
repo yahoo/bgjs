@@ -28,9 +28,28 @@ interface Action {
     debugName?: string;
     // set when the event loop opens this action's event
     started?: boolean;
-    // set when an error escapes the event loop that opened this action's event before that loop
-    // opened another one: the error came from this action's event or from work it started
-    failed?: boolean;
+    // the action whose event was running when this one was started, if any
+    parent?: Action | null;
+}
+
+// The action whose event was running when an error was thrown, recorded where the error first
+// leaves the event loop or a side effect block. A nested action's caller owns an error only if
+// it came from that action or from actions it started (see actionHelper).
+const errorSource = new WeakMap<object, Action>();
+
+function noteErrorSource(error: any, action: Action | null | undefined) {
+    if (action != null && error != null && typeof error == "object" && !errorSource.has(error)) {
+        errorSource.set(error, action);
+    }
+}
+
+function isStartedBy(source: Action | null | undefined, action: Action): boolean {
+    for (let a = source; a != null; a = a.parent) {
+        if (a === action) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // One running side effect block. Side effects nest when one starts a synchronous action: the
@@ -39,6 +58,8 @@ interface Action {
 export interface EffectFrame {
     effect: SideEffect;
     event: GraphEvent;
+    // the action that opened that event
+    action: Action;
     // true once a synchronous action started by this block has returned; the rest of the block
     // then runs outside any event
     resumed: boolean;
@@ -123,7 +144,7 @@ export class Graph {
      * {@link Graph.reentrant}. Defaults to `console.log`. Replace it to collect warnings, throw, or
      * stop at a breakpoint; set it to null to skip them.
      */
-    onWarning: ((message: string) => void) | null | undefined = (message) => console.log(message);
+    onWarning: ((message: string) => void) | null = (message) => console.log(message);
     /** @internal */
     activationCount: number = 0;
     /** @internal Bumped whenever links change, so reverse-mode priorities are recomputed. */
@@ -180,6 +201,7 @@ export class Graph {
             let err: any = new Error("Action cannot be created directly inside another action or behavior. Consider wrapping it in a side effect block.");
             throw err;
         }
+        this.prepareAction(action);
         let frame = this.eventLoopState?.phase == EventLoopPhase.sideEffects ? this.effectFrames[this.effectFrames.length - 1] : undefined;
         if (frame !== undefined && frame.reentrant == 0 && !frame.logged) {
             // before queuing, so a throwing onWarning leaves nothing behind to run later
@@ -197,15 +219,14 @@ export class Graph {
         try {
             this.eventLoop();
         } catch (error) {
-            if (action.failed) {
-                // this action's own event, or work it started, failed: the caller's error to handle
+            if (isStartedBy(errorSource.get(error as object), action)) {
+                // this action's own event, or an action it started, failed: the caller's error
                 throw error;
             }
             // Other work this call ran failed: most often another side effect of the caller's
-            // event, before this action, or work after it (when this action ran inside another
-            // side effect's nested call, or a queued action ran after it). Tell the caller, and
-            // keep the original for the loop running the caller's block, so catching this cannot
-            // hide it.
+            // event, before this action, or another action queued around it. Tell the caller,
+            // and keep the original for the loop running the caller's block, so catching this
+            // cannot hide it.
             frame.pendingError = error;
             let err: any = new Error(droppedNestedActionMessage(frame.effect, frame.event, error, action.started == true));
             err.cause = error;
@@ -232,6 +253,7 @@ export class Graph {
                     let err: any = new Error("Action cannot be created directly inside another action or behavior. Consider wrapping it in a side effect block.");
                     throw err;
                 }
+                this.prepareAction(action);
                 action.resolve = resolve;
                 this.actions.push(action);
                 if (this.currentEvent == null) {
@@ -243,9 +265,18 @@ export class Graph {
         });
     }
 
+    // Records which action is starting this one. If the side effect starting it caught a report
+    // that other work failed, the graph is unwinding: rethrow the original instead of running
+    // more work on an abandoned event.
+    private prepareAction(action: Action) {
+        let top = this.effectFrames[this.effectFrames.length - 1];
+        if (top?.pendingError != null) {
+            throw top.pendingError;
+        }
+        action.parent = this.eventLoopState?.action ?? top?.action ?? null;
+    }
+
     private eventLoop() {
-        // the last action whose event this loop opened; an error escaping this loop is its
-        let opened: Action | null = null;
 
         while (true) {
 
@@ -294,12 +325,14 @@ export class Graph {
                 if (effect) {
                     this.eventLoopState!.phase = EventLoopPhase.sideEffects;
                     this.eventLoopState!.currentSideEffect = effect;
-                    let frame: EffectFrame = {effect: effect, event: this.currentEvent!, resumed: false, reentrant: 0, logged: false, pendingError: null};
+                    let frame: EffectFrame = {effect: effect, event: this.currentEvent!, action: this.eventLoopState!.action, resumed: false, reentrant: 0, logged: false, pendingError: null};
                     this.effectFrames.push(frame);
                     try {
                         effect.block(effect.extent);
                     } catch (error) {
-                        throw frame.pendingError ?? error;
+                        let thrown = frame.pendingError ?? error;
+                        noteErrorSource(thrown, frame.action);
+                        throw thrown;
                     } finally {
                         this.effectFrames.pop();
                     }
@@ -333,15 +366,12 @@ export class Graph {
                     this.eventLoopState = new EventLoopState(action);
                     this.eventLoopState.phase = EventLoopPhase.action;
                     action.started = true;
-                    opened = action;
                     action.block(action.extent);
                     continue;
                 }
 
             } catch (error) {
-                if (opened != null) {
-                    opened.failed = true;
-                }
+                noteErrorSource(error, this.eventLoopState?.action);
                 this.currentEvent = null;
                 this.eventLoopState = null;
                 this.actions.length = 0;

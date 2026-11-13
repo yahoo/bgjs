@@ -70,8 +70,9 @@
   ran ..." (or "This action ran, but other work in the same call failed ..." when the failure
   came after it, such as another side effect's action or a queued action) with the original
   error as `err.cause`, and the action that opened the event rethrows the original even if that
-  is caught. An error from the started action's own event, or from actions its side effects
-  start, still reaches the caller unchanged.
+  is caught; starting another action after catching it rethrows the original instead of
+  running. An error from the started action's own event, or from actions it starts, still
+  reaches the caller unchanged.
 
 ### Changed
 

@@ -170,9 +170,32 @@ describe('Sync action from a side effect (no Zalgo: the caller sees it completed
         expect(p.position.value).toBe(1);
     });
 
-    test('an error from an action queued after the started one is not swallowed', () => {
+    test('an error from another side effect\'s action queued after the started one is not swallowed', () => {
         let caught: any = null;
         let original = new Error('queued action failed');
+        p.effectA = ext => {
+            try {
+                ext.play();
+            } catch (e) {
+                caught = e;
+            }
+        };
+        // B runs inside A's call and queues its action after A's
+        p.effectB = ext => {
+            ext.graph.actionAsync(() => {
+                throw original;
+            });
+        };
+
+        expect(() => p.go.updateWithAction(1)).toThrow(original);
+
+        expect(caught.cause).toBe(original);
+        expect(caught.message).toContain('This action ran');
+    });
+
+    test('an error from an action the started event queued is the caller\'s', () => {
+        let caught: any = null;
+        let original = new Error('follow-up failed');
         p.effectA = ext => {
             try {
                 ext.play();
@@ -186,10 +209,63 @@ describe('Sync action from a side effect (no Zalgo: the caller sees it completed
             });
         };
 
+        // same as a top-level play(): the follow-up is part of play()'s work
+        p.go.updateWithAction(1);
+
+        expect(caught).toBe(original);
+    });
+
+    test('an error is not swallowed when the started action runs two levels deep', () => {
+        // A queues play(); B's action runs play() first, and play()'s side effect starts another
+        // action, so the failure in B's action surfaces several loops down
+        let caught: any = null;
+        let original = new Error('B action failed');
+        let first = true;
+        p.effectA = ext => {
+            try {
+                ext.play();
+            } catch (e) {
+                caught = e;
+            }
+        };
+        p.effectB = () => g.action(() => {
+            throw original;
+        });
+        p.onPlayed = () => {
+            if (first) {
+                first = false;
+                g.action(() => {});
+            }
+        };
+
         expect(() => p.go.updateWithAction(1)).toThrow(original);
 
         expect(caught.cause).toBe(original);
         expect(caught.message).toContain('This action ran');
+    });
+
+    test('after catching the report, starting another action rethrows the original instead of running it', () => {
+        let original = new Error('B failed');
+        let second: any = null;
+        p.effectA = ext => {
+            try {
+                ext.play();
+            } catch (e) {
+                try {
+                    g.action(() => ext.log.push('second action ran'));
+                } catch (e2) {
+                    second = e2;
+                }
+            }
+        };
+        p.effectB = () => {
+            throw original;
+        };
+
+        expect(() => p.go.updateWithAction(1)).toThrow(original);
+
+        expect(second).toBe(original);
+        expect(p.log).toEqual([]);
     });
 
     test('an error from an action queued before the started one is reported as dropping it', () => {
@@ -317,6 +393,23 @@ describe('Sync action from a side effect (no Zalgo: the caller sees it completed
         expect(p.position.value).toBe(2);
         expect(warnings.length).toBe(1);
         expect(warnings[0]).toContain('side effect "played"');
+    });
+
+    test('graph.reentrant ends its mark when the block throws', () => {
+        p.effectA = ext => {
+            try {
+                g.reentrant(() => {
+                    throw new Error('client failed');
+                });
+            } catch (e) {
+                // ignored
+            }
+            ext.play();
+        };
+
+        p.go.updateWithAction(1);
+
+        expect(warnings.length).toBe(1);
     });
 
     test('graph.reentrant outside a side effect just runs the block', () => {

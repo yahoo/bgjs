@@ -262,14 +262,14 @@ export function droppedNestedActionMessage(effect: SideEffectLike, event: {seque
 
 export function sideEffectAfterNestedActionMessage(effect: SideEffectLike, event: {sequence: number}): string {
     let n = event.sequence;
-    return `Cannot queue a side effect here: ${describeSideEffect(effect)} started a synchronous action during event ${n}. That finished event ${n} and ran the new event to completion before the call returned, so the rest of the side effect runs outside any event. ` +
+    return `Cannot queue a side effect here: ${describeSideEffect(effect)} started a synchronous action during event ${n}. That call finished (or, after an error, abandoned) event ${n} before it returned, so the rest of the side effect runs outside any event. ` +
         `Fix: queue the side effect from a behavior, or make the action the last thing the side effect does.`;
 }
 
 export function unmarkedNestedActionMessage(effect: SideEffectLike, event: {sequence: number}): string {
     let n = event.sequence;
-    return `Behavior Graph warning: ${describeSideEffect(effect)} started a synchronous action during event ${n}. That is allowed: the rest of event ${n} (its remaining side effects) runs first, then the new action runs to completion before the call returns, so code after the call in this side effect runs outside any event (justUpdated is false and moment.value throws). ` +
-        `If this is intended, wrap the call that can start actions (often a client callback) in graph.reentrant(() => ...) to say so; this message then stops. Otherwise make that call the last thing the side effect does.`;
+    return `Behavior Graph warning: ${describeSideEffect(effect)} started a synchronous action during event ${n}. That is allowed: the rest of event ${n} (its remaining side effects) runs first, then the new action runs to completion before the call returns, so code after the call in this side effect runs outside any event (justUpdated is false, and reading moment.value throws by default). ` +
+        `Make that call the last thing the side effect does, and read what you need before it. If the reentry is intended, wrap the call that can start actions (often a client callback) in graph.reentrant(() => ...) to say so; that stops this message. Set graph.onWarning = null to skip all warnings.`;
 }
 
 export function cleanupKeyOwnerMessage(key: string, extent: any, owner: Behavior | null, current: Behavior | null): string {

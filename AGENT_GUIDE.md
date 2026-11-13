@@ -113,7 +113,7 @@ class Graph {
   validateTraceDemands: boolean;     // default true: traceValue needs a demand or .trace
   validateMomentReads: boolean;      // default true: moment.value throws unless the moment updated in this event
   reentrant<T>(block: () => T): T;    // optional: marks a call from a side effect that may start a sync action
-  onWarning: ((message: string) => void) | null | undefined; // default console.log; null skips warnings
+  onWarning: ((message: string) => void) | null;             // default console.log; null skips warnings
   reverseUnordered: boolean;         // debug aid: run unrelated behaviors in another valid order
   static reverseUnorderedDefault: boolean; // initial reverseUnordered for graphs created after
   debugHere(): string;               // text dump of current event/behavior
@@ -939,8 +939,8 @@ here: side effect "A" ... started a synchronous action during event 2.` The acti
 the current event and ran its own before returning, so `justUpdated` is false and
 `moment.value` throws. The warning `Behavior Graph warning: side effect "A" of Player ...
 started a synchronous action during event 2. That is allowed: ...` (through
-`graph.onWarning`) points at the call; it is not an error, and wrapping the call in
-`graph.reentrant(...)` silences it. Wrong: `ext.sideEffect(ext => { listener.onReady(); render(ext.ready.value); })`
+`graph.onWarning`) points at the call; it is not an error. Only wrapping the call in
+`graph.reentrant(...)` silences it, even when the call is already last. Wrong: `ext.sideEffect(ext => { listener.onReady(); render(ext.ready.value); })`
 when `onReady` may call an action. Right: read first, call the listener last.
 
 **Catching an error around a synchronous action in a side effect.** `Error: This action
@@ -948,11 +948,12 @@ never ran. Side effect "A" of Player ... started it synchronously during event 2
 rest of event 2 (its remaining side effects) and any queued actions had to finish first, and
 that failed: "..."` Another side effect of the same event threw. When the action did run
 but other work in the same call failed afterwards (another side effect's action, or an action
-queued after it), the message starts `Error: This action ran, but other work in the same call
+it queued after this one), the message starts `Error: This action ran, but other work in the same call
 failed.` instead. Either way the original error is in `err.cause`, and the action that opened
-the event rethrows it even if this one is caught. Fix the original error. An error from the
-started action's own event, or from actions its side effects start, reaches the caller
-unchanged.
+the event rethrows it even if this one is caught, and starting another action in the same
+side effect after catching it rethrows the original instead of running. Fix the original
+error. An error from the started action's own event, or from actions it starts (its side
+effects' actions and `actionAsync` calls), reaches the caller unchanged.
 
 **`exactOptionalPropertyTypes` and moment payloads.** Declare payload fields as
 `x: T | undefined` rather than `x?: T`, or assignments from optional inputs will not compile.
