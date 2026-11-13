@@ -436,8 +436,8 @@ describe('Sync action from a side effect (no Zalgo: the caller sees it completed
         expect(caught.message).toContain('event 2');
     });
 
-    test('onWarning defaults to console.log, and null skips warnings', () => {
-        let spy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    test('onWarning defaults to console.warn, and null skips warnings', () => {
+        let spy = jest.spyOn(console, 'warn').mockImplementation(() => {});
         try {
             let g2 = new Graph();
             let p2 = new Player(g2);

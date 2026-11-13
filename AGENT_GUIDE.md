@@ -113,7 +113,7 @@ class Graph {
   validateTraceDemands: boolean;     // default true: traceValue needs a demand or .trace
   validateMomentReads: boolean;      // default true: moment.value throws unless the moment updated in this event
   reentrant<T>(block: () => T): T;    // optional: marks a call from a side effect that may start a sync action
-  onWarning: ((message: string) => void) | null;             // default console.log; null skips warnings
+  onWarning: ((message: string) => void) | null;             // default console.warn; null skips warnings
   reverseUnordered: boolean;         // debug aid: run unrelated behaviors in another valid order
   static reverseUnorderedDefault: boolean; // initial reverseUnordered for graphs created after
   debugHere(): string;               // text dump of current event/behavior
@@ -318,7 +318,7 @@ all run before the call returns, so the rest of that side effect runs after its 
 closed. Make the call the last thing the side effect does, and read anything you need
 before it; queuing a side effect after it throws. Wrap the call in `graph.reentrant(...)` to
 say the reentry is intended; it changes nothing about the order, and without it the graph
-gives a warning (`graph.onWarning`, `console.log` by default) the first time each side effect
+gives a warning (`graph.onWarning`, `console.warn` by default) the first time each side effect
 run starts such an action:
 
 ```ts

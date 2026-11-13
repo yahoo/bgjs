@@ -40,7 +40,7 @@
     the first error is rethrown out of the removing action.
 - **`graph.validateMomentReads`** (default `true`), the switch for the moment-read check above.
 - **`graph.onWarning`**, which receives the text of each warning: code that works but may not
-  do what was meant. Defaults to `console.log`. Replace it to collect warnings, throw, or stop
+  do what was meant. Defaults to `console.warn`. Replace it to collect warnings, throw, or stop
   at a breakpoint; set it to `null` to skip them.
 - **`graph.reentrant(block)`** marks code in a side effect that may start a synchronous action,
   usually a call to a client callback. Such an action is still allowed and runs as before: the

@@ -141,10 +141,10 @@ export class Graph {
     /**
      * Receives each warning's text. A warning reports code that works but may not do what was
      * meant, such as a side effect that starts a synchronous action without
-     * {@link Graph.reentrant}. Defaults to `console.log`. Replace it to collect warnings, throw, or
+     * {@link Graph.reentrant}. Defaults to `console.warn`. Replace it to collect warnings, throw, or
      * stop at a breakpoint; set it to null to skip them.
      */
-    onWarning: ((message: string) => void) | null = (message) => console.log(message);
+    onWarning: ((message: string) => void) | null = (message) => console.warn(message);
     /** @internal */
     activationCount: number = 0;
     /** @internal Bumped whenever links change, so reverse-mode priorities are recomputed. */
