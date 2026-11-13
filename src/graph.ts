@@ -3,7 +3,7 @@
 //
 
 
-import {cycleMessage, demandNotAddedMessage, lifetimeMessage, removedDemandMessage, removedSupplyMessage} from "./errors.js";
+import {cycleMessage, demandNotAddedMessage, droppedNestedActionMessage, lifetimeMessage, removedDemandMessage, removedSupplyMessage, sideEffectAfterNestedActionMessage, unmarkedNestedActionMessage} from "./errors.js";
 import {BufferedPriorityQueue} from "./bufferedqueue.js";
 import {Behavior} from "./behavior.js";
 import {Extent, isChildLifetime, takeRemovalCleanups} from "./extent.js";
@@ -26,6 +26,50 @@ interface Action {
     extent: Extent | null;
     resolve: ((value: any) => void) | null;
     debugName?: string;
+    // set when the event loop opens this action's event
+    started?: boolean;
+    // the action whose event was running when this one was started, if any
+    parent?: Action | null;
+}
+
+// The action whose event was running when an error was thrown, recorded where the error first
+// leaves the event loop or a side effect block. A nested action's caller owns an error only if
+// it came from that action or from actions it started (see actionHelper).
+const errorSource = new WeakMap<object, Action>();
+
+function noteErrorSource(error: any, action: Action | null | undefined) {
+    if (action != null && error != null && typeof error == "object" && !errorSource.has(error)) {
+        errorSource.set(error, action);
+    }
+}
+
+function isStartedBy(source: Action | null | undefined, action: Action): boolean {
+    for (let a = source; a != null; a = a.parent) {
+        if (a === action) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// One running side effect block. Side effects nest when one starts a synchronous action: the
+// nested event loop runs inside the block, so frames form a stack.
+/** @internal */
+export interface EffectFrame {
+    effect: SideEffect;
+    event: GraphEvent;
+    // the action that opened that event
+    action: Action;
+    // true once a synchronous action started by this block has returned; the rest of the block
+    // then runs outside any event
+    resumed: boolean;
+    // depth of graph.reentrant calls open inside this block
+    reentrant: number;
+    // true once this block has logged an unmarked nested action
+    logged: boolean;
+    // an error from finishing this frame's event, raised inside an action this block started;
+    // rethrown by the loop that runs the block so the block cannot swallow it
+    pendingError: any;
 }
 
 const DefaultDateProvider = {
@@ -93,6 +137,15 @@ export class Graph {
     /** @internal */
     justUpdatedCallbacks: Set<Subscription> = new Set();
     /** @internal */
+    effectFrames: EffectFrame[] = [];
+    /**
+     * Receives each warning's text. A warning reports code that works but may not do what was
+     * meant, such as a side effect that starts a synchronous action without
+     * {@link Graph.reentrant}. Defaults to `console.warn`. Replace it to collect warnings, throw, or
+     * stop at a breakpoint; set it to null to skip them.
+     */
+    onWarning: ((message: string) => void) | null = (message) => console.warn(message);
+    /** @internal */
     activationCount: number = 0;
     /** @internal Bumped whenever links change, so reverse-mode priorities are recomputed. */
     heightGeneration: number = 0;
@@ -148,8 +201,39 @@ export class Graph {
             let err: any = new Error("Action cannot be created directly inside another action or behavior. Consider wrapping it in a side effect block.");
             throw err;
         }
+        this.prepareAction(action);
+        let frame = this.eventLoopState?.phase == EventLoopPhase.sideEffects ? this.effectFrames[this.effectFrames.length - 1] : undefined;
+        if (frame !== undefined && frame.reentrant == 0 && !frame.logged) {
+            // before queuing, so a throwing onWarning leaves nothing behind to run later
+            frame.logged = true;
+            this.onWarning?.(unmarkedNestedActionMessage(frame.effect, frame.event));
+        }
         this.actions.push(action);
-        this.eventLoop();
+        if (frame === undefined) {
+            this.eventLoop();
+            return;
+        }
+        // Started from a side effect. The nested loop first finishes the side effect's event
+        // (its remaining side effects), then any queued actions, then this one, and returns once
+        // all have completed, so the caller sees a synchronous action.
+        try {
+            this.eventLoop();
+        } catch (error) {
+            if (isStartedBy(errorSource.get(error as object), action)) {
+                // this action's own event, or an action it started, failed: the caller's error
+                throw error;
+            }
+            // Other work this call ran failed: most often another side effect of the caller's
+            // event, before this action, or another action queued around it. Tell the caller,
+            // and keep the original for the loop running the caller's block, so catching this
+            // cannot hide it.
+            frame.pendingError = error;
+            let err: any = new Error(droppedNestedActionMessage(frame.effect, frame.event, error, action.started == true));
+            err.cause = error;
+            throw err;
+        } finally {
+            frame.resumed = true;
+        }
     }
 
     /**
@@ -169,6 +253,7 @@ export class Graph {
                     let err: any = new Error("Action cannot be created directly inside another action or behavior. Consider wrapping it in a side effect block.");
                     throw err;
                 }
+                this.prepareAction(action);
                 action.resolve = resolve;
                 this.actions.push(action);
                 if (this.currentEvent == null) {
@@ -178,6 +263,17 @@ export class Graph {
                 reject(e);
             }
         });
+    }
+
+    // Records which action is starting this one. If the side effect starting it caught a report
+    // that other work failed, the graph is unwinding: rethrow the original instead of running
+    // more work on an abandoned event.
+    private prepareAction(action: Action) {
+        let top = this.effectFrames[this.effectFrames.length - 1];
+        if (top?.pendingError != null) {
+            throw top.pendingError;
+        }
+        action.parent = this.eventLoopState?.action ?? top?.action ?? null;
     }
 
     private eventLoop() {
@@ -229,7 +325,21 @@ export class Graph {
                 if (effect) {
                     this.eventLoopState!.phase = EventLoopPhase.sideEffects;
                     this.eventLoopState!.currentSideEffect = effect;
-                    effect.block(effect.extent);
+                    let frame: EffectFrame = {effect: effect, event: this.currentEvent!, action: this.eventLoopState!.action, resumed: false, reentrant: 0, logged: false, pendingError: null};
+                    this.effectFrames.push(frame);
+                    try {
+                        effect.block(effect.extent);
+                    } catch (error) {
+                        let thrown = frame.pendingError ?? error;
+                        noteErrorSource(thrown, frame.action);
+                        throw thrown;
+                    } finally {
+                        this.effectFrames.pop();
+                    }
+                    if (frame.pendingError != null) {
+                        // the block caught the report that its action was dropped
+                        throw frame.pendingError;
+                    }
                     if (this.eventLoopState != null) {
                         // side effect could create a synchronous action which would create a nested event loop
                         // which would clear out any existing event loop states
@@ -255,11 +365,13 @@ export class Graph {
                     this.currentEvent = newEvent;
                     this.eventLoopState = new EventLoopState(action);
                     this.eventLoopState.phase = EventLoopPhase.action;
+                    action.started = true;
                     action.block(action.extent);
                     continue;
                 }
 
             } catch (error) {
+                noteErrorSource(error, this.eventLoopState?.action);
                 this.currentEvent = null;
                 this.eventLoopState = null;
                 this.actions.length = 0;
@@ -460,6 +572,11 @@ export class Graph {
 
     /** @internal */
     sideEffectHelper(sideEffect: SideEffect) {
+        let resumed = this.resumedEffectFrame();
+        if (resumed != null) {
+            let err: any = new Error(sideEffectAfterNestedActionMessage(resumed.effect, resumed.event));
+            throw err;
+        }
         if (this.currentEvent == null) {
             let err: any = new Error("Effects can only be added during an event.");
             throw err;
@@ -468,6 +585,40 @@ export class Graph {
             throw err;
         } else {
             this.effects.push(sideEffect);
+        }
+    }
+
+    // The running side effect block, if a synchronous action it started has returned, so code
+    // running now is the rest of that block, outside any event.
+    private resumedEffectFrame(): EffectFrame | null {
+        if (this.currentEvent != null) {
+            return null;
+        }
+        let frame = this.effectFrames[this.effectFrames.length - 1];
+        return frame?.resumed ? frame : null;
+    }
+
+    /**
+     * Runs `block` and returns its result. Call it from a side effect around code that may start a
+     * synchronous action, usually a call out to client code (a listener or callback), to say that
+     * this is intended. Such an action still runs the way it always does: the side effect's event
+     * finishes its remaining side effects, the new action runs to completion, then the call
+     * returns, so code after it runs outside any event. Without `reentrant`, the graph reports that
+     * through {@link Graph.onWarning}, once per side effect run. Not required; it only documents the
+     * reentry and silences that message. Covers actions started anywhere inside `block`, however
+     * deeply, but not those started by side effects of the events it runs. Outside a side effect
+     * it just runs `block`.
+     */
+    reentrant<T>(block: () => T): T {
+        let frame = this.eventLoopState?.phase == EventLoopPhase.sideEffects ? this.effectFrames[this.effectFrames.length - 1] : undefined;
+        if (frame === undefined) {
+            return block();
+        }
+        frame.reentrant += 1;
+        try {
+            return block();
+        } finally {
+            frame.reentrant -= 1;
         }
     }
 

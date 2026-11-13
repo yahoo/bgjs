@@ -13,6 +13,9 @@ let r_b: State<number>;
 let r_c: State<number>;
 beforeEach(() => {
     g = new Graph();
+    // several tests start unmarked synchronous actions from side effects on purpose, to pin the
+    // default; skip the warning about those (see graph.reentrant)
+    g.onWarning = null;
     setupExt = new Extent(g)
     r_a = setupExt.state<number>(0, 'r_a');
     r_b = setupExt.state<number>(0, 'r_b');

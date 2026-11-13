@@ -112,6 +112,8 @@ class Graph {
   validateLifetimes: boolean;        // default true; see lifetimes below
   validateTraceDemands: boolean;     // default true: traceValue needs a demand or .trace
   validateMomentReads: boolean;      // default true: moment.value throws unless the moment updated in this event
+  reentrant<T>(block: () => T): T;    // optional: marks a call from a side effect that may start a sync action
+  onWarning: ((message: string) => void) | null;             // default console.warn; null skips warnings
   reverseUnordered: boolean;         // debug aid: run unrelated behaviors in another valid order
   static reverseUnorderedDefault: boolean; // initial reverseUnordered for graphs created after
   debugHere(): string;               // text dump of current event/behavior
@@ -304,6 +306,30 @@ test setup file.
 legal (rarely needed): the new event runs after the current event's remaining side effects,
 before the call returns. An error thrown from an action inside a promise callback becomes
 an unhandled rejection; make sure your environment reports those.
+
+**A side effect that calls client code.** When Behavior Graph sits inside a library, a side
+effect often calls a listener or callback, and that client code may call back into the
+library synchronously (`player.play()` from an `onReady` listener). That works, and the
+client sees a synchronous API: when `play()` returns, its event has completed. Making it
+deferred instead would be "releasing Zalgo" (an API that is sometimes synchronous and
+sometimes not), which breaks callers in ways they cannot see. The cost lands on the side
+effect that made the call: the current event's remaining side effects, then the new event,
+all run before the call returns, so the rest of that side effect runs after its event has
+closed. Make the call the last thing the side effect does, and read anything you need
+before it; queuing a side effect after it throws. Wrap the call in `graph.reentrant(...)` to
+say the reentry is intended; it changes nothing about the order, and without it the graph
+gives a warning (`graph.onWarning`, `console.warn` by default) the first time each side effect
+run starts such an action:
+
+```ts
+ext.sideEffect(ext => {
+    let items = ext.items.value;       // read first
+    ext.graph.reentrant(() => listener.onChange(items)); // may call player.play()
+});
+```
+
+After such an action returns, the rest of the side effect runs outside any event, so an
+`actionAsync` there also runs at once, before the call returns, like `action`.
 
 **Reading values in side effects.** `graph.currentBehavior` is null during side effects,
 so reading any resource's `.value` there is allowed and sees the event's final values.
@@ -907,6 +933,27 @@ ones.
 **Side effects from the wrong place.** `Error: Nested side effects don't make sense` when
 `sideEffect` is called inside a side effect; `Error: Effects can only be added during an
 event.` when it is called from plain code. Only behaviors and actions may queue them.
+
+**Code after a synchronous action in a side effect.** `Error: Cannot queue a side effect
+here: side effect "A" ... started a synchronous action during event 2.` The action finished
+the current event and ran its own before returning, so `justUpdated` is false and
+`moment.value` throws. The warning `Behavior Graph warning: side effect "A" of Player ...
+started a synchronous action during event 2. That is allowed: ...` (through
+`graph.onWarning`) points at the call; it is not an error. Only wrapping the call in
+`graph.reentrant(...)` silences it, even when the call is already last. Wrong: `ext.sideEffect(ext => { listener.onReady(); render(ext.ready.value); })`
+when `onReady` may call an action. Right: read first, call the listener last.
+
+**Catching an error around a synchronous action in a side effect.** `Error: This action
+never ran. Side effect "A" of Player ... started it synchronously during event 2, so the
+rest of event 2 (its remaining side effects) and any queued actions had to finish first, and
+that failed: "..."` Another side effect of the same event threw. When the action did run
+but other work in the same call failed afterwards (another side effect's action, or an action
+it queued after this one), the message starts `Error: This action ran, but other work in the same call
+failed.` instead. Either way the original error is in `err.cause`, and the action that opened
+the event rethrows it even if this one is caught, and starting another action in the same
+side effect after catching it rethrows the original instead of running. Fix the original
+error. An error from the started action's own event, or from actions it starts (its side
+effects' actions and `actionAsync` calls), reaches the caller unchanged.
 
 **`exactOptionalPropertyTypes` and moment payloads.** Declare payload fields as
 `x: T | undefined` rather than `x?: T`, or assignments from optional inputs will not compile.

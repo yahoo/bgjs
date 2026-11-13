@@ -234,6 +234,44 @@ export function shadowedMemberMessage(extent: any, name: string, isMethod: boole
         `Fix: rename the field (for example to ${name == "state" ? `"phase", "status" or ` : ""}"${name}Value").`;
 }
 
+interface SideEffectLike {
+    debugName?: string;
+    extent: any;
+    behavior: Behavior | null;
+}
+
+/** `side effect "render" of Player (queued by the behavior in Player that supplies [...] ...)` */
+function describeSideEffect(effect: SideEffectLike): string {
+    let name = effect.debugName != null ? `side effect "${effect.debugName}"` : "a side effect";
+    let of = effect.extent != null ? ` of ${extentName(effect.extent)}` : "";
+    let by = effect.behavior != null ? ` (queued by ${describeBehavior(effect.behavior)})` : "";
+    return name + of + by;
+}
+
+export function droppedNestedActionMessage(effect: SideEffectLike, event: {sequence: number}, error: any, ran: boolean): string {
+    let n = event.sequence;
+    let original = error?.message ?? String(error);
+    let effectText = capitalize(describeSideEffect(effect));
+    let what = ran
+        ? `This action ran, but other work in the same call failed. ${effectText} started it synchronously during event ${n}, so the call also ran the rest of event ${n} (its remaining side effects) and the queued actions around this one, and one of them failed: "${original}". `
+        : `This action never ran. ${effectText} started it synchronously during event ${n}, so the rest of event ${n} (its remaining side effects) and any queued actions had to finish first, and that failed: "${original}". `;
+    return what +
+        `The graph discarded the rest of that work and every queued action. The action that opened event ${n} rethrows the original error (err.cause here) even if this one is caught. ` +
+        `Fix the original error; this one only reports that it surfaced inside this call.`;
+}
+
+export function sideEffectAfterNestedActionMessage(effect: SideEffectLike, event: {sequence: number}): string {
+    let n = event.sequence;
+    return `Cannot queue a side effect here: ${describeSideEffect(effect)} started a synchronous action during event ${n}. That call finished (or, after an error, abandoned) event ${n} before it returned, so the rest of the side effect runs outside any event. ` +
+        `Fix: queue the side effect from a behavior, or make the action the last thing the side effect does.`;
+}
+
+export function unmarkedNestedActionMessage(effect: SideEffectLike, event: {sequence: number}): string {
+    let n = event.sequence;
+    return `Behavior Graph warning: ${describeSideEffect(effect)} started a synchronous action during event ${n}. That is allowed: the rest of event ${n} (its remaining side effects) runs first, then the new action runs to completion before the call returns, so code after the call in this side effect runs outside any event (justUpdated is false, and reading moment.value throws by default). ` +
+        `Make that call the last thing the side effect does, and read what you need before it. If the reentry is intended, wrap the call that can start actions (often a client callback) in graph.reentrant(() => ...) to say so; that stops this message. Set graph.onWarning = null to skip all warnings.`;
+}
+
 export function cleanupKeyOwnerMessage(key: string, extent: any, owner: Behavior | null, current: Behavior | null): string {
     let who = (b: Behavior | null) => b == null ? "a side effect queued from an action" : describeBehavior(b);
     return `Cleanup key "${key}" on ${extentName(extent)} belongs to ${who(owner)}, and ${who(current)} `
